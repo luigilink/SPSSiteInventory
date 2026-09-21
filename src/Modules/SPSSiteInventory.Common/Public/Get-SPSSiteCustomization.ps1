@@ -5,9 +5,18 @@
 
         .DESCRIPTION
         Inspects one site collection and returns the signals that drive the migration
-        complexity score: workflow associations, sandbox solutions, custom master page,
+        complexity score: 2010 vs 2013 workflows, sandbox solutions, custom master page,
         unique permissions, event receivers, and whether the site activates a feature
         that comes from a custom farm solution (correlated through the farm-solution map).
+
+        Workflows are split by platform because their migration cost differs sharply:
+
+        - Workflow2010Count counts classic SPWorkflowAssociation objects (the SharePoint
+          2010 workflow platform, whose engine is retired in SharePoint Online, so those
+          workflows always need a rebuild).
+        - Workflow2013Count counts Workflow Manager subscriptions (the SharePoint 2013
+          platform), read through WorkflowServicesManager. This is best-effort: when
+          Workflow Manager is not connected the count stays at 0 rather than failing.
 
         The returned hashtable is designed to be passed straight to
         Measure-SPSSiteComplexity. Signal collection is best-effort: a failure to read one
@@ -47,7 +56,8 @@
     )
 
     $signals = @{
-        WorkflowAssociationCount = 0
+        Workflow2010Count        = 0
+        Workflow2013Count        = 0
         SandboxSolutions         = 0
         CustomMasterPage         = $false
         UniquePermissionsCount   = 0
@@ -67,11 +77,26 @@
 
     foreach ($web in $Site.AllWebs) {
         try {
-            $signals.WorkflowAssociationCount += @($web.WorkflowAssociations).Count
+            # SharePoint 2010 platform: classic workflow associations at web and list scope.
+            $signals.Workflow2010Count += @($web.WorkflowAssociations).Count
 
             foreach ($list in $web.Lists) {
-                $signals.WorkflowAssociationCount += @($list.WorkflowAssociations).Count
+                $signals.Workflow2010Count += @($list.WorkflowAssociations).Count
                 $signals.EventReceivers += @($list.EventReceivers).Count
+            }
+
+            # SharePoint 2013 platform: Workflow Manager subscriptions. Best-effort - the
+            # type may be unavailable or Workflow Manager may not be connected, in which
+            # case the count stays at 0 instead of failing the whole site.
+            try {
+                $workflowManager = [Microsoft.SharePoint.WorkflowServices.WorkflowServicesManager]::new($web)
+                if ($workflowManager.IsConnected) {
+                    $subscriptions = $workflowManager.GetWorkflowSubscriptionService().EnumerateSubscriptions()
+                    $signals.Workflow2013Count += @($subscriptions).Count
+                }
+            }
+            catch {
+                Write-Verbose -Message "Could not read 2013 workflow subscriptions on web '$($web.Url)': $($_.Exception.Message)"
             }
 
             if ($web.HasUniqueRoleAssignments) {

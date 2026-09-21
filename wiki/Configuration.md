@@ -22,7 +22,8 @@ The `Scoring` hashtable drives `Measure-SPSSiteComplexity`.
 ```powershell
 Scoring = @{
     Weights = @{
-        WorkflowAssociationCount = 2.0
+        Workflow2010Count        = 3.0
+        Workflow2013Count        = 1.5
         SandboxSolutions         = 3.0
         CustomMasterPage         = 2.0
         EventReceivers           = 1.5
@@ -44,6 +45,15 @@ Scoring = @{
 Each key is a **signal** collected by `Get-SPSSiteCustomization`. The weight is multiplied
 by the signal value (booleans count as 1 when true) and summed into the site's score. Set a
 weight to `0` (or omit the key) to ignore a signal.
+
+Workflows are split by platform because their migration cost differs:
+
+- `Workflow2010Count` — SharePoint 2010 workflows (legacy engine, **retired in SharePoint
+  Online**). They always need a rebuild, so they are weighted heavily. Add
+  `Workflow2010Count` to `BlockingSignals` if you want any legacy workflow to force
+  **Blocking (4)**.
+- `Workflow2013Count` — SharePoint 2013 workflows (Workflow Manager). A lighter, more
+  direct remediation, so they are weighted less than their 2010 counterparts.
 
 ### Thresholds
 

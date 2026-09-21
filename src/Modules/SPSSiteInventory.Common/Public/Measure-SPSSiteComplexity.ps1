@@ -30,7 +30,7 @@
         BlockingSignals). See inventory-settings.example.psd1.
 
         .EXAMPLE
-        $signals = @{ Workflow2013Count = 2; SandboxSolutions = 1 }
+        $signals = @{ Workflow2010Count = 2; Workflow2013Count = 1; SandboxSolutions = 1 }
         Measure-SPSSiteComplexity -Signals $signals -Scoring $settings.Scoring
     #>
     [CmdletBinding()]
