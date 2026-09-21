@@ -67,6 +67,23 @@ Describe 'Group-SPSMigrationWave' {
         $result[0].Url | Should -Be 'https://s/1'
     }
 
+    It 'reassigns cleanly when re-run on already-waved records' {
+        $firstPass = Group-SPSMigrationWave -InputObject $script:Sites -MigrationWaves $script:DefaultWaves
+
+        # A different mapping: everything non-blocking into wave 1, blockers into wave 2.
+        $grouped = @(
+            @{ Wave = 1; Name = 'Migrate now'; Categories = @(1, 2, 3) }
+            @{ Wave = 2; Name = 'Projects'; Categories = @(4) }
+        )
+        $secondPass = Group-SPSMigrationWave -InputObject $firstPass -MigrationWaves $grouped
+
+        ($secondPass | Where-Object { $_.Category -eq 2 }).Wave | Should -Be 1
+        ($secondPass | Where-Object { $_.Category -eq 2 }).WaveName | Should -Be 'Migrate now'
+        ($secondPass | Where-Object { $_.Category -eq 4 }).Wave | Should -Be 2
+        # No duplicate Wave column introduced by the second pass.
+        @($secondPass[0].PSObject.Properties.Name | Where-Object { $_ -eq 'Wave' }).Count | Should -Be 1
+    }
+
     It 'handles an empty inventory without error' {
         $result = Group-SPSMigrationWave -InputObject @() -MigrationWaves $script:DefaultWaves
 

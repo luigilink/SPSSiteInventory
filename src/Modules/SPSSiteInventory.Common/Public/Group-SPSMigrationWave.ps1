@@ -70,10 +70,13 @@
         }
 
         # Rebuild the record preserving column order, inserting Wave / WaveName right
-        # after CategoryName (or at the end when that column is absent).
+        # after CategoryName (or at the end when that column is absent). Any pre-existing
+        # Wave / WaveName is skipped so re-running with a different mapping actually
+        # reassigns the site instead of keeping the stale values.
         $ordered = [ordered]@{}
         $inserted = $false
         foreach ($property in $record.PSObject.Properties) {
+            if ($property.Name -eq 'Wave' -or $property.Name -eq 'WaveName') { continue }
             $ordered[$property.Name] = $property.Value
             if ($property.Name -eq 'CategoryName') {
                 $ordered['Wave'] = $waveNumber

@@ -89,8 +89,8 @@ try {
         }
     }
 
-    $waves = if ($settings.MigrationWaves) {
-        $settings.MigrationWaves
+    $waves = if ($settings.ContainsKey('MigrationWaves')) {
+        @($settings.MigrationWaves)
     }
     else {
         @(

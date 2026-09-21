@@ -52,12 +52,18 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $html | Should -Match '4\. Blocking'
     }
 
-    It 'renders the migration wave plan with per-wave names' {
+    It 'renders the migration wave plan with per-wave counts and sizes' {
         $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
 
         $html | Should -Match 'Migration wave plan'
-        $html | Should -Match 'Quick wins'
-        $html | Should -Match 'Projects / blockers'
+        # Wave summary table header.
+        $html | Should -Match '<th>Wave</th><th>Name</th><th class="num">Sites</th><th class="num">Content \(GB\)</th>'
+        # Wave 1 row: Quick wins, 1 site, 1.5 GB.
+        $html | Should -Match 'Quick wins</td><td class="num">1</td><td class="num">1\.5</td>'
+        # Wave 4 row: Projects / blockers, 1 site, 12.25 GB.
+        $html | Should -Match 'Projects / blockers</td><td class="num">1</td><td class="num">12\.25</td>'
+        # The site table exposes a Wave column.
+        $html | Should -Match 'Wave <span class="arrow">'
     }
 
     It 'HTML-encodes field values so markup cannot break' {

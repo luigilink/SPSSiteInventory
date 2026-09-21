@@ -46,10 +46,10 @@ Each row in the CSV/JSON describes one site collection:
 | `Workflow2013Count` | SharePoint 2013 workflow subscriptions (Workflow Manager) |
 | `InfoPathFormCount` | InfoPath-driven lists/libraries (retired, no SPO equivalent) |
 | `UsesFullTrustCode` | Site activates a feature from a custom full-trust WSP (GAC assembly) |
-| `Wave` | Proposed migration wave number (from the category-to-wave mapping) |
-| `WaveName` | Proposed migration wave name |
 | `Category` | Complexity category 1–4 |
 | `CategoryName` | Simple / Moderate / Complex / Blocking |
+| `Wave` | Proposed migration wave number (from the category-to-wave mapping) |
+| `WaveName` | Proposed migration wave name |
 | `Score` | Numeric complexity score |
 | `Reasons` | Human-readable drivers of the score |
 
