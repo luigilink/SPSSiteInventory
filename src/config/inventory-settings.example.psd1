@@ -66,8 +66,12 @@
         }
 
         # Signals that force category 4 (Blocking) regardless of the score.
+        # UsesFullTrustCode marks a site that activates a feature from a custom
+        # full-trust solution (a WSP deploying a global assembly): not portable to
+        # SharePoint Online as-is.
         BlockingSignals = @(
             'UsesCustomFarmFeature'
+            'UsesFullTrustCode'
             'InfoPathFormCount'
         )
     }

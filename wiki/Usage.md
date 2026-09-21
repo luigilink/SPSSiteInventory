@@ -17,13 +17,16 @@ The orchestrator:
 
 ## Output files
 
-Each run writes three timestamped files to the output folder:
+Each run writes the site inventory in three timestamped formats, plus a dedicated
+farm-solution report, to the output folder:
 
 | File | Purpose |
 | --- | --- |
-| `*.csv` | Review in Excel; one row per site collection. |
-| `*.json` | Downstream automation (for example feeding migration wave planning). |
-| `*.html` | A shareable, self-contained report: category summary box and a sortable / filterable site table. Opens in any browser with no external resource. |
+| `*.csv` | Site inventory for review in Excel; one row per site collection. |
+| `*.json` | Site inventory for downstream automation (for example feeding migration wave planning). |
+| `*.html` | A shareable, self-contained site report: category summary box and a sortable / filterable site table. Opens in any browser with no external resource. |
+| `*-solutions-*.csv` | Farm-solution (WSP) inventory for Excel; one row per solution, with the feature scopes/ids flattened. |
+| `*-solutions-*.json` | Farm-solution (WSP) inventory for automation, with the feature scopes/ids kept as arrays. |
 
 ## Output fields
 
@@ -42,10 +45,28 @@ Each row in the CSV/JSON describes one site collection:
 | `Workflow2010Count` | SharePoint 2010 workflow associations (legacy engine, retired in SPO) |
 | `Workflow2013Count` | SharePoint 2013 workflow subscriptions (Workflow Manager) |
 | `InfoPathFormCount` | InfoPath-driven lists/libraries (retired, no SPO equivalent) |
+| `UsesFullTrustCode` | Site activates a feature from a custom full-trust WSP (GAC assembly) |
 | `Category` | Complexity category 1–4 |
 | `CategoryName` | Simple / Moderate / Complex / Blocking |
 | `Score` | Numeric complexity score |
 | `Reasons` | Human-readable drivers of the score |
+
+## Farm-solution report fields
+
+Each row in the `*-solutions-*` CSV/JSON describes one farm solution (WSP):
+
+| Field | Description |
+| --- | --- |
+| `SolutionName` | Solution (WSP) name |
+| `SolutionId` | Solution GUID |
+| `Deployed` / `DeploymentState` | Whether and how the solution is deployed |
+| `IsCustom` | Name matches a `CustomSolutionPrefix` |
+| `ContainsGlobalAssembly` | Deploys an assembly to the GAC (full-trust code) |
+| `ContainsCasPolicy` | Ships a Code Access Security policy |
+| `ContainsWebApplicationResource` | Deploys web-application-scoped resources |
+| `IsFullTrustCode` | Custom **and** deploys a global assembly (SPO blocker) |
+| `DeployedWebApplicationCount` / `DeployedServerCount` | Deployment reach |
+| `FeatureCount` / `FeatureScopes` / `FeatureIds` | Features the solution registers |
 
 ## Reading the results
 

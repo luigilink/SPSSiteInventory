@@ -7,11 +7,12 @@
 
     1. bootstraps logging and validates prerequisites;
     2. loads the SharePoint commands and the inventory settings;
-    3. builds the farm-solution map (WSP -> features) to detect custom code;
+    3. builds the farm-solution map (WSP -> full-trust code, features) to detect custom code;
     4. enumerates site collections (identity + volumetry);
     5. collects the customization signals of each site;
     6. scores each site from 1 (Simple) to 4 (Blocking);
-    7. exports the consolidated result to CSV, JSON and a self-contained HTML report.
+    7. exports the scored inventory to CSV, JSON and a self-contained HTML report, and the
+       farm-solution map to its own CSV and JSON.
 
     The tool is read-only: it never modifies the farm. Run it on a farm server, as the
     farm account, in an elevated Windows PowerShell 5.1 session.
@@ -51,6 +52,7 @@ try {
     Add-SPSInventoryEvent -Message 'Building farm-solution map.' -Level Information
     $solutionMap = Get-SPSFarmSolutionMap -CustomSolutionPrefix $settings.CustomSolutionPrefix
     $customFeatureId = @($solutionMap | Where-Object { $_.IsCustom } | ForEach-Object { $_.FeatureIds } | Sort-Object -Unique)
+    $fullTrustFeatureId = @($solutionMap | Where-Object { $_.IsFullTrustCode } | ForEach-Object { $_.FeatureIds } | Sort-Object -Unique)
 
     Add-SPSInventoryEvent -Message 'Enumerating site collections.' -Level Information
     $inventory = Get-SPSSiteInventory -WebApplicationUrl $settings.WebApplicationUrl
@@ -58,7 +60,7 @@ try {
     $scored = foreach ($item in $inventory) {
         $site = Get-SPSite -Identity $item.Url -ErrorAction Stop
         try {
-            $signals = Get-SPSSiteCustomization -Site $site -CustomFeatureId $customFeatureId
+            $signals = Get-SPSSiteCustomization -Site $site -CustomFeatureId $customFeatureId -FullTrustFeatureId $fullTrustFeatureId
             $signals['SizeGB'] = $item.SizeGB
 
             $result = Measure-SPSSiteComplexity -Signals $signals -Scoring $settings.Scoring
@@ -75,6 +77,7 @@ try {
                 Workflow2010Count = $signals['Workflow2010Count']
                 Workflow2013Count = $signals['Workflow2013Count']
                 InfoPathFormCount = $signals['InfoPathFormCount']
+                UsesFullTrustCode = $signals['UsesFullTrustCode']
                 Category          = $result.Category
                 CategoryName      = $result.CategoryName
                 Score             = $result.Score
@@ -87,8 +90,10 @@ try {
     }
 
     $output = Export-SPSInventoryReport -InputObject @($scored) -OutputFolder $settings.OutputFolder -BaseName ('SPSSiteInventory-' + $settings.EnvName) -EnvName $settings.EnvName
+    $solutionOutput = Export-SPSSolutionReport -InputObject @($solutionMap) -OutputFolder $settings.OutputFolder -BaseName ('SPSSiteInventory-' + $settings.EnvName)
 
     Add-SPSInventoryEvent -Message "Inventory complete. CSV: $($output.CsvPath) | JSON: $($output.JsonPath) | HTML: $($output.HtmlPath)" -Level Information
+    Add-SPSInventoryEvent -Message "Farm-solution report. CSV: $($solutionOutput.CsvPath) | JSON: $($solutionOutput.JsonPath)" -Level Information
 }
 catch {
     Add-SPSInventoryEvent -Message "Inventory failed: $($_.Exception.Message)" -Level Error

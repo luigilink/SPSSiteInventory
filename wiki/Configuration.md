@@ -37,6 +37,7 @@ Scoring = @{
     }
     BlockingSignals = @(
         'UsesCustomFarmFeature'
+        'UsesFullTrustCode'
         'InfoPathFormCount'
     )
 }
@@ -70,7 +71,12 @@ heavily and listed in `BlockingSignals` in the example configuration.
 
 A list of signal names. If **any** of them is truthy for a site, the site is forced to
 **Blocking (4)**, regardless of the score. Use this for signals that make a site
-non-portable as-is (for example a feature coming from a custom full-trust solution).
+non-portable as-is:
+
+- `UsesCustomFarmFeature` — the site activates a feature from a custom farm solution.
+- `UsesFullTrustCode` — the site activates a feature from a custom **full-trust** solution
+  (a WSP deploying a global assembly to the GAC), correlated through the farm-solution map.
+- `InfoPathFormCount` — the site uses InfoPath forms.
 
 ## Tuning
 

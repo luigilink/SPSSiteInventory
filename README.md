@@ -20,9 +20,9 @@ Microsoft's assessment tooling has shifted: **SMAT reaches end of support on 1 O
 
 - Site identity and volumetry (URL, template, size, sub-webs, last activity)
 - Customization signals: 2010 vs 2013 workflows, InfoPath forms, sandbox solutions, custom master pages, event receivers, unique permissions
-- Correlation between **farm solutions (WSP)** and the sites that activate their features (custom-code detection)
+- Correlation between **farm solutions (WSP)** and the sites that activate their features, including **full-trust code** detection (assemblies deployed to the GAC), CAS policy, deployment reach and features per solution
 - A **complexity score and category** per site, driven by a per-environment configuration
-- Outputs: a **CSV** (Excel), a **JSON** (automation) and a **self-contained HTML report** (category summary, sortable/filterable table) for sharing with stakeholders
+- Outputs: a **CSV** (Excel), a **JSON** (automation) and a **self-contained HTML report** (category summary, sortable/filterable table) for sharing with stakeholders, plus a dedicated **farm-solution (WSP) CSV/JSON** report
 
 ## Quick links
 
