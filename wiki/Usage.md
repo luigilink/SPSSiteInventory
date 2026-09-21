@@ -62,7 +62,7 @@ Each row in the `*-solutions-*` CSV/JSON describes one farm solution (WSP):
 | `SolutionName` | Solution (WSP) name |
 | `SolutionId` | Solution GUID |
 | `Deployed` / `DeploymentState` | Whether and how the solution is deployed |
-| `IsCustom` | Name matches a `CustomSolutionPrefix` |
+| `IsCustom` | Auto-detected as custom (any solution that is not a known Microsoft / OOTB one); can be forced via `CustomSolutionPrefix` |
 | `ContainsGlobalAssembly` | Deploys an assembly to the GAC (full-trust code) |
 | `ContainsCasPolicy` | Ships a Code Access Security policy |
 | `ContainsWebApplicationResource` | Deploys web-application-scoped resources |

@@ -12,6 +12,21 @@ Describe 'Test-SPSMicrosoftSolution' {
         (& $script:Module { Test-SPSMicrosoftSolution -Name 'microsoft.sharepoint.translation.wsp' }) | Should -BeTrue
     }
 
+    It 'recognizes each shipped Microsoft / OOTB marker family' {
+        $names = @(
+            'microsoft.office.server.wsp'
+            'sharepoint server standard.wsp'
+            'osrc.wsp'
+            'search-adminwebparts.wsp'
+            'spscontentdeployment.wsp'
+            'languagepack-fr-fr.wsp'
+            'sts.wsp'
+        )
+        foreach ($n in $names) {
+            (& $script:Module { param($x) Test-SPSMicrosoftSolution -Name $x } $n) | Should -BeTrue -Because "$n should be recognized as Microsoft / OOTB"
+        }
+    }
+
     It 'is case-insensitive' {
         (& $script:Module { Test-SPSMicrosoftSolution -Name 'MICROSOFT.Office.Server.wsp' }) | Should -BeTrue
     }

@@ -50,14 +50,22 @@
     $solutionName = $solutionName.Trim()
 
     # Built-in, shipped markers for Microsoft / out-of-the-box farm solutions. Kept broad
-    # but specific enough not to swallow custom code. Case-insensitive.
+    # but specific enough not to swallow custom code. Case-insensitive. Covers the
+    # 'microsoft.*' families, the SharePoint/Office server solutions, and the language
+    # packs (whose solution names carry 'languagepack' / 'lang pack').
     $microsoftPrefix = @(
         'microsoft.'
         'microsoft-'
+        'sharepoint'             # sharepoint*, e.g. 'SharePoint Server ...'
+        'office'                 # office server solutions
         'osrc'                   # Office Server resource solutions
+        'osrv'
         'search-'
         'spscontentdeployment'
+        'languagepack'           # language pack solutions
+        'lang pack'
         'sts.wsp'
+        'webpartadderdefinitions'
     )
 
     $allPrefix = @($microsoftPrefix + @($ExtraMicrosoftPrefix | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }))
