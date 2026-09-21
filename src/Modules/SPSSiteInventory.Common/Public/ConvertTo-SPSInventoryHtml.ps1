@@ -319,6 +319,33 @@ td.muted, .muted { color: var(--muted); }
         [void]$sb.AppendLine('</tbody>')
         [void]$sb.AppendLine('</table>')
         [void]$sb.AppendLine('</div>')
+
+        # Sites bound to full-trust code: link the farm-level finding to the affected
+        # sites so a reader can jump from "there is custom full-trust code" to "these are
+        # the sites that use it".
+        $fullTrustSites = @($records | Where-Object { $_.UsesFullTrustCode })
+        if ($fullTrustSites.Count -gt 0) {
+            [void]$sb.AppendLine('<h2>Sites bound to full-trust code</h2>')
+            [void]$sb.AppendLine('<div class="table-scroll">')
+            [void]$sb.AppendLine('<table class="fulltrust">')
+            [void]$sb.AppendLine('<thead><tr><th>Site</th><th>Full-trust code</th><th>Category</th><th class="num">Wave</th><th>Reasons</th></tr></thead>')
+            [void]$sb.AppendLine('<tbody>')
+            foreach ($site in $fullTrustSites) {
+                $cat = if ($null -ne $site.Category) { [int]$site.Category } else { 0 }
+                $catName = if ($categoryMeta.Contains($cat)) { $categoryMeta[$cat].Name } elseif ($site.CategoryName) { [string]$site.CategoryName } else { '' }
+                $waveLabel = if ($null -ne $site.Wave) { [string]$site.Wave } else { '' }
+                [void]$sb.AppendLine(('<tr><td class="url">{0}</td><td>{1}</td><td><span class="badge b{2}">{3}</span></td><td class="num">{4}</td><td class="reasons">{5}</td></tr>' -f `
+                    (ConvertTo-SPSHtmlText -Value $site.Url),
+                    (Get-SPSYesNoPill -Value $site.UsesFullTrustCode),
+                    $cat,
+                    (ConvertTo-SPSHtmlText -Value $catName),
+                    (ConvertTo-SPSHtmlText -Value $waveLabel),
+                    (ConvertTo-SPSHtmlText -Value $site.Reasons)))
+            }
+            [void]$sb.AppendLine('</tbody>')
+            [void]$sb.AppendLine('</table>')
+            [void]$sb.AppendLine('</div>')
+        }
     }
 
     # Filter bar.

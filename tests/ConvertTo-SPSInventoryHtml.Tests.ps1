@@ -15,7 +15,8 @@ BeforeAll {
             Url = 'https://intranet/sites/legacy'; Title = 'Legacy <workflows>'; WebApp = 'Intranet'
             ContentDb = 'WSS_Content'; Template = 'STS#0'; SizeGB = 12.25; SubWebCount = 8
             LastModified = [datetime]'2024-06-01'; Category = 4; CategoryName = 'Blocking'
-            Wave = 4; WaveName = 'Projects / blockers'; Score = 9.5; Reasons = 'blocking: UsesCustomFarmFeature'
+            UsesFullTrustCode = $true
+            Wave = 4; WaveName = 'Projects / blockers'; Score = 9.5; Reasons = 'blocking: UsesFullTrustCode'
         }
     )
 
@@ -130,6 +131,27 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $html | Should -Match 'class="pill no">No<'
         # Feature scopes surfaced.
         $html | Should -Match 'Site; Web'
+    }
+
+    It 'links full-trust solutions to the affected sites' {
+        $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample -SolutionMap $script:SolutionMap
+
+        $html | Should -Match 'Sites bound to full-trust code'
+        # The blocking site that uses full-trust code is listed with its URL.
+        $html | Should -Match 'https://intranet/sites/legacy'
+    }
+
+    It 'omits the affected-sites table when no site uses full-trust code' {
+        $simpleOnly = @(
+            [PSCustomObject]@{
+                Url = 'https://intranet/sites/ok'; Title = 'OK'; Category = 1; CategoryName = 'Simple'
+                UsesFullTrustCode = $false; Wave = 1; WaveName = 'Quick wins'; Score = 0; Reasons = ''
+            }
+        )
+        $html = ConvertTo-SPSInventoryHtml -InputObject $simpleOnly -SolutionMap $script:SolutionMap
+
+        $html | Should -Match 'Farm solutions \(WSP\)'
+        $html | Should -Not -Match 'Sites bound to full-trust code'
     }
 
     It 'HTML-encodes solution values in the WSP section' {
