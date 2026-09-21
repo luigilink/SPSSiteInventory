@@ -95,6 +95,7 @@
                 # a list whose forms were customized with InfoPath (the _ipfs_* marker
                 # properties are stamped on the list root folder). InfoPath Forms Services
                 # is retired and unavailable in SharePoint Online.
+                $listTitle = $list.Title
                 try {
                     if ($list.BaseTemplate -eq [Microsoft.SharePoint.SPListTemplateType]::XMLForm) {
                         $signals.InfoPathFormCount++
@@ -108,7 +109,7 @@
                     }
                 }
                 catch {
-                    Write-Verbose -Message "Could not read InfoPath state on list '$($list.RootFolder.Url)': $($_.Exception.Message)"
+                    Write-Verbose -Message "Could not read InfoPath state on list '$listTitle': $($_.Exception.Message)"
                 }
             }
 
