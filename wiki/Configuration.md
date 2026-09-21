@@ -10,11 +10,31 @@ and adjust it. No client-specific value ships in the repository.
 | --- | --- | --- |
 | `EnvName` | string | Free-form environment identifier (e.g. `PROD`), used in output file names and the banner. |
 | `WebApplicationUrl` | string[] | Web application URLs to scan. Leave empty to scan every content web application. |
-| `CustomSolutionPrefix` | string[] | Case-insensitive name prefixes marking a farm solution (WSP) as custom/in-house. Sites activating a feature from a matching solution are flagged. |
+| `CustomSolutionPrefix` | string[] | **Optional override.** Case-insensitive name prefixes that force a farm solution (WSP) to be treated as custom. Custom solutions are auto-detected by default (see below), so this is usually left empty. |
+| `AutoDetectCustomSolutions` | bool | Optional (default `$true`). When true, a solution is custom unless its name matches a known Microsoft / out-of-the-box marker. Set `$false` to rely only on `CustomSolutionPrefix`. |
+| `KnownMicrosoftSolutionPrefix` | string[] | Optional extra name prefixes to treat as Microsoft / out-of-the-box during auto-detection (e.g. a known vendor package). |
 | `OutputFolder` | string | Folder where the CSV/JSON reports are written. |
 | `LogRetentionDays` | int | Days of run logs kept under the `Logs` folder. |
 | `Scoring` | hashtable | The scoring engine configuration (see below). **Mandatory.** |
 | `MigrationWaves` | hashtable[] | The category-to-wave mapping (see below). Optional; a one-wave-per-category default applies when omitted. |
+
+## Custom solution detection
+
+Custom farm solutions (WSP) are **auto-detected**, so you normally do not configure anything
+here. On a farm the solution store only holds solutions that were explicitly added, so the
+safe default is "custom unless proven Microsoft": a solution is treated as custom unless its
+name matches a known Microsoft / out-of-the-box marker (`microsoft.`, language packs, ...).
+
+- To force a solution custom when auto-detection misses it, add a prefix to
+  `CustomSolutionPrefix`.
+- To treat a known third-party package as out-of-the-box, add its prefix to
+  `KnownMicrosoftSolutionPrefix`.
+- To disable auto-detection entirely and rely only on `CustomSolutionPrefix`, set
+  `AutoDetectCustomSolutions = $false`.
+
+`IsCustom` feeds `UsesCustomFarmFeature`, and combined with a global assembly it drives
+`IsFullTrustCode` / `UsesFullTrustCode` — so getting it right without manual prefixes is the
+point of auto-detection.
 
 ## Scoring section
 
