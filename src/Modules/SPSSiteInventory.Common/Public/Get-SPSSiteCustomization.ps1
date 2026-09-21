@@ -97,6 +97,23 @@
     $fullTrustFeatureSet = [System.Collections.Generic.HashSet[string]]::new(
         [string[]]$FullTrustFeatureId, [System.StringComparer]::OrdinalIgnoreCase)
 
+    # Site-scoped features live on the site collection, not on any web. Inspect them once
+    # here so a full-trust WSP that ships a Site-scope feature is not missed (SPWeb.Features
+    # below only covers Web-scope features).
+    if ($customFeatureSet.Count -gt 0 -or $fullTrustFeatureSet.Count -gt 0) {
+        try {
+            foreach ($feature in $Site.Features) {
+                $featureId = $feature.DefinitionId.ToString()
+                if ($customFeatureSet.Contains($featureId)) { $signals.UsesCustomFarmFeature = $true }
+                if ($fullTrustFeatureSet.Contains($featureId)) { $signals.UsesFullTrustCode = $true }
+                if ($signals.UsesCustomFarmFeature -and $signals.UsesFullTrustCode) { break }
+            }
+        }
+        catch {
+            Write-Verbose -Message "Could not read site-scoped features for '$($Site.Url)': $($_.Exception.Message)"
+        }
+    }
+
     foreach ($web in $Site.AllWebs) {
         try {
             # SharePoint 2010 platform: classic workflow associations at web and list scope.
@@ -151,7 +168,8 @@
                 $signals.CustomMasterPage = $true
             }
 
-            if ($customFeatureSet.Count -gt 0 -or $fullTrustFeatureSet.Count -gt 0) {
+            if (($customFeatureSet.Count -gt 0 -or $fullTrustFeatureSet.Count -gt 0) -and
+                -not ($signals.UsesCustomFarmFeature -and $signals.UsesFullTrustCode)) {
                 foreach ($feature in $web.Features) {
                     $featureId = $feature.DefinitionId.ToString()
                     if ($customFeatureSet.Contains($featureId)) {
