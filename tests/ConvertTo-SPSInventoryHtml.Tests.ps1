@@ -9,13 +9,13 @@ BeforeAll {
             Url = 'https://intranet/sites/team'; Title = 'Team & Co'; WebApp = 'Intranet'
             ContentDb = 'WSS_Content'; Template = 'STS#3'; SizeGB = 1.5; SubWebCount = 2
             LastModified = [datetime]'2025-01-15'; Category = 1; CategoryName = 'Simple'
-            Score = 0; Reasons = ''
+            Wave = 1; WaveName = 'Quick wins'; Score = 0; Reasons = ''
         },
         [PSCustomObject]@{
             Url = 'https://intranet/sites/legacy'; Title = 'Legacy <workflows>'; WebApp = 'Intranet'
             ContentDb = 'WSS_Content'; Template = 'STS#0'; SizeGB = 12.25; SubWebCount = 8
             LastModified = [datetime]'2024-06-01'; Category = 4; CategoryName = 'Blocking'
-            Score = 9.5; Reasons = 'blocking: UsesCustomFarmFeature'
+            Wave = 4; WaveName = 'Projects / blockers'; Score = 9.5; Reasons = 'blocking: UsesCustomFarmFeature'
         }
     )
 }
@@ -50,6 +50,14 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         # Category labels present in the summary cards.
         $html | Should -Match '1\. Simple'
         $html | Should -Match '4\. Blocking'
+    }
+
+    It 'renders the migration wave plan with per-wave names' {
+        $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
+
+        $html | Should -Match 'Migration wave plan'
+        $html | Should -Match 'Quick wins'
+        $html | Should -Match 'Projects / blockers'
     }
 
     It 'HTML-encodes field values so markup cannot break' {

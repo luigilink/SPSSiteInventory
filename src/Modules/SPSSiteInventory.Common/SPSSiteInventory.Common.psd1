@@ -19,6 +19,7 @@
         'Get-SPSInventorySetting'
         'Get-SPSSiteCustomization'
         'Get-SPSSiteInventory'
+        'Group-SPSMigrationWave'
         'Import-SPSSharePointCommand'
         'Initialize-SPSScript'
         'Measure-SPSSiteComplexity'
