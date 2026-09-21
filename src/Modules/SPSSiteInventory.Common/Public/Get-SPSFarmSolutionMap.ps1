@@ -31,7 +31,9 @@
         Returns an array of PSCustomObject with SolutionName, SolutionId, Deployed,
         DeploymentState, IsCustom, ContainsGlobalAssembly, ContainsCasPolicy,
         ContainsWebApplicationResource, IsFullTrustCode, DeployedWebApplicationCount,
-        DeployedServerCount, FeatureCount, FeatureScopes and FeatureIds.
+        DeployedServerCount, FeatureCount, FeatureScopes and FeatureIds. FeatureCount
+        reflects the number of features the solution ships even when it is added but not
+        deployed (the ids and scopes may still be empty until deployment).
 
         .PARAMETER CustomSolutionPrefix
         Optional list of case-insensitive name prefixes that force a solution to be flagged
@@ -120,14 +122,34 @@
 
         $featureIds = @()
         $featureScopes = @()
+        $featureCount = 0
         try {
             $deployedFeatures = @($solution.DeployedFeatures)
-            $featureIds = @($deployedFeatures | ForEach-Object { $_.Id.ToString() })
-            $featureScopes = @($deployedFeatures | ForEach-Object { [string]$_.Scope } | Where-Object { $_ } | Sort-Object -Unique)
+            # Capture the count first: SPSolution.DeployedFeatures enumerates even when the
+            # solution is not deployed, but reading each feature's Id/Scope can throw until
+            # deployment. Keeping the count separate means a non-deployed solution still
+            # reports how many features it ships.
+            $featureCount = $deployedFeatures.Count
+
+            $ids = [System.Collections.Generic.List[string]]::new()
+            $scopes = [System.Collections.Generic.List[string]]::new()
+            foreach ($feature in $deployedFeatures) {
+                # Read each feature best-effort so one unreadable feature does not drop the
+                # detail for the others.
+                try { if ($feature.Id) { $ids.Add($feature.Id.ToString()) } }
+                catch { Write-Verbose -Message "Could not read a feature Id for solution '$name': $($_.Exception.Message)" }
+                try { $scope = [string]$feature.Scope; if ($scope) { $scopes.Add($scope) } }
+                catch { Write-Verbose -Message "Could not read a feature Scope for solution '$name': $($_.Exception.Message)" }
+            }
+            $featureIds = @($ids)
+            $featureScopes = @($scopes | Sort-Object -Unique)
         }
         catch {
             Write-Verbose -Message "Could not read features for solution '$name': $($_.Exception.Message)"
         }
+
+        # Prefer the enumerated count; fall back to the number of ids actually read.
+        if ($featureCount -lt $featureIds.Count) { $featureCount = $featureIds.Count }
 
         [PSCustomObject]@{
             SolutionName                   = $name
@@ -141,7 +163,7 @@
             IsFullTrustCode                = ($isCustom -and $containsGlobalAssembly)
             DeployedWebApplicationCount    = $deployedWebAppCount
             DeployedServerCount            = $deployedServerCount
-            FeatureCount                   = $featureIds.Count
+            FeatureCount                   = $featureCount
             FeatureScopes                  = $featureScopes
             FeatureIds                     = $featureIds
         }
