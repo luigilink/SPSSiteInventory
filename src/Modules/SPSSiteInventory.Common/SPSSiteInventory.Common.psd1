@@ -1,6 +1,6 @@
 ﻿@{
     RootModule        = 'SPSSiteInventory.Common.psm1'
-    ModuleVersion     = '1.0.0'
+    ModuleVersion     = '1.1.0'
     GUID              = 'dbd80cd4-51b6-4987-bcae-267c6e0e6374'
     Author            = 'Jean-Cyril DROUHIN'
     CompanyName       = 'luigilink'
