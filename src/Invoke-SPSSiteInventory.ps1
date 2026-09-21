@@ -11,7 +11,7 @@
     4. enumerates site collections (identity + volumetry);
     5. collects the customization signals of each site;
     6. scores each site from 1 (Simple) to 4 (Blocking);
-    7. exports the consolidated result to CSV and JSON.
+    7. exports the consolidated result to CSV, JSON and a self-contained HTML report.
 
     The tool is read-only: it never modifies the farm. Run it on a farm server, as the
     farm account, in an elevated Windows PowerShell 5.1 session.
@@ -83,9 +83,9 @@ try {
         }
     }
 
-    $output = Export-SPSInventoryReport -InputObject @($scored) -OutputFolder $settings.OutputFolder -BaseName ('SPSSiteInventory-' + $settings.EnvName)
+    $output = Export-SPSInventoryReport -InputObject @($scored) -OutputFolder $settings.OutputFolder -BaseName ('SPSSiteInventory-' + $settings.EnvName) -EnvName $settings.EnvName
 
-    Add-SPSInventoryEvent -Message "Inventory complete. CSV: $($output.CsvPath) | JSON: $($output.JsonPath)" -Level Information
+    Add-SPSInventoryEvent -Message "Inventory complete. CSV: $($output.CsvPath) | JSON: $($output.JsonPath) | HTML: $($output.HtmlPath)" -Level Information
 }
 catch {
     Add-SPSInventoryEvent -Message "Inventory failed: $($_.Exception.Message)" -Level Error

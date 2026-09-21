@@ -11,6 +11,7 @@
 
     FunctionsToExport = @(
         'Add-SPSInventoryEvent'
+        'ConvertTo-SPSInventoryHtml'
         'Export-SPSInventoryReport'
         'Get-SPSFarmSolutionMap'
         'Get-SPSInstalledProductVersion'

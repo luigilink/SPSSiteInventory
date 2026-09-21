@@ -8,7 +8,7 @@
 
 **SPSSiteInventory** is a PowerShell toolkit that inventories on-premises **SharePoint Server** site collections and **categorizes them by migration complexity** (Simple → Moderate → Complex → Blocking) to prepare a move to **SharePoint Online**.
 
-It is read-only by design and produces a scriptable, diff-friendly CSV/JSON inventory that feeds a migration wave plan.
+It is read-only by design and produces a scriptable, diff-friendly CSV/JSON inventory plus a shareable, self-contained HTML report that feed a migration wave plan.
 
 Compatible with **SharePoint Server 2016, 2019 and Subscription Edition**.
 
@@ -22,6 +22,7 @@ Microsoft's assessment tooling has shifted: **SMAT reaches end of support on 1 O
 - Customization signals: workflow associations, sandbox solutions, custom master pages, event receivers, unique permissions
 - Correlation between **farm solutions (WSP)** and the sites that activate their features (custom-code detection)
 - A **complexity score and category** per site, driven by a per-environment configuration
+- Outputs: a **CSV** (Excel), a **JSON** (automation) and a **self-contained HTML report** (category summary, sortable/filterable table) for sharing with stakeholders
 
 ## Quick links
 
@@ -37,26 +38,6 @@ Microsoft's assessment tooling has shifted: **SMAT reaches end of support on 1 O
 
 - **Windows PowerShell 5.1** (the SharePoint Server object model requires it; do not use PowerShell 7)
 - Run on a **SharePoint farm server**, as the **farm account** (read access to all web applications and the User Profile service), in an elevated session
-
-## Repository structure
-
-```text
-SPSSiteInventory/
-├── src/
-│   ├── Invoke-SPSSiteInventory.ps1          # orchestrator (entry point)
-│   ├── Test-SPSSiteInventoryReadiness.ps1   # prerequisite check
-│   ├── config/
-│   │   └── inventory-settings.example.psd1  # scoring weights, thresholds, blocking signals
-│   └── Modules/SPSSiteInventory.Common/      # collectors + scoring engine
-├── tests/                                    # Pester tests
-└── wiki/                                      # documentation (published to the GitHub wiki)
-```
-
-## Roadmap
-
-- **V1** — inventory + configurable scoring + CSV/JSON export (read-only)
-- **V2** — WSP↔site correlation depth, workflow 2010/2013 split, InfoPath detection, self-contained HTML report, wave proposal
-- **V3** — delta re-scans, migration backlog export, remediation tracking
 
 ## Code of conduct
 
