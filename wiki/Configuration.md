@@ -24,6 +24,7 @@ Scoring = @{
     Weights = @{
         Workflow2010Count        = 3.0
         Workflow2013Count        = 1.5
+        InfoPathFormCount        = 3.0
         SandboxSolutions         = 3.0
         CustomMasterPage         = 2.0
         EventReceivers           = 1.5
@@ -36,6 +37,7 @@ Scoring = @{
     }
     BlockingSignals = @(
         'UsesCustomFarmFeature'
+        'InfoPathFormCount'
     )
 }
 ```
@@ -54,6 +56,10 @@ Workflows are split by platform because their migration cost differs:
   **Blocking (4)**.
 - `Workflow2013Count` — SharePoint 2013 workflows (Workflow Manager). A lighter, more
   direct remediation, so they are weighted less than their 2010 counterparts.
+
+`InfoPathFormCount` counts the InfoPath-driven lists and libraries on the site. InfoPath
+Forms Services is **retired and unavailable in SharePoint Online**, so it is weighted
+heavily and listed in `BlockingSignals` in the example configuration.
 
 ### Thresholds
 

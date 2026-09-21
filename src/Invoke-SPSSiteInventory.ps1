@@ -74,6 +74,7 @@ try {
                 LastModified      = $item.LastModified
                 Workflow2010Count = $signals['Workflow2010Count']
                 Workflow2013Count = $signals['Workflow2013Count']
+                InfoPathFormCount = $signals['InfoPathFormCount']
                 Category          = $result.Category
                 CategoryName      = $result.CategoryName
                 Score             = $result.Score

@@ -41,6 +41,7 @@ Each row in the CSV/JSON describes one site collection:
 | `LastModified` | Last item modified date (dormancy signal) |
 | `Workflow2010Count` | SharePoint 2010 workflow associations (legacy engine, retired in SPO) |
 | `Workflow2013Count` | SharePoint 2013 workflow subscriptions (Workflow Manager) |
+| `InfoPathFormCount` | InfoPath-driven lists/libraries (retired, no SPO equivalent) |
 | `Category` | Complexity category 1–4 |
 | `CategoryName` | Simple / Moderate / Complex / Blocking |
 | `Score` | Numeric complexity score |
