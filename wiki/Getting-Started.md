@@ -30,7 +30,7 @@ Copy-Item .\config\inventory-settings.example.psd1 .\config\inventory-settings.p
 notepad .\config\inventory-settings.psd1
 ```
 
-See the [Configuration](Configuration) page for every setting. At minimum, set `OutputFolder` and the `CustomSolutionPrefix` list (the name prefixes of your in-house farm solutions).
+See the [Configuration](Configuration) page for every setting. At minimum, set `OutputFolder`. Custom farm solutions are auto-detected, so `CustomSolutionPrefix` is optional (leave it empty unless you need to override the detection).
 
 ## 4. Check readiness
 

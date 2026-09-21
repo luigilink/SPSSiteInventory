@@ -16,6 +16,11 @@
         blocker for SharePoint Online; a purely declarative farm solution is a lighter
         lift.
 
+        IsCustom is auto-detected by default (custom unless the solution name matches a
+        known Microsoft / out-of-the-box marker), so no per-client prefix list is needed.
+        CustomSolutionPrefix remains as an optional override; AutoDetectCustom can be
+        turned off to fall back to the legacy prefix-only behaviour.
+
         The map lets Get-SPSSiteCustomization flag any site that activates a feature coming
         from a custom farm solution (UsesCustomFarmFeature) and, more specifically, from a
         custom full-trust solution (UsesFullTrustCode).
@@ -29,12 +34,35 @@
         DeployedServerCount, FeatureCount, FeatureScopes and FeatureIds.
 
         .PARAMETER CustomSolutionPrefix
-        Optional list of case-insensitive name prefixes that mark a solution as custom
-        (in-house). Solutions whose name starts with one of these prefixes are flagged
-        IsCustom = $true. Keep this in the per-environment settings, never hard-coded.
+        Optional list of case-insensitive name prefixes that force a solution to be flagged
+        IsCustom = $true. This is now an *override* on top of auto-detection: you rarely
+        need it, because a solution is treated as custom by default. Use it only to force
+        a solution custom when auto-detection wrongly classifies it as Microsoft.
+
+        .PARAMETER AutoDetectCustom
+        When $true (default), a solution is treated as custom unless its name matches a
+        known Microsoft / out-of-the-box marker (see Test-SPSMicrosoftSolution). This is
+        what makes CustomSolutionPrefix optional: on a farm the solution store only holds
+        solutions that were explicitly added, so "custom unless proven Microsoft" is the
+        safe default and needs no per-client configuration. Set to $false to fall back to
+        the legacy behaviour where only CustomSolutionPrefix decides IsCustom.
+
+        .PARAMETER KnownMicrosoftPrefix
+        Optional extra case-insensitive name prefixes to treat as Microsoft / out-of-the-box
+        during auto-detection, merged with the built-in list. Use it to silence a known
+        vendor package that should not count as custom.
 
         .EXAMPLE
+        # Zero configuration: solutions are auto-classified as custom vs Microsoft.
+        Get-SPSFarmSolutionMap
+
+        .EXAMPLE
+        # Force a solution custom even if auto-detection missed it.
         Get-SPSFarmSolutionMap -CustomSolutionPrefix @('contoso', 'inhouse')
+
+        .EXAMPLE
+        # Legacy behaviour: only the prefix list decides IsCustom.
+        Get-SPSFarmSolutionMap -CustomSolutionPrefix @('contoso') -AutoDetectCustom:$false
     #>
     [CmdletBinding()]
     [OutputType([System.Object[]])]
@@ -42,7 +70,15 @@
     (
         [Parameter()]
         [System.String[]]
-        $CustomSolutionPrefix = @()
+        $CustomSolutionPrefix = @(),
+
+        [Parameter()]
+        [System.Boolean]
+        $AutoDetectCustom = $true,
+
+        [Parameter()]
+        [System.String[]]
+        $KnownMicrosoftPrefix = @()
     )
 
     $solutions = Get-SPSolution -ErrorAction Stop
@@ -50,7 +86,14 @@
     $map = foreach ($solution in $solutions) {
         $name = [string]$solution.Name
 
+        # 1. Auto-detection: custom by default, unless the name looks Microsoft / OOTB.
         $isCustom = $false
+        if ($AutoDetectCustom) {
+            $isCustom = -not (Test-SPSMicrosoftSolution -Name $name -ExtraMicrosoftPrefix $KnownMicrosoftPrefix)
+        }
+
+        # 2. Explicit prefix override: force custom when the name matches a supplied prefix
+        #    (works whether or not auto-detection is on).
         foreach ($prefix in $CustomSolutionPrefix) {
             if (-not [string]::IsNullOrWhiteSpace($prefix) -and
                 $name.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase)) {

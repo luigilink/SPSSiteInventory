@@ -50,7 +50,14 @@ try {
     Import-SPSSharePointCommand
 
     Add-SPSInventoryEvent -Message 'Building farm-solution map.' -Level Information
-    $solutionMap = Get-SPSFarmSolutionMap -CustomSolutionPrefix $settings.CustomSolutionPrefix
+    $solutionMapParams = @{ CustomSolutionPrefix = $settings.CustomSolutionPrefix }
+    if ($settings.ContainsKey('AutoDetectCustomSolutions')) {
+        $solutionMapParams['AutoDetectCustom'] = [bool]$settings.AutoDetectCustomSolutions
+    }
+    if ($settings.ContainsKey('KnownMicrosoftSolutionPrefix')) {
+        $solutionMapParams['KnownMicrosoftPrefix'] = $settings.KnownMicrosoftSolutionPrefix
+    }
+    $solutionMap = Get-SPSFarmSolutionMap @solutionMapParams
     $customFeatureId = @($solutionMap | Where-Object { $_.IsCustom } | ForEach-Object { $_.FeatureIds } | Sort-Object -Unique)
     $fullTrustFeatureId = @($solutionMap | Where-Object { $_.IsFullTrustCode } | ForEach-Object { $_.FeatureIds } | Sort-Object -Unique)
 

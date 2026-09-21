@@ -15,12 +15,22 @@
     # web application in the farm.
     WebApplicationUrl = @()
 
-    # Case-insensitive name prefixes that mark a farm solution (WSP) as custom / in-house.
-    # Any site activating a feature from a matching solution is flagged and can be scored
-    # as blocking. Replace with your own product/solution prefixes.
-    CustomSolutionPrefix = @(
-        'contoso'
-    )
+    # Custom farm solutions (WSP) are auto-detected by default: a solution is treated as
+    # custom unless its name looks like a Microsoft / out-of-the-box solution. You usually
+    # do NOT need to configure anything here.
+    #
+    # CustomSolutionPrefix is an optional OVERRIDE: list case-insensitive name prefixes to
+    # force a solution to be treated as custom when auto-detection wrongly classifies it as
+    # Microsoft. Leave empty to rely on auto-detection alone.
+    CustomSolutionPrefix = @()
+
+    # Optional: turn auto-detection off to fall back to the legacy behaviour where only
+    # CustomSolutionPrefix decides which solutions are custom.
+    # AutoDetectCustomSolutions = $true
+
+    # Optional: extra name prefixes to treat as Microsoft / out-of-the-box during
+    # auto-detection (for example a known vendor package that should not count as custom).
+    # KnownMicrosoftSolutionPrefix = @()
 
     # Folder where the CSV/JSON reports are written.
     OutputFolder = 'C:\SPSSiteInventory\Reports'
