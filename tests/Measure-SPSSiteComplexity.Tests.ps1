@@ -21,6 +21,7 @@ BeforeAll {
         }
         BlockingSignals = @(
             'UsesCustomFarmFeature'
+            'UsesFullTrustCode'
             'InfoPathFormCount'
         )
     }
@@ -73,6 +74,15 @@ Describe 'Measure-SPSSiteComplexity' {
 
     It 'forces Blocking (category 4) when a site uses InfoPath forms' {
         $signals = @{ InfoPathFormCount = 1 }
+
+        $result = Measure-SPSSiteComplexity -Signals $signals -Scoring $script:Scoring
+
+        $result.Category | Should -Be 4
+        $result.CategoryName | Should -Be 'Blocking'
+    }
+
+    It 'forces Blocking (category 4) when a site activates custom full-trust code' {
+        $signals = @{ UsesFullTrustCode = $true }
 
         $result = Measure-SPSSiteComplexity -Signals $signals -Scoring $script:Scoring
 

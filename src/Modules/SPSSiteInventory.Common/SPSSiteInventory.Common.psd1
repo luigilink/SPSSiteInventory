@@ -13,6 +13,7 @@
         'Add-SPSInventoryEvent'
         'ConvertTo-SPSInventoryHtml'
         'Export-SPSInventoryReport'
+        'Export-SPSSolutionReport'
         'Get-SPSFarmSolutionMap'
         'Get-SPSInstalledProductVersion'
         'Get-SPSInventorySetting'

@@ -41,11 +41,19 @@
         built from Get-SPSFarmSolutionMap). A site activating one of these is flagged with
         the UsesCustomFarmFeature signal, which the scoring config can treat as blocking.
 
+        .PARAMETER FullTrustFeatureId
+        Optional list of feature IDs known to come from custom *full-trust* solutions
+        (solutions that deploy a global assembly, i.e. IsFullTrustCode in the farm-solution
+        map). A site activating one of these is flagged with the UsesFullTrustCode signal,
+        a strong "not portable to SharePoint Online" indicator that the scoring config can
+        treat as blocking.
+
         .EXAMPLE
         $map = Get-SPSFarmSolutionMap -CustomSolutionPrefix @('contoso')
         $customIds = $map | Where-Object IsCustom | ForEach-Object FeatureIds
+        $fullTrustIds = $map | Where-Object IsFullTrustCode | ForEach-Object FeatureIds
         Get-SPSSite 'https://intranet/sites/team' | ForEach-Object {
-            Get-SPSSiteCustomization -Site $_ -CustomFeatureId $customIds
+            Get-SPSSiteCustomization -Site $_ -CustomFeatureId $customIds -FullTrustFeatureId $fullTrustIds
         }
     #>
     [CmdletBinding()]
@@ -58,7 +66,11 @@
 
         [Parameter()]
         [System.String[]]
-        $CustomFeatureId = @()
+        $CustomFeatureId = @(),
+
+        [Parameter()]
+        [System.String[]]
+        $FullTrustFeatureId = @()
     )
 
     $signals = @{
@@ -70,6 +82,7 @@
         UniquePermissionsCount   = 0
         EventReceivers           = 0
         UsesCustomFarmFeature    = $false
+        UsesFullTrustCode        = $false
     }
 
     try {
@@ -81,6 +94,8 @@
 
     $customFeatureSet = [System.Collections.Generic.HashSet[string]]::new(
         [string[]]$CustomFeatureId, [System.StringComparer]::OrdinalIgnoreCase)
+    $fullTrustFeatureSet = [System.Collections.Generic.HashSet[string]]::new(
+        [string[]]$FullTrustFeatureId, [System.StringComparer]::OrdinalIgnoreCase)
 
     foreach ($web in $Site.AllWebs) {
         try {
@@ -136,10 +151,16 @@
                 $signals.CustomMasterPage = $true
             }
 
-            if ($customFeatureSet.Count -gt 0) {
+            if ($customFeatureSet.Count -gt 0 -or $fullTrustFeatureSet.Count -gt 0) {
                 foreach ($feature in $web.Features) {
-                    if ($customFeatureSet.Contains($feature.DefinitionId.ToString())) {
+                    $featureId = $feature.DefinitionId.ToString()
+                    if ($customFeatureSet.Contains($featureId)) {
                         $signals.UsesCustomFarmFeature = $true
+                    }
+                    if ($fullTrustFeatureSet.Contains($featureId)) {
+                        $signals.UsesFullTrustCode = $true
+                    }
+                    if ($signals.UsesCustomFarmFeature -and $signals.UsesFullTrustCode) {
                         break
                     }
                 }
