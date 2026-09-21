@@ -1,0 +1,40 @@
+# SPSSiteInventory CI Release workflow
+# Triggered by pushing a v* tag (e.g. v1.0.0). Packages the contents of the
+# src/ folder into a ZIP (so the archive extracts straight to config/, Modules/
+# and the scripts, with no src/ wrapper) and publishes a GitHub Release using
+# RELEASE-NOTES.md as the body.
+
+name: SPSSiteInventory CI Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Create ZIP file of src contents
+        run: |
+          zip_name="SPSSiteInventory-${{ github.ref_name }}.zip"
+          ( cd src && zip -r "../$zip_name" . )
+        shell: bash
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          draft: false
+          prerelease: false
+          body_path: RELEASE-NOTES.md
+          files: |
+            LICENSE
+            SPSSiteInventory-${{ github.ref_name }}.zip
