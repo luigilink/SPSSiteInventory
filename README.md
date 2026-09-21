@@ -39,26 +39,6 @@ Microsoft's assessment tooling has shifted: **SMAT reaches end of support on 1 O
 - **Windows PowerShell 5.1** (the SharePoint Server object model requires it; do not use PowerShell 7)
 - Run on a **SharePoint farm server**, as the **farm account** (read access to all web applications and the User Profile service), in an elevated session
 
-## Repository structure
-
-```text
-SPSSiteInventory/
-├── src/
-│   ├── Invoke-SPSSiteInventory.ps1          # orchestrator (entry point)
-│   ├── Test-SPSSiteInventoryReadiness.ps1   # prerequisite check
-│   ├── config/
-│   │   └── inventory-settings.example.psd1  # scoring weights, thresholds, blocking signals
-│   └── Modules/SPSSiteInventory.Common/      # collectors + scoring engine
-├── tests/                                    # Pester tests
-└── wiki/                                      # documentation (published to the GitHub wiki)
-```
-
-## Roadmap
-
-- **V1** — inventory + configurable scoring + CSV/JSON export (read-only)
-- **V2** — self-contained HTML report ✅, WSP↔site correlation depth, workflow 2010/2013 split, InfoPath detection, wave proposal
-- **V3** — delta re-scans, migration backlog export, remediation tracking
-
 ## Code of conduct
 
 This project adopts the [Contributor Covenant](CODE_OF_CONDUCT.md).
