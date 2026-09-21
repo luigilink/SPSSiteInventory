@@ -13,7 +13,17 @@ The orchestrator:
 3. builds the farm-solution map (custom-code detection);
 4. enumerates site collections;
 5. collects customization signals and scores each site;
-6. exports CSV and JSON to the configured output folder.
+6. exports CSV, JSON and a self-contained HTML report to the configured output folder.
+
+## Output files
+
+Each run writes three timestamped files to the output folder:
+
+| File | Purpose |
+| --- | --- |
+| `*.csv` | Review in Excel; one row per site collection. |
+| `*.json` | Downstream automation (for example feeding migration wave planning). |
+| `*.html` | A shareable, self-contained report: category summary box and a sortable / filterable site table. Opens in any browser with no external resource. |
 
 ## Output fields
 

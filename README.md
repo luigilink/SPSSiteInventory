@@ -8,7 +8,7 @@
 
 **SPSSiteInventory** is a PowerShell toolkit that inventories on-premises **SharePoint Server** site collections and **categorizes them by migration complexity** (Simple → Moderate → Complex → Blocking) to prepare a move to **SharePoint Online**.
 
-It is read-only by design and produces a scriptable, diff-friendly CSV/JSON inventory that feeds a migration wave plan.
+It is read-only by design and produces a scriptable, diff-friendly CSV/JSON inventory plus a shareable, self-contained HTML report that feed a migration wave plan.
 
 Compatible with **SharePoint Server 2016, 2019 and Subscription Edition**.
 
@@ -22,6 +22,7 @@ Microsoft's assessment tooling has shifted: **SMAT reaches end of support on 1 O
 - Customization signals: workflow associations, sandbox solutions, custom master pages, event receivers, unique permissions
 - Correlation between **farm solutions (WSP)** and the sites that activate their features (custom-code detection)
 - A **complexity score and category** per site, driven by a per-environment configuration
+- Outputs: a **CSV** (Excel), a **JSON** (automation) and a **self-contained HTML report** (category summary, sortable/filterable table) for sharing with stakeholders
 
 ## Quick links
 
@@ -55,7 +56,7 @@ SPSSiteInventory/
 ## Roadmap
 
 - **V1** — inventory + configurable scoring + CSV/JSON export (read-only)
-- **V2** — WSP↔site correlation depth, workflow 2010/2013 split, InfoPath detection, self-contained HTML report, wave proposal
+- **V2** — self-contained HTML report ✅, WSP↔site correlation depth, workflow 2010/2013 split, InfoPath detection, wave proposal
 - **V3** — delta re-scans, migration backlog export, remediation tracking
 
 ## Code of conduct
