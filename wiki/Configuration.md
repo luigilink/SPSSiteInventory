@@ -14,6 +14,7 @@ and adjust it. No client-specific value ships in the repository.
 | `OutputFolder` | string | Folder where the CSV/JSON reports are written. |
 | `LogRetentionDays` | int | Days of run logs kept under the `Logs` folder. |
 | `Scoring` | hashtable | The scoring engine configuration (see below). **Mandatory.** |
+| `MigrationWaves` | hashtable[] | The category-to-wave mapping (see below). Optional; a one-wave-per-category default applies when omitted. |
 
 ## Scoring section
 
@@ -77,6 +78,37 @@ non-portable as-is:
 - `UsesFullTrustCode` — the site activates a feature from a custom **full-trust** solution
   (a WSP deploying a global assembly to the GAC), correlated through the farm-solution map.
 - `InfoPathFormCount` — the site uses InfoPath forms.
+
+## MigrationWaves section
+
+`MigrationWaves` maps complexity categories to ordered migration waves, consumed by
+`Group-SPSMigrationWave`. In a SharePoint Server to SharePoint Online migration the
+migrated unit is the **site collection**, so waves are planned per site by complexity —
+content databases are an on-premises storage concern with no SharePoint Online equivalent
+and are not used here.
+
+```powershell
+MigrationWaves = @(
+    @{ Wave = 1; Name = 'Quick wins'; Categories = @(1) }
+    @{ Wave = 2; Name = 'Light remediation'; Categories = @(2) }
+    @{ Wave = 3; Name = 'Rebuild'; Categories = @(3) }
+    @{ Wave = 4; Name = 'Projects / blockers'; Categories = @(4) }
+)
+```
+
+Each entry lists the categories it groups. The default above is **one wave per category**.
+To put every non-blocking site in the first wave instead:
+
+```powershell
+MigrationWaves = @(
+    @{ Wave = 1; Name = 'Migrate now'; Categories = @(1, 2, 3) }
+    @{ Wave = 2; Name = 'Projects';    Categories = @(4) }
+)
+```
+
+A site whose category is not listed in any wave lands in an **Unassigned** bucket (wave 0),
+surfaced in the report rather than silently dropped. When `MigrationWaves` is omitted from
+the settings, the one-wave-per-category default is applied.
 
 ## Tuning
 

@@ -10,7 +10,7 @@
     3. builds the farm-solution map (WSP -> full-trust code, features) to detect custom code;
     4. enumerates site collections (identity + volumetry);
     5. collects the customization signals of each site;
-    6. scores each site from 1 (Simple) to 4 (Blocking);
+    6. scores each site from 1 (Simple) to 4 (Blocking) and assigns a migration wave;
     7. exports the scored inventory to CSV, JSON and a self-contained HTML report, and the
        farm-solution map to its own CSV and JSON.
 
@@ -88,6 +88,19 @@ try {
             $site.Dispose()
         }
     }
+
+    $waves = if ($settings.ContainsKey('MigrationWaves')) {
+        @($settings.MigrationWaves)
+    }
+    else {
+        @(
+            @{ Wave = 1; Name = 'Quick wins'; Categories = @(1) }
+            @{ Wave = 2; Name = 'Light remediation'; Categories = @(2) }
+            @{ Wave = 3; Name = 'Rebuild'; Categories = @(3) }
+            @{ Wave = 4; Name = 'Projects / blockers'; Categories = @(4) }
+        )
+    }
+    $scored = @(Group-SPSMigrationWave -InputObject @($scored) -MigrationWaves $waves)
 
     $output = Export-SPSInventoryReport -InputObject @($scored) -OutputFolder $settings.OutputFolder -BaseName ('SPSSiteInventory-' + $settings.EnvName) -EnvName $settings.EnvName
     $solutionOutput = Export-SPSSolutionReport -InputObject @($solutionMap) -OutputFolder $settings.OutputFolder -BaseName ('SPSSiteInventory-' + $settings.EnvName)

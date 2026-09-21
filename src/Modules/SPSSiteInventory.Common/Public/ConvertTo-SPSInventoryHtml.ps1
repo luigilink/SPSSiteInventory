@@ -91,6 +91,25 @@
     }
     $totalSize = [math]::Round($totalSize, 2)
 
+    # Per-wave aggregation for the migration wave plan. Waves are discovered from the
+    # records (Wave / WaveName), so this stays self-contained. Records without a wave are
+    # bucketed as 0 / 'Unassigned' and shown last.
+    $waveAgg = @{}
+    foreach ($record in $records) {
+        $waveNumber = 0
+        if ($null -ne $record.Wave) { $waveNumber = [int]$record.Wave }
+        $waveName = if ($record.WaveName) { [string]$record.WaveName } elseif ($waveNumber -eq 0) { 'Unassigned' } else { ('Wave {0}' -f $waveNumber) }
+
+        if (-not $waveAgg.ContainsKey($waveNumber)) {
+            $waveAgg[$waveNumber] = [PSCustomObject]@{ Name = $waveName; Count = 0; SizeGB = 0.0 }
+        }
+        $waveAgg[$waveNumber].Count++
+        if ($null -ne $record.SizeGB) {
+            try { $waveAgg[$waveNumber].SizeGB += [double]$record.SizeGB } catch { Write-Verbose -Message "Ignoring non-numeric SizeGB in wave aggregation: $($_.Exception.Message)" }
+        }
+    }
+    $waveKeys = @($waveAgg.Keys | Sort-Object { if ([int]$_ -eq 0) { [int]::MaxValue } else { [int]$_ } })
+
     $encTitle = ConvertTo-SPSHtmlText -Value $Title
     $encEnv = ConvertTo-SPSHtmlText -Value $EnvName
     $encGenerated = ConvertTo-SPSHtmlText -Value $GeneratedOn.ToString('yyyy-MM-dd HH:mm')
@@ -218,6 +237,23 @@ td.reasons { max-width: 340px; color: var(--muted); }
     [void]$sb.AppendLine('</div>')
     [void]$sb.AppendLine('</div>')
 
+    # Migration wave plan.
+    if ($waveKeys.Count -gt 0) {
+        [void]$sb.AppendLine('<h2>Migration wave plan</h2>')
+        [void]$sb.AppendLine('<div class="table-scroll">')
+        [void]$sb.AppendLine('<table class="waves">')
+        [void]$sb.AppendLine('<thead><tr><th>Wave</th><th>Name</th><th class="num">Sites</th><th class="num">Content (GB)</th></tr></thead>')
+        [void]$sb.AppendLine('<tbody>')
+        foreach ($key in $waveKeys) {
+            $agg = $waveAgg[$key]
+            $waveLabel = if ([int]$key -eq 0) { '-' } else { [string]$key }
+            [void]$sb.AppendLine(('<tr><td class="num">{0}</td><td>{1}</td><td class="num">{2}</td><td class="num">{3}</td></tr>' -f $waveLabel, (ConvertTo-SPSHtmlText -Value $agg.Name), $agg.Count, ([math]::Round($agg.SizeGB, 2)).ToString($invariant)))
+        }
+        [void]$sb.AppendLine('</tbody>')
+        [void]$sb.AppendLine('</table>')
+        [void]$sb.AppendLine('</div>')
+    }
+
     # Filter bar.
     [void]$sb.AppendLine('<div class="filters">')
     [void]$sb.AppendLine('<button data-filter="all" class="active">All</button>')
@@ -236,6 +272,7 @@ td.reasons { max-width: 340px; color: var(--muted); }
         @{ Key = 'SizeGB'; Label = 'Size (GB)'; Class = 'num'; Type = 'num' }
         @{ Key = 'SubWebCount'; Label = 'Sub-webs'; Class = 'num'; Type = 'num' }
         @{ Key = 'LastModified'; Label = 'Last modified'; Class = ''; Type = 'text' }
+        @{ Key = 'Wave'; Label = 'Wave'; Class = 'num'; Type = 'num' }
         @{ Key = 'Score'; Label = 'Score'; Class = 'num'; Type = 'num' }
     )
 

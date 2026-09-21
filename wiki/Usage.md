@@ -48,6 +48,8 @@ Each row in the CSV/JSON describes one site collection:
 | `UsesFullTrustCode` | Site activates a feature from a custom full-trust WSP (GAC assembly) |
 | `Category` | Complexity category 1–4 |
 | `CategoryName` | Simple / Moderate / Complex / Blocking |
+| `Wave` | Proposed migration wave number (from the category-to-wave mapping) |
+| `WaveName` | Proposed migration wave name |
 | `Score` | Numeric complexity score |
 | `Reasons` | Human-readable drivers of the score |
 

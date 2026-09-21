@@ -75,4 +75,25 @@
             'InfoPathFormCount'
         )
     }
+
+    # -------------------------------------------------------------------------------
+    # Migration wave plan (consumed by Group-SPSMigrationWave)
+    #
+    # Each site is assigned to a wave from its complexity category. The migrated unit
+    # is the site collection, so waves are planned per site by complexity - content
+    # databases are an on-premises storage concern with no SharePoint Online
+    # equivalent and are not used here.
+    #
+    # Each entry lists the categories it groups. The default below is one wave per
+    # category; to put every non-blocking site in the first wave instead, use:
+    #   @{ Wave = 1; Name = 'Migrate now'; Categories = @(1, 2, 3) }
+    #   @{ Wave = 2; Name = 'Projects';    Categories = @(4) }
+    # A site whose category is not listed lands in an 'Unassigned' bucket.
+    # -------------------------------------------------------------------------------
+    MigrationWaves = @(
+        @{ Wave = 1; Name = 'Quick wins'; Categories = @(1) }
+        @{ Wave = 2; Name = 'Light remediation'; Categories = @(2) }
+        @{ Wave = 3; Name = 'Rebuild'; Categories = @(3) }
+        @{ Wave = 4; Name = 'Projects / blockers'; Categories = @(4) }
+    )
 }
