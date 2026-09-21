@@ -63,6 +63,10 @@ Workflows are split by platform because their migration cost differs:
 Forms Services is **retired and unavailable in SharePoint Online**, so it is weighted
 heavily and listed in `BlockingSignals` in the example configuration.
 
+`EventReceivers` counts only **custom** event receivers (those registered from a
+non-Microsoft assembly). Out-of-the-box receivers on native lists are ignored, so a stock
+site is not promoted just because SharePoint's own lists carry many built-in receivers.
+
 ### Thresholds
 
 - `Moderate` — a score at or above this value promotes the site from **Simple (1)** to **Moderate (2)**.
