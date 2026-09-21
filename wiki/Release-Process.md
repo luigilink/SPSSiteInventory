@@ -22,8 +22,8 @@ The single source of truth for the version is `ModuleVersion` in
 6. Tag the merge commit `vX.Y.Z` and push the tag:
 
    ```powershell
-   git tag v0.1.0
-   git push origin v0.1.0
+   git tag vX.Y.Z
+   git push origin vX.Y.Z
    ```
 
 ## What the automation does
