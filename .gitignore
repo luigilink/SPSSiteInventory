@@ -1,0 +1,30 @@
+# Logs and runtime artifacts
+logs
+**/Logs/
+*.log
+*_errlog.xml
+
+# Local configuration and secrets (never commit credentials)
+src/config/inventory-settings.psd1
+src/config/*.local.psd1
+
+# OSX
+.DS_Store
+
+# Visual Studio Code
+.vscode/
+
+# Visual Studio
+.ntvs_analysis.dat
+.vs
+bin
+obj
+
+# JetBrains (Rider / PowerShell plugin)
+.idea/
+
+# Pester / PowerShell test artifacts
+*.coverage.xml
+*.testResults.xml
+testResults.xml
+test-results.xml

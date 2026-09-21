@@ -1,0 +1,121 @@
+# SPSSiteInventory CI Pester workflow to run tests and code analysis on pull requests.
+
+name: SPSSiteInventory CI Pester Tests
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'PSScriptAnalyzerSettings.psd1'
+
+# The "Publish Test Results" step creates a check run, which requires write
+# access to checks. The default GITHUB_TOKEN is read-only on repositories
+# created with the modern default, so grant the minimum needed here.
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+jobs:
+  test:
+    name: Run Pester Tests
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Install Pester
+        shell: pwsh
+        run: |
+          Install-Module -Name Pester -MinimumVersion 5.3.0 -Force -SkipPublisherCheck -Scope CurrentUser
+          Import-Module Pester
+
+      - name: Run Pester Tests
+        shell: pwsh
+        run: |
+          $config = New-PesterConfiguration
+          $config.Run.Path = './tests'
+          $config.Run.Exit = $true
+          $config.TestResult.Enabled = $true
+          $config.TestResult.OutputPath = './test-results.xml'
+          $config.Output.Verbosity = 'Detailed'
+
+          Invoke-Pester -Configuration $config
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: test-results
+          path: test-results.xml
+
+      - name: Publish Test Results
+        uses: EnricoMi/publish-unit-test-result-action/composite@v2
+        if: always()
+        continue-on-error: true
+        with:
+          files: |
+            test-results.xml
+          check_name: Pester Test Results
+
+  test-ps51:
+    name: Run Pester Tests (Windows PowerShell 5.1)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      # The scripts run under Windows PowerShell 5.1 (.NET Framework) in production
+      # (SharePoint snap-in requirement). PowerShell 7 (pwsh) targets a newer .NET
+      # whose BCL has extra API overloads, so a pwsh-only test pass can miss 5.1
+      # incompatibilities (e.g. the 4-arg [Enum]::TryParse overload). This job runs
+      # the same suite under Windows PowerShell 5.1 to catch them.
+      - name: Install Pester (Windows PowerShell 5.1)
+        shell: powershell
+        run: |
+          Install-Module -Name Pester -MinimumVersion 5.3.0 -Force -SkipPublisherCheck -Scope CurrentUser
+
+      - name: Run Pester Tests (Windows PowerShell 5.1)
+        shell: powershell
+        run: |
+          $psv = $PSVersionTable.PSVersion
+          Write-Host "PowerShell edition: $($PSVersionTable.PSEdition) $psv"
+          if ($psv.Major -ne 5) { throw "Expected Windows PowerShell 5.1, got $psv" }
+          Import-Module Pester -MinimumVersion 5.3.0 -Force
+          $config = New-PesterConfiguration
+          $config.Run.Path = './tests'
+          $config.Run.Exit = $true
+          $config.Output.Verbosity = 'Detailed'
+          Invoke-Pester -Configuration $config
+
+  code-quality:
+    name: Code Quality Check
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Install PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          Install-Module -Name PSScriptAnalyzer -Force -SkipPublisherCheck -Scope CurrentUser
+
+      - name: Run PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          $results = Invoke-ScriptAnalyzer -Path ./src -Recurse -Settings ./PSScriptAnalyzerSettings.psd1
+
+          if ($results) {
+            $results | Format-Table -AutoSize
+            Write-Error "PSScriptAnalyzer found issues"
+            exit 1
+          }
+          else {
+            Write-Host "No issues found by PSScriptAnalyzer"
+          }
