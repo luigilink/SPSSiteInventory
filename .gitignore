@@ -4,6 +4,10 @@ logs
 *.log
 *_errlog.xml
 
+# Generated inventory reports (may contain customer/site data - never commit)
+Reports/
+**/Reports/
+
 # Local configuration and secrets (never commit credentials)
 src/config/inventory-settings.psd1
 src/config/*.local.psd1
