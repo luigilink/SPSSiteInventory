@@ -29,6 +29,10 @@
         Optional environment identifier shown in the HTML report header (for example
         'PROD').
 
+        .PARAMETER SolutionMap
+        Optional farm-solution (WSP) records (from Get-SPSFarmSolutionMap). When provided,
+        the HTML report includes a "Farm solutions (WSP)" section.
+
         .EXAMPLE
         Export-SPSInventoryReport -InputObject $scored -OutputFolder C:\Inventory
     #>
@@ -50,7 +54,13 @@
 
         [Parameter()]
         [System.String]
-        $EnvName = ''
+        $EnvName = '',
+
+        [Parameter()]
+        [AllowEmptyCollection()]
+        [AllowNull()]
+        [System.Object[]]
+        $SolutionMap = @()
     )
 
     if (-not (Test-Path -Path $OutputFolder)) {
@@ -65,7 +75,7 @@
     $InputObject | Export-Csv -Path $csvPath -NoTypeInformation -Encoding UTF8
     $InputObject | ConvertTo-Json -Depth 6 | Set-Content -Path $jsonPath -Encoding UTF8
 
-    $html = ConvertTo-SPSInventoryHtml -InputObject @($InputObject) -EnvName $EnvName
+    $html = ConvertTo-SPSInventoryHtml -InputObject @($InputObject) -EnvName $EnvName -SolutionMap @($SolutionMap)
     $html | Set-Content -Path $htmlPath -Encoding UTF8
 
     return [PSCustomObject]@{

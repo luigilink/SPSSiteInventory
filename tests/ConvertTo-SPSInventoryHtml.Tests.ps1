@@ -15,7 +15,23 @@ BeforeAll {
             Url = 'https://intranet/sites/legacy'; Title = 'Legacy <workflows>'; WebApp = 'Intranet'
             ContentDb = 'WSS_Content'; Template = 'STS#0'; SizeGB = 12.25; SubWebCount = 8
             LastModified = [datetime]'2024-06-01'; Category = 4; CategoryName = 'Blocking'
-            Wave = 4; WaveName = 'Projects / blockers'; Score = 9.5; Reasons = 'blocking: UsesCustomFarmFeature'
+            UsesFullTrustCode = $true
+            Wave = 4; WaveName = 'Projects / blockers'; Score = 9.5; Reasons = 'blocking: UsesFullTrustCode'
+        }
+    )
+
+    $script:SolutionMap = @(
+        [PSCustomObject]@{
+            SolutionName = 'contoso.portal.wsp'; Deployed = $true; DeploymentState = 'GlobalDeployed'
+            IsCustom = $true; ContainsGlobalAssembly = $true; ContainsCasPolicy = $false
+            ContainsWebApplicationResource = $true; IsFullTrustCode = $true
+            FeatureCount = 3; FeatureScopes = @('Site', 'Web'); FeatureIds = @('f1', 'f2', 'f3')
+        },
+        [PSCustomObject]@{
+            SolutionName = 'microsoft.sharepoint.search.wsp'; Deployed = $true; DeploymentState = 'GlobalDeployed'
+            IsCustom = $false; ContainsGlobalAssembly = $false; ContainsCasPolicy = $false
+            ContainsWebApplicationResource = $false; IsFullTrustCode = $false
+            FeatureCount = 6; FeatureScopes = @('Farm'); FeatureIds = @()
         }
     )
 }
@@ -93,5 +109,62 @@ Describe 'ConvertTo-SPSInventoryHtml' {
 
         $html | Should -Match '<!DOCTYPE html>'
         $html | Should -Match '<strong>0</strong> site collection'
+    }
+
+    It 'omits the Farm solutions section when no SolutionMap is given' {
+        $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
+
+        $html | Should -Not -Match 'Farm solutions \(WSP\)'
+    }
+
+    It 'renders the Farm solutions section with a WSP summary and table' {
+        $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample -SolutionMap $script:SolutionMap
+
+        $html | Should -Match 'Farm solutions \(WSP\)'
+        # Summary: 2 solutions, 1 custom, 1 full-trust.
+        $html | Should -Match '<strong>2</strong> farm solution\(s\) &middot; <strong>1</strong> custom &middot; <strong>1</strong> full-trust code'
+        # The custom full-trust WSP is listed with Yes pills.
+        $html | Should -Match 'contoso\.portal\.wsp'
+        $html | Should -Match 'class="pill yes">Yes<'
+        # The Microsoft WSP is not custom / not full-trust.
+        $html | Should -Match 'microsoft\.sharepoint\.search\.wsp'
+        $html | Should -Match 'class="pill no">No<'
+        # Feature scopes surfaced.
+        $html | Should -Match 'Site; Web'
+    }
+
+    It 'links full-trust solutions to the affected sites' {
+        $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample -SolutionMap $script:SolutionMap
+
+        $html | Should -Match 'Sites bound to full-trust code'
+        # The blocking site that uses full-trust code is listed with its URL.
+        $html | Should -Match 'https://intranet/sites/legacy'
+    }
+
+    It 'omits the affected-sites table when no site uses full-trust code' {
+        $simpleOnly = @(
+            [PSCustomObject]@{
+                Url = 'https://intranet/sites/ok'; Title = 'OK'; Category = 1; CategoryName = 'Simple'
+                UsesFullTrustCode = $false; Wave = 1; WaveName = 'Quick wins'; Score = 0; Reasons = ''
+            }
+        )
+        $html = ConvertTo-SPSInventoryHtml -InputObject $simpleOnly -SolutionMap $script:SolutionMap
+
+        $html | Should -Match 'Farm solutions \(WSP\)'
+        $html | Should -Not -Match 'Sites bound to full-trust code'
+    }
+
+    It 'HTML-encodes solution values in the WSP section' {
+        $map = @(
+            [PSCustomObject]@{
+                SolutionName = 'a&b <x>.wsp'; Deployed = $true; DeploymentState = 'GlobalDeployed'
+                IsCustom = $true; ContainsGlobalAssembly = $true; ContainsCasPolicy = $false
+                ContainsWebApplicationResource = $false; IsFullTrustCode = $true
+                FeatureCount = 1; FeatureScopes = @('Site'); FeatureIds = @('f1')
+            }
+        )
+        $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample -SolutionMap $map
+
+        $html | Should -Match 'a&amp;b &lt;x&gt;\.wsp'
     }
 }
