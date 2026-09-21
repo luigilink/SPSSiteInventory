@@ -6,9 +6,13 @@
         .DESCRIPTION
         Inspects one site collection and returns the signals that drive the migration
         complexity score: 2010 vs 2013 workflows, InfoPath forms, sandbox solutions,
-        custom master page, unique permissions, event receivers, and whether the site
-        activates a feature that comes from a custom farm solution (correlated through the
-        farm-solution map).
+        custom master page, unique permissions, custom event receivers, and whether the
+        site activates a feature that comes from a custom farm solution (correlated through
+        the farm-solution map).
+
+        EventReceivers counts only custom event receivers (those registered from a
+        non-Microsoft assembly). Out-of-the-box receivers on native lists are ignored so
+        they do not inflate the score.
 
         Workflows are split by platform because their migration cost differs sharply:
 
@@ -121,7 +125,17 @@
 
             foreach ($list in $web.Lists) {
                 $signals.Workflow2010Count += @($list.WorkflowAssociations).Count
-                $signals.EventReceivers += @($list.EventReceivers).Count
+
+                # Count only custom event receivers. Out-of-the-box lists (Search Center,
+                # App Catalog, MySite host, ...) carry many native receivers from Microsoft
+                # assemblies that are not a migration concern; counting them inflates the
+                # score and wrongly promotes stock sites. Test-SPSCustomAssembly filters
+                # them out by assembly.
+                foreach ($receiver in $list.EventReceivers) {
+                    if (Test-SPSCustomAssembly -Assembly $receiver.Assembly) {
+                        $signals.EventReceivers++
+                    }
+                }
 
                 # InfoPath detection: an InfoPath form library (XMLForm base template) or
                 # a list whose forms were customized with InfoPath (the _ipfs_* marker
