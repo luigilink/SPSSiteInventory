@@ -24,7 +24,7 @@ farm-solution report, to the output folder:
 | --- | --- |
 | `*.csv` | Site inventory for review in Excel; one row per site collection. |
 | `*.json` | Site inventory for downstream automation (for example feeding migration wave planning). |
-| `*.html` | A shareable, self-contained site report: category summary box and a sortable / filterable site table. Opens in any browser with no external resource. |
+| `*.html` | A shareable, self-contained report: category summary, migration wave plan, a **Farm solutions (WSP)** section and a sortable / filterable site table. Opens in any browser with no external resource. |
 | `*-solutions-*.csv` | Farm-solution (WSP) inventory for Excel; one row per solution, with the feature scopes/ids flattened. |
 | `*-solutions-*.json` | Farm-solution (WSP) inventory for automation, with the feature scopes/ids kept as arrays. |
 

@@ -34,9 +34,20 @@
         Timestamp shown in the header. Defaults to the current date and time. Exposed so
         callers (and tests) can produce a deterministic document.
 
+        .PARAMETER SolutionMap
+        Optional farm-solution (WSP) records, as produced by Get-SPSFarmSolutionMap. When
+        provided, the report gains a "Farm solutions (WSP)" section: a summary box (total
+        solutions, custom, full-trust code, web-app resource) and a table with each
+        solution's Deployed / Custom / IsFullTrustCode / ContainsCasPolicy /
+        ContainsWebApplicationResource / FeatureCount / FeatureScopes. Omitted cleanly when
+        no map is passed.
+
         .EXAMPLE
         $html = ConvertTo-SPSInventoryHtml -InputObject $scored -EnvName 'PROD'
         Set-Content -Path report.html -Value $html -Encoding UTF8
+
+        .EXAMPLE
+        $html = ConvertTo-SPSInventoryHtml -InputObject $scored -SolutionMap $solutionMap
     #>
     [CmdletBinding()]
     [OutputType([System.String])]
@@ -57,7 +68,13 @@
 
         [Parameter()]
         [System.DateTime]
-        $GeneratedOn = (Get-Date)
+        $GeneratedOn = (Get-Date),
+
+        [Parameter()]
+        [AllowEmptyCollection()]
+        [AllowNull()]
+        [System.Object[]]
+        $SolutionMap = @()
     )
 
     # Category metadata: name and accent colour for each complexity level. A plain
@@ -201,6 +218,14 @@ td.reasons { max-width: 340px; color: var(--muted); }
 }
 .b1 { background: var(--cat1); } .b2 { background: var(--cat2); }
 .b3 { background: var(--cat3); } .b4 { background: var(--cat4); }
+.pill { display: inline-block; padding: 2px 9px; border-radius: 999px; color: #fff; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.pill.yes { background: var(--cat4); }
+.pill.no { background: #8a9099; }
+.pill.warn { background: var(--cat2); }
+.card.wsp { border-top-color: var(--cat4); } .card.wsp .num { color: var(--cat4); }
+.card.custom { border-top-color: var(--cat2); } .card.custom .num { color: var(--cat2); }
+.card.plain { border-top-color: var(--brand); } .card.plain .num { color: var(--brand); }
+td.muted, .muted { color: var(--muted); }
 .footer { color: var(--muted); font-size: 12px; margin-top: 18px; text-align: center; }
 </style>
 '@
@@ -248,6 +273,48 @@ td.reasons { max-width: 340px; color: var(--muted); }
             $agg = $waveAgg[$key]
             $waveLabel = if ([int]$key -eq 0) { '-' } else { [string]$key }
             [void]$sb.AppendLine(('<tr><td class="num">{0}</td><td>{1}</td><td class="num">{2}</td><td class="num">{3}</td></tr>' -f $waveLabel, (ConvertTo-SPSHtmlText -Value $agg.Name), $agg.Count, ([math]::Round($agg.SizeGB, 2)).ToString($invariant)))
+        }
+        [void]$sb.AppendLine('</tbody>')
+        [void]$sb.AppendLine('</table>')
+        [void]$sb.AppendLine('</div>')
+    }
+
+    # Farm solutions (WSP) section.
+    $solutions = @($SolutionMap | Where-Object { $null -ne $_ })
+    if ($solutions.Count -gt 0) {
+        $solTotal = $solutions.Count
+        $solCustom = @($solutions | Where-Object { $_.IsCustom }).Count
+        $solFullTrust = @($solutions | Where-Object { $_.IsFullTrustCode }).Count
+        $solWebApp = @($solutions | Where-Object { $_.ContainsWebApplicationResource }).Count
+
+        [void]$sb.AppendLine('<h2>Farm solutions (WSP)</h2>')
+        [void]$sb.AppendLine('<div class="summary">')
+        [void]$sb.AppendLine(('<div class="summary-total"><strong>{0}</strong> farm solution(s) &middot; <strong>{1}</strong> custom &middot; <strong>{2}</strong> full-trust code</div>' -f $solTotal, $solCustom, $solFullTrust))
+        [void]$sb.AppendLine('<div class="cards">')
+        [void]$sb.AppendLine(('<div class="card plain"><div class="num">{0}</div><div class="lbl">Solutions (WSP)</div></div>' -f $solTotal))
+        [void]$sb.AppendLine(('<div class="card custom"><div class="num">{0}</div><div class="lbl">Custom / in-house</div></div>' -f $solCustom))
+        [void]$sb.AppendLine(('<div class="card wsp"><div class="num">{0}</div><div class="lbl">Full-trust code (GAC)</div></div>' -f $solFullTrust))
+        [void]$sb.AppendLine(('<div class="card wsp"><div class="num">{0}</div><div class="lbl">Web-app resource</div></div>' -f $solWebApp))
+        [void]$sb.AppendLine('</div>')
+        [void]$sb.AppendLine('</div>')
+
+        [void]$sb.AppendLine('<div class="table-scroll">')
+        [void]$sb.AppendLine('<table class="solutions">')
+        [void]$sb.AppendLine('<thead><tr><th>Solution (WSP)</th><th>Deployed</th><th>Custom</th><th>Full-trust code</th><th>CAS policy</th><th>Web-app resource</th><th class="num">Features</th><th>Scopes</th></tr></thead>')
+        [void]$sb.AppendLine('<tbody>')
+        foreach ($solution in ($solutions | Sort-Object -Property @{ E = { [bool]$_.IsFullTrustCode }; Descending = $true }, @{ E = { [bool]$_.IsCustom }; Descending = $true }, @{ E = { [string]$_.SolutionName } })) {
+            $deployed = if ($solution.DeploymentState) { [string]$solution.DeploymentState } elseif ($solution.Deployed) { 'Deployed' } else { 'NotDeployed' }
+            $scopes = (@($solution.FeatureScopes) -join '; ')
+            $featureCount = if ($null -ne $solution.FeatureCount) { [int]$solution.FeatureCount } else { 0 }
+            [void]$sb.AppendLine(('<tr><td>{0}</td><td>{1}</td><td>{2}</td><td>{3}</td><td>{4}</td><td>{5}</td><td class="num">{6}</td><td class="muted">{7}</td></tr>' -f `
+                (ConvertTo-SPSHtmlText -Value $solution.SolutionName),
+                (ConvertTo-SPSHtmlText -Value $deployed),
+                (Get-SPSYesNoPill -Value $solution.IsCustom),
+                (Get-SPSYesNoPill -Value $solution.IsFullTrustCode),
+                (Get-SPSYesNoPill -Value $solution.ContainsCasPolicy -TruePill 'warn'),
+                (Get-SPSYesNoPill -Value $solution.ContainsWebApplicationResource),
+                $featureCount,
+                (ConvertTo-SPSHtmlText -Value $scopes)))
         }
         [void]$sb.AppendLine('</tbody>')
         [void]$sb.AppendLine('</table>')
