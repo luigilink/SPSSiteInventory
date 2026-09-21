@@ -41,7 +41,14 @@
         # Weighted signals: weight * signal value is summed into the score.
         # Booleans count as 1 when true; counts contribute their value.
         Weights = @{
-            WorkflowAssociationCount = 2.0
+            # SharePoint 2010 workflows run on the legacy engine, retired in SharePoint
+            # Online: they always need a rebuild, so they weigh heavily. Add
+            # 'Workflow2010Count' to BlockingSignals below if your organization treats
+            # any legacy workflow as a hard blocker.
+            Workflow2010Count        = 3.0
+            # SharePoint 2013 workflows (Workflow Manager) are a lighter, more direct
+            # remediation, so they weigh less than their 2010 counterparts.
+            Workflow2013Count        = 1.5
             SandboxSolutions         = 3.0
             CustomMasterPage         = 2.0
             EventReceivers           = 1.5

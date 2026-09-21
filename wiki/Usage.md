@@ -39,6 +39,8 @@ Each row in the CSV/JSON describes one site collection:
 | `SizeGB` | Storage used, in GB |
 | `SubWebCount` | Number of sub-webs |
 | `LastModified` | Last item modified date (dormancy signal) |
+| `Workflow2010Count` | SharePoint 2010 workflow associations (legacy engine, retired in SPO) |
+| `Workflow2013Count` | SharePoint 2013 workflow subscriptions (Workflow Manager) |
 | `Category` | Complexity category 1–4 |
 | `CategoryName` | Simple / Moderate / Complex / Blocking |
 | `Score` | Numeric complexity score |

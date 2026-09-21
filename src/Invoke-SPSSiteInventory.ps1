@@ -64,18 +64,20 @@ try {
             $result = Measure-SPSSiteComplexity -Signals $signals -Scoring $settings.Scoring
 
             [PSCustomObject]@{
-                Url          = $item.Url
-                Title        = $item.Title
-                WebApp       = $item.WebApp
-                ContentDb    = $item.ContentDb
-                Template     = $item.Template
-                SizeGB       = $item.SizeGB
-                SubWebCount  = $item.SubWebCount
-                LastModified = $item.LastModified
-                Category     = $result.Category
-                CategoryName = $result.CategoryName
-                Score        = $result.Score
-                Reasons      = ($result.Reasons -join '; ')
+                Url               = $item.Url
+                Title             = $item.Title
+                WebApp            = $item.WebApp
+                ContentDb         = $item.ContentDb
+                Template          = $item.Template
+                SizeGB            = $item.SizeGB
+                SubWebCount       = $item.SubWebCount
+                LastModified      = $item.LastModified
+                Workflow2010Count = $signals['Workflow2010Count']
+                Workflow2013Count = $signals['Workflow2013Count']
+                Category          = $result.Category
+                CategoryName      = $result.CategoryName
+                Score             = $result.Score
+                Reasons           = ($result.Reasons -join '; ')
             }
         }
         finally {
