@@ -5,9 +5,10 @@
 
         .DESCRIPTION
         Inspects one site collection and returns the signals that drive the migration
-        complexity score: 2010 vs 2013 workflows, sandbox solutions, custom master page,
-        unique permissions, event receivers, and whether the site activates a feature
-        that comes from a custom farm solution (correlated through the farm-solution map).
+        complexity score: 2010 vs 2013 workflows, InfoPath forms, sandbox solutions,
+        custom master page, unique permissions, event receivers, and whether the site
+        activates a feature that comes from a custom farm solution (correlated through the
+        farm-solution map).
 
         Workflows are split by platform because their migration cost differs sharply:
 
@@ -17,6 +18,11 @@
         - Workflow2013Count counts Workflow Manager subscriptions (the SharePoint 2013
           platform), read through WorkflowServicesManager. This is best-effort: when
           Workflow Manager is not connected the count stays at 0 rather than failing.
+
+        InfoPathFormCount counts the InfoPath-driven lists and libraries on the site
+        (InfoPath form libraries, and lists whose forms were customized with InfoPath).
+        InfoPath Forms Services is retired and has no equivalent in SharePoint Online, so
+        those forms must be rebuilt (Power Apps) - often a migration blocker.
 
         The returned hashtable is designed to be passed straight to
         Measure-SPSSiteComplexity. Signal collection is best-effort: a failure to read one
@@ -58,6 +64,7 @@
     $signals = @{
         Workflow2010Count        = 0
         Workflow2013Count        = 0
+        InfoPathFormCount        = 0
         SandboxSolutions         = 0
         CustomMasterPage         = $false
         UniquePermissionsCount   = 0
@@ -83,6 +90,27 @@
             foreach ($list in $web.Lists) {
                 $signals.Workflow2010Count += @($list.WorkflowAssociations).Count
                 $signals.EventReceivers += @($list.EventReceivers).Count
+
+                # InfoPath detection: an InfoPath form library (XMLForm base template) or
+                # a list whose forms were customized with InfoPath (the _ipfs_* marker
+                # properties are stamped on the list root folder). InfoPath Forms Services
+                # is retired and unavailable in SharePoint Online.
+                $listTitle = $list.Title
+                try {
+                    if ($list.BaseTemplate -eq [Microsoft.SharePoint.SPListTemplateType]::XMLForm) {
+                        $signals.InfoPathFormCount++
+                    }
+                    else {
+                        $listProperties = $list.RootFolder.Properties
+                        if ($listProperties -and $listProperties.ContainsKey('_ipfs_infopathenabled') -and
+                            [string]$listProperties['_ipfs_infopathenabled'] -eq 'True') {
+                            $signals.InfoPathFormCount++
+                        }
+                    }
+                }
+                catch {
+                    Write-Verbose -Message "Could not read InfoPath state on list '$listTitle': $($_.Exception.Message)"
+                }
             }
 
             # SharePoint 2013 platform: Workflow Manager subscriptions. Best-effort - the

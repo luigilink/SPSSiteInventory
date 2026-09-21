@@ -8,6 +8,7 @@ BeforeAll {
         Weights = @{
             Workflow2010Count        = 3.0
             Workflow2013Count        = 1.5
+            InfoPathFormCount        = 3.0
             SandboxSolutions         = 3.0
             CustomMasterPage         = 2.0
             EventReceivers           = 1.5
@@ -20,6 +21,7 @@ BeforeAll {
         }
         BlockingSignals = @(
             'UsesCustomFarmFeature'
+            'InfoPathFormCount'
         )
     }
 }
@@ -62,6 +64,15 @@ Describe 'Measure-SPSSiteComplexity' {
 
     It 'forces Blocking (category 4) when a blocking signal is true, whatever the score' {
         $signals = @{ Workflow2010Count = 0; UsesCustomFarmFeature = $true }
+
+        $result = Measure-SPSSiteComplexity -Signals $signals -Scoring $script:Scoring
+
+        $result.Category | Should -Be 4
+        $result.CategoryName | Should -Be 'Blocking'
+    }
+
+    It 'forces Blocking (category 4) when a site uses InfoPath forms' {
+        $signals = @{ InfoPathFormCount = 1 }
 
         $result = Measure-SPSSiteComplexity -Signals $signals -Scoring $script:Scoring
 

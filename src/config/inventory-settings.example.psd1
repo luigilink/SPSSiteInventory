@@ -49,6 +49,9 @@
             # SharePoint 2013 workflows (Workflow Manager) are a lighter, more direct
             # remediation, so they weigh less than their 2010 counterparts.
             Workflow2013Count        = 1.5
+            # InfoPath forms (retired, no SharePoint Online equivalent) must be rebuilt in
+            # Power Apps. Weighted heavily and listed as a blocking signal below.
+            InfoPathFormCount        = 3.0
             SandboxSolutions         = 3.0
             CustomMasterPage         = 2.0
             EventReceivers           = 1.5
@@ -65,6 +68,7 @@
         # Signals that force category 4 (Blocking) regardless of the score.
         BlockingSignals = @(
             'UsesCustomFarmFeature'
+            'InfoPathFormCount'
         )
     }
 }
