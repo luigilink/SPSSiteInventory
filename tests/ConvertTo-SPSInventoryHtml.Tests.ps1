@@ -68,6 +68,36 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $html | Should -Match '4\. Blocking'
     }
 
+    It 'shows partial and failed assessment counts and per-site status' {
+        $sites = @(
+            [PSCustomObject]@{
+                Url = 'https://intranet/sites/partial'; Category = 1; CategoryName = 'Simple'
+                AssessmentStatus = 'Partial'; SiteInventoryComplete = $false
+                CustomizationInventoryComplete = $true; ContentTypeInventoryComplete = $true
+                AssessmentWarnings = 'Root web metadata could not be fully read'
+                SizeGB = 1; Wave = 1; WaveName = 'Quick wins'; Score = 0
+            },
+            [PSCustomObject]@{
+                Url = 'https://intranet/sites/failed'; Category = $null; CategoryName = 'Not assessed'
+                AssessmentStatus = 'Failed'; SiteInventoryComplete = $true
+                CustomizationInventoryComplete = $false; ContentTypeInventoryComplete = $false
+                AssessmentWarnings = 'Assessment failed: Access denied'
+                SizeGB = 2; Wave = 0; WaveName = 'Not assessed'; Score = $null
+            }
+        )
+
+        $html = ConvertTo-SPSInventoryHtml -InputObject $sites
+
+        $html | Should -Match '<strong>1</strong> partial &middot; <strong>1</strong> failed'
+        $html | Should -Match 'Assessment status'
+        $html | Should -Match 'Customization complete'
+        $html | Should -Match 'Assessment warnings'
+        $html | Should -Match 'Root web metadata could not be fully read'
+        $html | Should -Match 'Assessment failed: Access denied'
+        $html | Should -Match 'Not assessed'
+        $html | Should -Match 'data-category="0"'
+    }
+
     It 'renders the migration wave plan with per-wave counts and sizes' {
         $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
 

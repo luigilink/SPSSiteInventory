@@ -64,7 +64,10 @@
 
         $waveNumber = 0
         $waveName = 'Unassigned'
-        if ($lookup.ContainsKey($category)) {
+        if ($record.AssessmentStatus -eq 'Failed') {
+            $waveName = 'Not assessed'
+        }
+        elseif ($lookup.ContainsKey($category)) {
             $waveNumber = $lookup[$category].Wave
             $waveName = $lookup[$category].Name
         }

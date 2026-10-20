@@ -47,6 +47,14 @@
         throw "Could not read fields for content type '$id' on '$WebUrl'."
     }
     $fields = @($fieldCollection | Where-Object { $null -ne $_ })
+    $fieldTypes = [System.Collections.Generic.List[string]]::new()
+    foreach ($field in $fields) {
+        $fieldType = [string]$field.TypeAsString
+        if ([string]::IsNullOrWhiteSpace($fieldType)) {
+            throw "A field in content type '$id' on '$WebUrl' has no readable type name."
+        }
+        $fieldTypes.Add($fieldType)
+    }
 
     [PSCustomObject]@{
         SiteUrl             = $SiteUrl
@@ -59,7 +67,7 @@
         Group               = [string]$ContentType.Group
         ParentContentTypeId = if ($null -ne $ContentType.Parent) { [string]$ContentType.Parent.Id } else { '' }
         FieldCount          = $fields.Count
-        FieldTypes          = (@($fields | ForEach-Object { $_.TypeAsString } | Sort-Object -Unique) -join '; ')
+        FieldTypes          = (@($fieldTypes | Sort-Object -Unique) -join '; ')
         DocumentTemplateUrl = [string]$ContentType.DocumentTemplateUrl
         Hidden              = [bool]$ContentType.Hidden
         ReadOnly            = [bool]$ContentType.ReadOnly

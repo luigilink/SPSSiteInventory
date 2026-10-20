@@ -123,12 +123,94 @@ Describe 'Get-SPSWebApplicationAuthentication' {
                 HasFbaZone = $true; AuthenticationReviewRequired = $false
             }
         }
+        Mock Add-SPSInventoryEvent -ModuleName SPSSiteInventory.Common { }
+        Mock Write-Progress -ModuleName SPSSiteInventory.Common { }
 
         $inventory = @(Get-SPSSiteInventory)
 
         $inventory | Should -HaveCount 2
+        $inventory[0].SiteInventoryComplete | Should -BeTrue
         $inventory[0].HasFbaZone | Should -BeTrue
         $inventory[1].AuthenticationZones | Should -Be 'Extranet: FBA'
+        Should -Invoke Write-Progress -ModuleName SPSSiteInventory.Common -Times 4 -Exactly
         Should -Invoke Get-SPSWebApplicationAuthentication -ModuleName SPSSiteInventory.Common -Times 1 -Exactly
+    }
+
+    It 'retains a site with partial metadata and marks the inventory incomplete' {
+        $root = [PSCustomObject]@{
+            Title = 'Team'; WebTemplate = 'STS'; Configuration = 0
+            LastItemModifiedDate = [datetime]'2026-01-01'
+        }
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/partial'
+            RootWeb = $root
+            ContentDatabase = [PSCustomObject]@{ Name = 'WSS_Content' }
+            Usage = [PSCustomObject]@{ Storage = 1GB }
+            AllWebs = @($root)
+        }
+        $site | Add-Member -MemberType ScriptProperty -Name RootWeb -Value { throw 'Access denied' } -Force
+        $site | Add-Member -MemberType ScriptMethod -Name Dispose -Value { }
+        $script:webApp | Add-Member -NotePropertyName Name -NotePropertyValue 'Intranet' -Force
+        $script:webApp | Add-Member -NotePropertyName Sites -NotePropertyValue @($site) -Force
+        Mock Get-SPWebApplication -ModuleName SPSSiteInventory.Common { $script:webApp }
+        Mock Get-SPSWebApplicationAuthentication -ModuleName SPSSiteInventory.Common {
+            [PSCustomObject]@{
+                AuthenticationModes = 'Windows'; AuthenticationZones = 'Default: Windows'
+                HasFbaZone = $false; AuthenticationReviewRequired = $false
+            }
+        }
+        Mock Add-SPSInventoryEvent -ModuleName SPSSiteInventory.Common { }
+        Mock Write-Progress -ModuleName SPSSiteInventory.Common { }
+
+        $inventory = @(Get-SPSSiteInventory)
+
+        $inventory | Should -HaveCount 1
+        $inventory[0].Url | Should -Be 'https://intranet.contoso.com/sites/partial'
+        $inventory[0].SiteInventoryComplete | Should -BeFalse
+        $inventory[0].SiteInventoryWarnings | Should -Match 'Root web metadata could not be fully read'
+    }
+
+    It 'continues with later web applications when one site collection list is inaccessible' {
+        $root = [PSCustomObject]@{
+            Title = 'Other web app'; WebTemplate = 'STS'; Configuration = 0
+            LastItemModifiedDate = [datetime]'2026-01-01'
+        }
+        $root | Add-Member -MemberType ScriptMethod -Name Dispose -Value { }
+        $site = [PSCustomObject]@{
+            Url = 'https://other.contoso.com/sites/team'
+            RootWeb = $root
+            ContentDatabase = [PSCustomObject]@{ Name = 'WSS_Other' }
+            Usage = [PSCustomObject]@{ Storage = 1GB }
+            AllWebs = @($root)
+        }
+        $site | Add-Member -MemberType ScriptMethod -Name Dispose -Value { }
+
+        $inaccessibleWebApp = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com'
+            Name = 'Intranet'
+        }
+        $inaccessibleWebApp | Add-Member -MemberType ScriptProperty -Name Sites -Value { throw 'Access denied' }
+
+        $availableWebApp = [PSCustomObject]@{
+            Url = 'https://other.contoso.com'
+            Name = 'Other'
+            Sites = @($site)
+        }
+        Mock Get-SPWebApplication -ModuleName SPSSiteInventory.Common { @($inaccessibleWebApp, $availableWebApp) }
+        Mock Get-SPSWebApplicationAuthentication -ModuleName SPSSiteInventory.Common {
+            [PSCustomObject]@{
+                AuthenticationModes = 'Windows'; AuthenticationZones = 'Default: Windows'
+                HasFbaZone = $false; AuthenticationReviewRequired = $false
+            }
+        }
+        Mock Add-SPSInventoryEvent -ModuleName SPSSiteInventory.Common { }
+        Mock Write-Progress -ModuleName SPSSiteInventory.Common { }
+
+        $inventory = @(Get-SPSSiteInventory)
+
+        $inventory | Should -HaveCount 1
+        $inventory[0].Url | Should -Be 'https://other.contoso.com/sites/team'
+        $inventory[0].SiteInventoryComplete | Should -BeTrue
+        Should -Invoke Get-SPSWebApplicationAuthentication -ModuleName SPSSiteInventory.Common -Times 2 -Exactly
     }
 }

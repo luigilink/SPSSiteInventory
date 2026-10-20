@@ -100,6 +100,9 @@
 
     $records = @($InputObject)
     $total = $records.Count
+    $partialCount = @($records | Where-Object { $_.AssessmentStatus -eq 'Partial' }).Count
+    $failedCount = @($records | Where-Object { $_.AssessmentStatus -eq 'Failed' }).Count
+    $assessedTotal = $total - $failedCount
 
     $invariant = [System.Globalization.CultureInfo]::InvariantCulture
 
@@ -226,6 +229,7 @@ td.reasons { max-width: 340px; color: var(--muted); }
     display: inline-block; padding: 2px 10px; border-radius: 999px;
     color: #fff; font-size: 12px; font-weight: 600; white-space: nowrap;
 }
+.b0 { background: var(--muted); }
 .b1 { background: var(--cat1); } .b2 { background: var(--cat2); }
 .b3 { background: var(--cat3); } .b4 { background: var(--cat4); }
 .pill { display: inline-block; padding: 2px 9px; border-radius: 999px; color: #fff; font-size: 12px; font-weight: 600; white-space: nowrap; }
@@ -261,12 +265,12 @@ td.muted, .muted { color: var(--muted); }
 
     # Summary box.
     [void]$sb.AppendLine('<div class="summary">')
-    [void]$sb.AppendLine(('<div class="summary-total"><strong>{0}</strong> site collection(s) &middot; <strong>{1} GB</strong> total content</div>' -f $total, $totalSize.ToString($invariant)))
+    [void]$sb.AppendLine(('<div class="summary-total"><strong>{0}</strong> site collection(s) &middot; <strong>{1} GB</strong> total content &middot; <strong>{2}</strong> partial &middot; <strong>{3}</strong> failed</div>' -f $total, $totalSize.ToString($invariant), $partialCount, $failedCount))
     [void]$sb.AppendLine('<div class="cards">')
     foreach ($key in 1..4) {
         $meta = $categoryMeta[$key]
         $count = $counts[[int]$key]
-        $pct = if ($total -gt 0) { [math]::Round(($count / $total) * 100, 1) } else { 0 }
+        $pct = if ($assessedTotal -gt 0) { [math]::Round(($count / $assessedTotal) * 100, 1) } else { 0 }
         [void]$sb.AppendLine(('<div class="card c{0}"><div class="num">{1}</div><div class="lbl">{0}. {2}</div><div class="pct">{3}%</div></div>' -f $key, $count, $meta.Name, $pct.ToString($invariant)))
     }
     [void]$sb.AppendLine('</div>')
@@ -435,6 +439,10 @@ td.muted, .muted { color: var(--muted); }
         @{ Key = 'SizeGB'; Label = 'Size (GB)'; Class = 'num'; Type = 'num' }
         @{ Key = 'SubWebCount'; Label = 'Sub-webs'; Class = 'num'; Type = 'num' }
         @{ Key = 'LastModified'; Label = 'Last modified'; Class = ''; Type = 'text' }
+        @{ Key = 'AssessmentStatus'; Label = 'Assessment status'; Class = ''; Type = 'text' }
+        @{ Key = 'SiteInventoryComplete'; Label = 'Site inventory complete'; Class = ''; Type = 'text' }
+        @{ Key = 'CustomizationInventoryComplete'; Label = 'Customization complete'; Class = ''; Type = 'text' }
+        @{ Key = 'AssessmentWarnings'; Label = 'Assessment warnings'; Class = 'reasons'; Type = 'text' }
         @{ Key = 'AuthenticationModes'; Label = 'Authentication'; Class = ''; Type = 'text' }
         @{ Key = 'HasFbaZone'; Label = 'FBA configured'; Class = ''; Type = 'text' }
         @{ Key = 'ContentTypeCount'; Label = 'Content types (unique web IDs)'; Class = 'num'; Type = 'num' }
