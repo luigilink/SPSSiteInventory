@@ -38,7 +38,7 @@ param
 
 $ErrorActionPreference = 'Stop'
 
-Import-Module -Name (Join-Path -Path $PSScriptRoot -ChildPath 'Modules\SPSSiteInventory.Common\SPSSiteInventory.Common.psd1') -Force
+$commonModule = Import-Module -Name (Join-Path -Path $PSScriptRoot -ChildPath 'Modules\SPSSiteInventory.Common\SPSSiteInventory.Common.psd1') -Force -PassThru
 
 $context = Initialize-SPSScript -ScriptName 'Invoke-SPSSiteInventory' -ScriptRoot $PSScriptRoot
 
@@ -62,14 +62,17 @@ try {
     $fullTrustFeatureId = @($solutionMap | Where-Object { $_.IsFullTrustCode } | ForEach-Object { $_.FeatureIds } | Sort-Object -Unique)
 
     Add-SPSInventoryEvent -Message 'Enumerating site collections.' -Level Information
-    $inventory = Get-SPSSiteInventory -WebApplicationUrl $settings.WebApplicationUrl
+    $inventory = @(Get-SPSSiteInventory -WebApplicationUrl $settings.WebApplicationUrl)
     if (@($inventory | Where-Object { $_.HasFbaZone }).Count -gt 0 -and
         @($settings.Scoring.BlockingSignals) -notcontains 'HasFbaZone') {
         Add-SPSInventoryEvent -Message 'FBA is configured, but HasFbaZone is not in Scoring.BlockingSignals. Add it to your settings to classify FBA as a SharePoint Online migration blocker.' -Level Warning
     }
 
     Add-SPSInventoryEvent -Message ("Discovered {0} site collection(s); collecting customization signals." -f @($inventory).Count) -Level Information
-    $assessment = Invoke-SPSiteAssessment -Inventory $inventory -CustomFeatureId $customFeatureId -FullTrustFeatureId $fullTrustFeatureId -Scoring $settings.Scoring
+    $assessment = & $commonModule {
+        param ($Inventory, $CustomFeatureId, $FullTrustFeatureId, $Scoring)
+        Invoke-SPSiteAssessment -Inventory $Inventory -CustomFeatureId $CustomFeatureId -FullTrustFeatureId $FullTrustFeatureId -Scoring $Scoring
+    } $inventory $customFeatureId $fullTrustFeatureId $settings.Scoring
     $scored = @($assessment.Inventory)
     $contentTypes = @($assessment.ContentTypes)
 

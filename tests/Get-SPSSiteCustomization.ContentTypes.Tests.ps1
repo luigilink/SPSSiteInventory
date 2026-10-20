@@ -142,6 +142,24 @@ Describe 'Get-SPSSiteCustomization content types' {
         $signals.ContentTypes | Should -HaveCount 1
     }
 
+    It 'marks connected Workflow Manager subscription read failures as incomplete' {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Solutions = @()
+            AllWebs = @($web)
+        }
+        Mock Get-SPSWorkflowSubscriptionCount -ModuleName SPSSiteInventory.Common {
+            throw 'Workflow subscription access denied'
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -WarningVariable warnings -WarningAction SilentlyContinue
+
+        $signals.CustomizationInventoryComplete | Should -BeFalse
+        ($warnings -join ';') | Should -Match 'Workflow Manager subscriptions could not be read'
+        ($warnings -join ';') | Should -Match 'Workflow subscription access denied'
+    }
+
     It 'marks unreadable field metadata as partial rather than exporting zero fields' {
         $definition = Get-TestContentType -Id '0x0101' -Name 'Document'
         $definition | Add-Member -MemberType ScriptProperty -Name Fields -Value { throw 'Access denied' } -Force

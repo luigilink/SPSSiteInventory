@@ -37,11 +37,15 @@
     try {
         foreach ($item in $Inventory) {
             $siteIndex++
+            $inventoryScope = 'SiteCollection'
+            if ($null -ne $item.PSObject.Properties['InventoryScope']) {
+                $inventoryScope = [string]$item.InventoryScope
+            }
             $percentComplete = if ($siteTotal -gt 0) { [int](($siteIndex / $siteTotal) * 100) } else { 0 }
             $progressStatus = '{0}/{1}: {2}' -f $siteIndex, $siteTotal, $item.Url
             Write-Progress -Id 2 -Activity 'Collecting customization and scoring site collections' -Status $progressStatus -PercentComplete $percentComplete
             if ($siteIndex -eq 1 -or $siteIndex % 10 -eq 0 -or $siteIndex -eq $siteTotal) {
-                $null = Add-SPSInventoryEvent -Message "Collecting customization signals ($progressStatus)." -Level Information
+                Add-SPSInventoryEvent -Message "Collecting customization signals ($progressStatus)." -Level Information | Out-Host
             }
 
             $site = $null
@@ -50,16 +54,23 @@
             if ($null -ne $item.PSObject.Properties['SiteInventoryComplete']) {
                 $siteInventoryComplete = [bool]$item.SiteInventoryComplete
             }
-            if (-not $siteInventoryComplete -and $item.SiteInventoryWarnings) {
+            if ($inventoryScope -ne 'WebApplication' -and -not $siteInventoryComplete -and $item.SiteInventoryWarnings) {
                 $siteWarnings.Add("Site inventory partial: $($item.SiteInventoryWarnings)")
             }
 
             try {
+                if ($inventoryScope -eq 'WebApplication') {
+                    throw "Site collection enumeration failed for web application '$($item.WebApp)': $($item.SiteInventoryWarnings)"
+                }
                 $site = Get-SPSite -Identity $item.Url -ErrorAction Stop
                 if ($null -eq $site) {
                     throw "SharePoint did not return a site collection for '$($item.Url)'."
                 }
-                $signals = Get-SPSSiteCustomization -Site $site -CustomFeatureId $CustomFeatureId -FullTrustFeatureId $FullTrustFeatureId
+                $customizationWarnings = @()
+                $signals = Get-SPSSiteCustomization -Site $site -CustomFeatureId $CustomFeatureId -FullTrustFeatureId $FullTrustFeatureId -WarningVariable customizationWarnings
+                foreach ($warning in $customizationWarnings) {
+                    $siteWarnings.Add([string]$warning)
+                }
                 $signals['SizeGB'] = $item.SizeGB
                 $signals['HasFbaZone'] = $item.HasFbaZone
                 foreach ($contentType in $signals.ContentTypes) {
@@ -82,6 +93,7 @@
                 $assessmentStatus = if ($siteInventoryComplete -and $customizationComplete -and $contentTypeComplete) { 'Complete' } else { 'Partial' }
                 $reasons = @($result.Reasons) + @($siteWarnings.ToArray())
                 $scored.Add([PSCustomObject]@{
+                    InventoryScope = $inventoryScope
                     Url = $item.Url
                     Title = $item.Title
                     WebApp = $item.WebApp
@@ -120,6 +132,7 @@
                 $siteWarnings.Add("Assessment failed: $errorMessage")
                 $null = Add-SPSInventoryEvent -Message "Assessment failed for '$($item.Url)'; continuing with the next site. $errorMessage" -Level Warning
                 $scored.Add([PSCustomObject]@{
+                    InventoryScope = $inventoryScope
                     Url = $item.Url
                     Title = $item.Title
                     WebApp = $item.WebApp

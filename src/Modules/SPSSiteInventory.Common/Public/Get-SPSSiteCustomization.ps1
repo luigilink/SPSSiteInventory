@@ -219,18 +219,17 @@
                     Write-Warning -Message "Lists could not be fully enumerated on web '$($web.Url)': $($_.Exception.Message)"
                 }
 
-                # SharePoint 2013 platform: Workflow Manager subscriptions. Best-effort - the
-                # type may be unavailable or Workflow Manager may not be connected, in which
-                # case the count stays at 0 instead of failing the whole site.
+                # SharePoint 2013 platform: Workflow Manager subscriptions. An unavailable
+                # optional API stays best-effort; a connected read failure is incomplete data.
                 try {
-                    $workflowManager = [Microsoft.SharePoint.WorkflowServices.WorkflowServicesManager]::new($web)
-                    if ($workflowManager.IsConnected) {
-                        $subscriptions = $workflowManager.GetWorkflowSubscriptionService().EnumerateSubscriptions()
-                        $signals.Workflow2013Count += @($subscriptions).Count
+                    $workflowSubscriptionCount = Get-SPSWorkflowSubscriptionCount -Web $web
+                    if ($null -ne $workflowSubscriptionCount) {
+                        $signals.Workflow2013Count += [int]$workflowSubscriptionCount
                     }
                 }
                 catch {
-                    Write-Verbose -Message "Could not read 2013 workflow subscriptions on web '$($web.Url)': $($_.Exception.Message)"
+                    $signals.CustomizationInventoryComplete = $false
+                    Write-Warning -Message "Workflow Manager subscriptions could not be read on web '$($web.Url)': $($_.Exception.Message)"
                 }
 
                 if ($web.HasUniqueRoleAssignments) {

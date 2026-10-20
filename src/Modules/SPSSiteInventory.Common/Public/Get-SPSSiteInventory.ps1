@@ -50,7 +50,30 @@
     foreach ($webApp in $webApps) {
         $authentication = Get-SPSWebApplicationAuthentication -WebApplication $webApp
         Write-Progress -Id 1 -Activity 'Enumerating site collections' -Status "Opening the site collection list for $($webApp.Url)" -PercentComplete 0
-        $null = Add-SPSInventoryEvent -Message "Starting site collection enumeration for web application '$($webApp.Url)'." -Level Information
+        Add-SPSInventoryEvent -Message "Starting site collection enumeration for web application '$($webApp.Url)'." -Level Information | Out-Host
+        $addEnumerationFailure = {
+            param ([string]$Message)
+            $null = $inventory.Add([PSCustomObject]@{
+                InventoryScope = 'WebApplication'
+                Url = [string]$webApp.Url
+                Title = 'Site collection enumeration failed'
+                WebApp = $webApp.Name
+                WebAppUrl = [string]$webApp.Url
+                AuthenticationModes = $authentication.AuthenticationModes
+                AuthenticationZones = $authentication.AuthenticationZones
+                FbaMembershipProviders = $authentication.FbaMembershipProviders
+                FbaRoleProviders = $authentication.FbaRoleProviders
+                HasFbaZone = $authentication.HasFbaZone
+                AuthenticationReviewRequired = $authentication.AuthenticationReviewRequired
+                ContentDb = ''
+                Template = ''
+                SizeGB = $null
+                SubWebCount = $null
+                LastModified = $null
+                SiteInventoryComplete = $false
+                SiteInventoryWarnings = $Message
+            })
+        }
         try {
             $sites = $webApp.Sites
             if ($null -eq $sites) {
@@ -58,7 +81,9 @@
             }
         }
         catch {
-            $null = Add-SPSInventoryEvent -Message "Could not access site collections for web application '$($webApp.Url)': $($_.Exception.Message)" -Level Warning
+            $failureMessage = "Site collection list could not be accessed: $($_.Exception.Message)"
+            $null = Add-SPSInventoryEvent -Message "Could not access site collections for web application '$($webApp.Url)': $failureMessage" -Level Warning
+            & $addEnumerationFailure $failureMessage
             Write-Progress -Id 1 -Activity 'Enumerating site collections' -Completed
             continue
         }
@@ -100,11 +125,12 @@
 
                 if ($siteIndex -eq 1 -or $siteIndex % 10 -eq 0 -or
                     ($null -ne $siteCount -and $siteIndex -eq $siteCount)) {
-                    $null = Add-SPSInventoryEvent -Message "Enumerating site collections in '$($webApp.Url)' ($progressStatus)." -Level Information
+                    Add-SPSInventoryEvent -Message "Enumerating site collections in '$($webApp.Url)' ($progressStatus)." -Level Information | Out-Host
                 }
 
                 $rootWeb = $null
                 $record = [ordered]@{
+                    InventoryScope = 'SiteCollection'
                     Url = $siteUrl
                     Title = ''
                     WebApp = $webApp.Name
@@ -189,7 +215,9 @@
             }
         }
         catch {
-            $null = Add-SPSInventoryEvent -Message "Site enumeration stopped early for web application '$($webApp.Url)' after $siteIndex site collection(s): $($_.Exception.Message)" -Level Warning
+            $failureMessage = "Site collection enumeration stopped early after $siteIndex site collection(s): $($_.Exception.Message)"
+            $null = Add-SPSInventoryEvent -Message "Site enumeration stopped early for web application '$($webApp.Url)': $failureMessage" -Level Warning
+            & $addEnumerationFailure $failureMessage
         }
         finally {
             Write-Progress -Id 1 -Activity "Enumerating site collections in $($webApp.Url)" -Completed

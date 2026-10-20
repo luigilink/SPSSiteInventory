@@ -112,6 +112,48 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $html | Should -Match 'Wave <span class="arrow">'
     }
 
+    It 'keeps wave-zero groups distinct for unmapped and failed records in either input order' {
+        $unassigned = [PSCustomObject]@{
+            Url = 'https://intranet/sites/unmapped'; Category = 5; CategoryName = 'Other'
+            AssessmentStatus = 'Complete'; SizeGB = 1; Wave = 0; WaveName = 'Unassigned'
+        }
+        $notAssessed = [PSCustomObject]@{
+            Url = 'https://intranet/sites/failed'; Category = $null; CategoryName = 'Not assessed'
+            AssessmentStatus = 'Failed'; SizeGB = 2; Wave = 0; WaveName = 'Not assessed'
+        }
+
+        $htmlFirst = ConvertTo-SPSInventoryHtml -InputObject @($unassigned, $notAssessed)
+        $htmlReverse = ConvertTo-SPSInventoryHtml -InputObject @($notAssessed, $unassigned)
+        foreach ($html in @($htmlFirst, $htmlReverse)) {
+            ([regex]::Matches($html, '<td class="num">-</td><td>Unassigned</td><td class="num">1</td><td class="num">1</td>')).Count | Should -Be 1
+            ([regex]::Matches($html, '<td class="num">-</td><td>Not assessed</td><td class="num">1</td><td class="num">2</td>')).Count | Should -Be 1
+        }
+    }
+
+    It 'counts web-application enumeration failures separately from site collections' {
+        $records = @(
+            [PSCustomObject]@{
+                InventoryScope = 'SiteCollection'; Url = 'https://intranet/sites/team'
+                AssessmentStatus = 'Complete'; Category = 1; CategoryName = 'Simple'
+                SizeGB = 1; Wave = 1; WaveName = 'Quick wins'
+            },
+            [PSCustomObject]@{
+                InventoryScope = 'WebApplication'; Url = 'https://intranet'
+                AssessmentStatus = 'Failed'; Category = $null; CategoryName = 'Not assessed'
+                AssessmentWarnings = 'Site collection list could not be accessed: Access denied'
+                SizeGB = $null; Wave = 0; WaveName = 'Not assessed'
+            }
+        )
+
+        $html = ConvertTo-SPSInventoryHtml -InputObject $records -ContentTypes @()
+
+        $html | Should -Match '<strong>1</strong> site collection\(s\)'
+        $html | Should -Match '<strong>1</strong> web application enumeration failure'
+        $html | Should -Match '1 web application\(s\) had site collection enumeration failures'
+        $html | Should -Match 'Inventory scope'
+        $html | Should -Match 'WebApplication'
+    }
+
     It 'HTML-encodes field values so markup cannot break' {
         $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
 

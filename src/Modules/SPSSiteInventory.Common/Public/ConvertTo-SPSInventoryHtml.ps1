@@ -99,9 +99,11 @@
     }
 
     $records = @($InputObject)
-    $total = $records.Count
-    $partialCount = @($records | Where-Object { $_.AssessmentStatus -eq 'Partial' }).Count
-    $failedCount = @($records | Where-Object { $_.AssessmentStatus -eq 'Failed' }).Count
+    $siteRecords = @($records | Where-Object { $_.InventoryScope -ne 'WebApplication' })
+    $total = $siteRecords.Count
+    $partialCount = @($siteRecords | Where-Object { $_.AssessmentStatus -eq 'Partial' }).Count
+    $failedCount = @($siteRecords | Where-Object { $_.AssessmentStatus -eq 'Failed' }).Count
+    $enumerationFailureCount = @($records | Where-Object { $_.InventoryScope -eq 'WebApplication' }).Count
     $assessedTotal = $total - $failedCount
 
     $invariant = [System.Globalization.CultureInfo]::InvariantCulture
@@ -109,7 +111,7 @@
     # Per-category counts and total size.
     $counts = @{ 1 = 0; 2 = 0; 3 = 0; 4 = 0 }
     $totalSize = 0.0
-    foreach ($record in $records) {
+    foreach ($record in $siteRecords) {
         $cat = 0
         if ($null -ne $record.Category) { $cat = [int]$record.Category }
         if ($counts.ContainsKey($cat)) { $counts[$cat]++ }
@@ -125,20 +127,23 @@
     # records (Wave / WaveName), so this stays self-contained. Records without a wave are
     # bucketed as 0 / 'Unassigned' and shown last.
     $waveAgg = @{}
-    foreach ($record in $records) {
+    foreach ($record in $siteRecords) {
         $waveNumber = 0
         if ($null -ne $record.Wave) { $waveNumber = [int]$record.Wave }
         $waveName = if ($record.WaveName) { [string]$record.WaveName } elseif ($waveNumber -eq 0) { 'Unassigned' } else { ('Wave {0}' -f $waveNumber) }
+        $waveGroupKey = '{0}|{1}' -f $waveNumber, $waveName
 
-        if (-not $waveAgg.ContainsKey($waveNumber)) {
-            $waveAgg[$waveNumber] = [PSCustomObject]@{ Name = $waveName; Count = 0; SizeGB = 0.0 }
+        if (-not $waveAgg.ContainsKey($waveGroupKey)) {
+            $waveAgg[$waveGroupKey] = [PSCustomObject]@{ Wave = $waveNumber; Name = $waveName; Count = 0; SizeGB = 0.0 }
         }
-        $waveAgg[$waveNumber].Count++
+        $waveAgg[$waveGroupKey].Count++
         if ($null -ne $record.SizeGB) {
-            try { $waveAgg[$waveNumber].SizeGB += [double]$record.SizeGB } catch { Write-Verbose -Message "Ignoring non-numeric SizeGB in wave aggregation: $($_.Exception.Message)" }
+            try { $waveAgg[$waveGroupKey].SizeGB += [double]$record.SizeGB } catch { Write-Verbose -Message "Ignoring non-numeric SizeGB in wave aggregation: $($_.Exception.Message)" }
         }
     }
-    $waveKeys = @($waveAgg.Keys | Sort-Object { if ([int]$_ -eq 0) { [int]::MaxValue } else { [int]$_ } })
+    $waveKeys = @($waveAgg.Keys | Sort-Object `
+        @{ Expression = { if ($waveAgg[$_].Wave -eq 0) { [int]::MaxValue } else { [int]$waveAgg[$_].Wave } } },
+        @{ Expression = { [string]$waveAgg[$_].Name } })
 
     $encTitle = ConvertTo-SPSHtmlText -Value $Title
     $encEnv = ConvertTo-SPSHtmlText -Value $EnvName
@@ -266,6 +271,9 @@ td.muted, .muted { color: var(--muted); }
     # Summary box.
     [void]$sb.AppendLine('<div class="summary">')
     [void]$sb.AppendLine(('<div class="summary-total"><strong>{0}</strong> site collection(s) &middot; <strong>{1} GB</strong> total content &middot; <strong>{2}</strong> partial &middot; <strong>{3}</strong> failed</div>' -f $total, $totalSize.ToString($invariant), $partialCount, $failedCount))
+    if ($enumerationFailureCount -gt 0) {
+        [void]$sb.AppendLine(('<div class="summary-total"><strong>{0}</strong> web application enumeration failure(s)</div>' -f $enumerationFailureCount))
+    }
     [void]$sb.AppendLine('<div class="cards">')
     foreach ($key in 1..4) {
         $meta = $categoryMeta[$key]
@@ -285,7 +293,7 @@ td.muted, .muted { color: var(--muted); }
         [void]$sb.AppendLine('<tbody>')
         foreach ($key in $waveKeys) {
             $agg = $waveAgg[$key]
-            $waveLabel = if ([int]$key -eq 0) { '-' } else { [string]$key }
+            $waveLabel = if ($agg.Wave -eq 0) { '-' } else { [string]$agg.Wave }
             [void]$sb.AppendLine(('<tr><td class="num">{0}</td><td>{1}</td><td class="num">{2}</td><td class="num">{3}</td></tr>' -f $waveLabel, (ConvertTo-SPSHtmlText -Value $agg.Name), $agg.Count, ([math]::Round($agg.SizeGB, 2)).ToString($invariant)))
         }
         [void]$sb.AppendLine('</tbody>')
@@ -362,7 +370,7 @@ td.muted, .muted { color: var(--muted); }
         }
     }
 
-    $authenticationSites = @($records | Where-Object { $_.AuthenticationZones })
+    $authenticationSites = @($siteRecords | Where-Object { $_.AuthenticationZones })
     if ($authenticationSites.Count -gt 0) {
         [void]$sb.AppendLine('<h2>Web application authentication</h2>')
         [void]$sb.AppendLine('<p>Configured providers across all zones, not actual user sign-in activity. FBA requires identity/authentication remediation for SharePoint Online. Categories follow your configured blocking rules.</p>')
@@ -382,9 +390,12 @@ td.muted, .muted { color: var(--muted); }
     }
 
     if ($PSBoundParameters.ContainsKey('ContentTypes')) {
-        $partialSites = @($records | Where-Object { $_.ContentTypeInventoryComplete -eq $false })
+        $partialSites = @($siteRecords | Where-Object { $_.ContentTypeInventoryComplete -eq $false })
         [void]$sb.AppendLine('<h2>Content types and list bindings</h2>')
         [void]$sb.AppendLine(('<p><strong>{0}</strong> definition/binding row(s). Standard types are included; presence alone is not a migration blocker. List bindings are not item counts or distinct business designs.</p>' -f $ContentTypes.Count))
+        if ($enumerationFailureCount -gt 0) {
+            [void]$sb.AppendLine(('<p><strong>Coverage warning:</strong> {0} web application(s) had site collection enumeration failures; content-type results do not cover those scopes.</p>' -f $enumerationFailureCount))
+        }
         if ($partialSites.Count -gt 0) {
             [void]$sb.AppendLine(('<p><strong>Partial collection:</strong> {0} site collection(s). Counts are lower bounds; consult ContentTypeInventoryComplete and the run warnings.</p>' -f $partialSites.Count))
         }
@@ -431,6 +442,7 @@ td.muted, .muted { color: var(--muted); }
 
     # Table.
     $columns = @(
+        @{ Key = 'InventoryScope'; Label = 'Inventory scope'; Class = ''; Type = 'text' }
         @{ Key = 'Url'; Label = 'URL'; Class = 'url'; Type = 'text' }
         @{ Key = 'Title'; Label = 'Title'; Class = ''; Type = 'text' }
         @{ Key = 'WebApp'; Label = 'Web application'; Class = ''; Type = 'text' }
