@@ -9,8 +9,11 @@
         drive the migration plan: URL, title, content database, root-web template, size,
         sub-web count and last activity date.
 
-        This collector deliberately returns only volumetry and identity. The
-        customization signals that feed the complexity score are collected separately by
+        This collector returns volumetry, identity and authentication configuration
+        across every web application zone. FBA configured
+        on any zone is surfaced on every collection in that web application; this does
+        not measure actual sign-in usage. Authentication read errors stop collection.
+        Customization signals that feed the complexity score are collected separately by
         Get-SPSSiteCustomization, so a fast "identity + size" pass can run on its own.
 
         Requires the SharePoint commands (see Import-SPSSharePointCommand) and to run as
@@ -43,6 +46,7 @@
     }
 
     $inventory = foreach ($webApp in $webApps) {
+        $authentication = Get-SPSWebApplicationAuthentication -WebApplication $webApp
         foreach ($site in $webApp.Sites) {
             try {
                 $rootWeb = $site.RootWeb
@@ -50,6 +54,13 @@
                     Url          = $site.Url
                     Title        = $rootWeb.Title
                     WebApp       = $webApp.Name
+                    WebAppUrl    = [string]$webApp.Url
+                    AuthenticationModes = $authentication.AuthenticationModes
+                    AuthenticationZones = $authentication.AuthenticationZones
+                    FbaMembershipProviders = $authentication.FbaMembershipProviders
+                    FbaRoleProviders = $authentication.FbaRoleProviders
+                    HasFbaZone = $authentication.HasFbaZone
+                    AuthenticationReviewRequired = $authentication.AuthenticationReviewRequired
                     ContentDb    = $site.ContentDatabase.Name
                     Template     = ('{0}#{1}' -f $rootWeb.WebTemplate, $rootWeb.Configuration)
                     SizeGB       = [math]::Round($site.Usage.Storage / 1GB, 2)

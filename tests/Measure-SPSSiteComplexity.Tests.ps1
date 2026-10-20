@@ -23,6 +23,7 @@ BeforeAll {
             'UsesCustomFarmFeature'
             'UsesFullTrustCode'
             'InfoPathFormCount'
+            'HasFbaZone'
         )
     }
 }
@@ -88,6 +89,25 @@ Describe 'Measure-SPSSiteComplexity' {
 
         $result.Category | Should -Be 4
         $result.CategoryName | Should -Be 'Blocking'
+    }
+
+    It 'forces Blocking for configured FBA regardless of the weighted score' {
+        $result = Measure-SPSSiteComplexity -Signals @{ HasFbaZone = $true } -Scoring $script:Scoring
+
+        $result.Score | Should -Be 0
+        $result.Category | Should -Be 4
+        ($result.Reasons -join '; ') | Should -Match 'blocking: HasFbaZone'
+    }
+
+    It 'does not block a site for FBA when its existing configuration lacks the rule' {
+        $legacy = @{
+            Weights = @{}
+            Thresholds = @{ Moderate = 1; Complex = 6 }
+            BlockingSignals = @('InfoPathFormCount')
+        }
+
+        (Measure-SPSSiteComplexity -Signals @{ HasFbaZone = $true } -Scoring $legacy).Category |
+            Should -Be 1
     }
 
     It 'treats missing signals as zero' {

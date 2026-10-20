@@ -60,6 +60,7 @@ Scoring = @{
         'UsesCustomFarmFeature'
         'UsesFullTrustCode'
         'InfoPathFormCount'
+        'HasFbaZone'
     )
 }
 ```
@@ -102,6 +103,18 @@ non-portable as-is:
 - `UsesFullTrustCode` — the site activates a feature from a custom **full-trust** solution
   (a WSP deploying a global assembly to the GAC), correlated through the farm-solution map.
 - `InfoPathFormCount` — the site uses InfoPath forms.
+- `HasFbaZone` — at least one zone of the site's web application is configured for
+  forms-based authentication. This requires an identity/authentication redesign for
+  SharePoint Online, not an on-premises farm repair. The signal does not prove that
+  FBA is actively used by the site or its users.
+
+Existing settings files are not rewritten. Add `HasFbaZone` to your existing
+`Scoring.BlockingSignals` to apply the new FBA override; otherwise FBA is still
+reported and the orchestrator warns that the override is not configured.
+
+Content types are inventoried for review, including standard definitions and list
+bindings. They do not contribute to the default score. Names, groups and content-type
+ID prefixes alone do not reliably identify custom or non-portable definitions.
 
 ## MigrationWaves section
 

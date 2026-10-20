@@ -83,6 +83,9 @@
             'UsesCustomFarmFeature'
             'UsesFullTrustCode'
             'InfoPathFormCount'
+            # FBA on any zone requires identity/authentication remediation for SPO.
+            # This is a configured capability, not a measurement of active users.
+            'HasFbaZone'
         )
     }
 

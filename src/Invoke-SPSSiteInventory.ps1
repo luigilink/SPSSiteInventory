@@ -63,12 +63,21 @@ try {
 
     Add-SPSInventoryEvent -Message 'Enumerating site collections.' -Level Information
     $inventory = Get-SPSSiteInventory -WebApplicationUrl $settings.WebApplicationUrl
+    if (@($inventory | Where-Object { $_.HasFbaZone }).Count -gt 0 -and
+        @($settings.Scoring.BlockingSignals) -notcontains 'HasFbaZone') {
+        Add-SPSInventoryEvent -Message 'FBA is configured, but HasFbaZone is not in Scoring.BlockingSignals. Add it to your settings to classify FBA as a SharePoint Online migration blocker.' -Level Warning
+    }
 
+    $contentTypes = [System.Collections.Generic.List[object]]::new()
     $scored = foreach ($item in $inventory) {
         $site = Get-SPSite -Identity $item.Url -ErrorAction Stop
         try {
             $signals = Get-SPSSiteCustomization -Site $site -CustomFeatureId $customFeatureId -FullTrustFeatureId $fullTrustFeatureId
             $signals['SizeGB'] = $item.SizeGB
+            $signals['HasFbaZone'] = $item.HasFbaZone
+            foreach ($contentType in $signals.ContentTypes) {
+                $contentTypes.Add($contentType)
+            }
 
             $result = Measure-SPSSiteComplexity -Signals $signals -Scoring $settings.Scoring
 
@@ -76,6 +85,13 @@ try {
                 Url               = $item.Url
                 Title             = $item.Title
                 WebApp            = $item.WebApp
+                WebAppUrl         = $item.WebAppUrl
+                AuthenticationModes = $item.AuthenticationModes
+                AuthenticationZones = $item.AuthenticationZones
+                FbaMembershipProviders = $item.FbaMembershipProviders
+                FbaRoleProviders = $item.FbaRoleProviders
+                HasFbaZone = $item.HasFbaZone
+                AuthenticationReviewRequired = $item.AuthenticationReviewRequired
                 ContentDb         = $item.ContentDb
                 Template          = $item.Template
                 SizeGB            = $item.SizeGB
@@ -85,6 +101,9 @@ try {
                 Workflow2013Count = $signals['Workflow2013Count']
                 InfoPathFormCount = $signals['InfoPathFormCount']
                 UsesFullTrustCode = $signals['UsesFullTrustCode']
+                ContentTypeCount = $signals['ContentTypeCount']
+                ListContentTypeBindingCount = $signals['ListContentTypeBindingCount']
+                ContentTypeInventoryComplete = $signals['ContentTypeInventoryComplete']
                 Category          = $result.Category
                 CategoryName      = $result.CategoryName
                 Score             = $result.Score
@@ -109,11 +128,12 @@ try {
     }
     $scored = @(Group-SPSMigrationWave -InputObject @($scored) -MigrationWaves $waves)
 
-    $output = Export-SPSInventoryReport -InputObject @($scored) -OutputFolder $settings.OutputFolder -BaseName ('SPSSiteInventory-' + $settings.EnvName) -EnvName $settings.EnvName -SolutionMap @($solutionMap)
+    $output = Export-SPSInventoryReport -InputObject @($scored) -OutputFolder $settings.OutputFolder -BaseName ('SPSSiteInventory-' + $settings.EnvName) -EnvName $settings.EnvName -SolutionMap @($solutionMap) -ContentTypes $contentTypes.ToArray()
     $solutionOutput = Export-SPSSolutionReport -InputObject @($solutionMap) -OutputFolder $settings.OutputFolder -BaseName ('SPSSiteInventory-' + $settings.EnvName)
 
     Add-SPSInventoryEvent -Message "Inventory complete. CSV: $($output.CsvPath) | JSON: $($output.JsonPath) | HTML: $($output.HtmlPath)" -Level Information
     Add-SPSInventoryEvent -Message "Farm-solution report. CSV: $($solutionOutput.CsvPath) | JSON: $($solutionOutput.JsonPath)" -Level Information
+    Add-SPSInventoryEvent -Message "Content-type report. CSV: $($output.ContentTypesCsvPath) | JSON: $($output.ContentTypesJsonPath)" -Level Information
 }
 catch {
     Add-SPSInventoryEvent -Message "Inventory failed: $($_.Exception.Message)" -Level Error

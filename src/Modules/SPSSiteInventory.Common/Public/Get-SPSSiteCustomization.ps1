@@ -33,6 +33,12 @@
         signal logs a verbose message and leaves that signal at its default rather than
         aborting the whole site.
 
+        ContentTypes contains web definitions and list bindings, including standard
+        types. ContentTypeCount counts distinct web-definition IDs in the collection;
+        ListContentTypeBindingCount counts list bindings, not distinct designs or items.
+        ContentTypeInventoryComplete is false and a warning is emitted when collection
+        is partial. Content-type presence alone is not a migration blocker.
+
         Requires the SharePoint commands (see Import-SPSSharePointCommand) and to run as
         the farm account on a farm server.
 
@@ -87,7 +93,12 @@
         EventReceivers           = 0
         UsesCustomFarmFeature    = $false
         UsesFullTrustCode        = $false
+        ContentTypeCount         = 0
+        ListContentTypeBindingCount = 0
+        ContentTypeInventoryComplete = $true
     }
+    $contentTypes = [System.Collections.Generic.List[object]]::new()
+    $contentTypeIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 
     try {
         $signals.SandboxSolutions = @($Site.Solutions).Count
@@ -120,10 +131,34 @@
 
     foreach ($web in $Site.AllWebs) {
         try {
+            try {
+                foreach ($contentType in $web.ContentTypes) {
+                    $record = ConvertTo-SPSContentTypeRecord -ContentType $contentType -SiteUrl $Site.Url -WebUrl $web.Url -Scope Web
+                    $contentTypes.Add($record)
+                    [void]$contentTypeIds.Add($record.ContentTypeId)
+                }
+            }
+            catch {
+                $signals.ContentTypeInventoryComplete = $false
+                Write-Warning -Message "Content-type definitions could not be fully read on '$($web.Url)': $($_.Exception.Message)"
+            }
+
             # SharePoint 2010 platform: classic workflow associations at web and list scope.
             $signals.Workflow2010Count += @($web.WorkflowAssociations).Count
 
             foreach ($list in $web.Lists) {
+                try {
+                    foreach ($contentType in $list.ContentTypes) {
+                        $record = ConvertTo-SPSContentTypeRecord -ContentType $contentType -SiteUrl $Site.Url -WebUrl $web.Url -Scope List -ListTitle $list.Title -ListUrl $list.RootFolder.ServerRelativeUrl
+                        $contentTypes.Add($record)
+                        $signals.ListContentTypeBindingCount++
+                    }
+                }
+                catch {
+                    $signals.ContentTypeInventoryComplete = $false
+                    Write-Warning -Message "Content-type bindings could not be fully read on list '$($list.Title)' in '$($web.Url)': $($_.Exception.Message)"
+                }
+
                 $signals.Workflow2010Count += @($list.WorkflowAssociations).Count
 
                 # Count only custom event receivers. Out-of-the-box lists (Search Center,
@@ -199,12 +234,15 @@
             }
         }
         catch {
-            Write-Verbose -Message "Signal collection issue on web '$($web.Url)': $($_.Exception.Message)"
+            $signals.ContentTypeInventoryComplete = $false
+            Write-Warning -Message "Signal collection issue on web '$($web.Url)': $($_.Exception.Message)"
         }
         finally {
             $web.Dispose()
         }
     }
 
+    $signals.ContentTypeCount = $contentTypeIds.Count
+    $signals.ContentTypes = $contentTypes.ToArray()
     return $signals
 }

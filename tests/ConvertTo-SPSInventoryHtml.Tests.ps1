@@ -167,4 +167,62 @@ Describe 'ConvertTo-SPSInventoryHtml' {
 
         $html | Should -Match 'a&amp;b &lt;x&gt;\.wsp'
     }
+
+    It 'renders authentication by web application and does not infer sign-ins' {
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet/sites/team'; WebAppUrl = 'https://intranet'
+            AuthenticationZones = 'Default: Windows; Extranet: FBA (Members & Co)'
+            AuthenticationModes = 'FBA; Windows'
+            HasFbaZone = $true
+            Category = 4; CategoryName = 'Blocking'; Wave = 4; Score = 0
+        }
+        $html = ConvertTo-SPSInventoryHtml -InputObject @($site)
+
+        $html | Should -Match 'Web application authentication'
+        $html | Should -Match 'not actual user sign-in activity'
+        $html | Should -Match 'Members &amp; Co'
+        $html | Should -Match 'FBA configured'
+        $html | Should -Match '<span class="pill warn">Yes</span>'
+    }
+
+    It 'shows unknown FBA state without displaying a false No pill' {
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet/sites/team'; WebAppUrl = 'https://intranet'
+            AuthenticationZones = 'Default: Unknown'; HasFbaZone = $null
+            AuthenticationReviewRequired = $true; Category = 1
+        }
+
+        $html = ConvertTo-SPSInventoryHtml -InputObject @($site)
+
+        $html | Should -Match '<td>Unknown</td><td><span class="pill warn">Yes</span>'
+    }
+
+    It 'renders encoded content-type detail and surfaces partial collection' {
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet/sites/team'; Category = 1
+            ContentTypeCount = 1; ListContentTypeBindingCount = 1
+            ContentTypeInventoryComplete = $false
+        }
+        $types = @([PSCustomObject]@{
+            SiteUrl = 'https://intranet/sites/team'; WebUrl = 'https://intranet/sites/team'
+            Scope = 'List'; ListTitle = 'Records <Admin>'; Name = 'Contract & Agreement'
+            ContentTypeId = '0x01'; ParentContentTypeId = '0x0'; Group = 'Custom'
+            FieldCount = 1; FieldTypes = 'Text'; DocumentTemplateUrl = 'a&b.dotx'
+        })
+
+        $html = ConvertTo-SPSInventoryHtml -InputObject @($site) -ContentTypes $types
+
+        $html | Should -Match 'Content types and list bindings'
+        $html | Should -Match 'Partial collection'
+        $html | Should -Match 'Records &lt;Admin&gt;'
+        $html | Should -Match 'Contract &amp; Agreement'
+        $html | Should -Match 'a&amp;b.dotx'
+        $html | Should -Not -Match 'Records <Admin>'
+    }
+
+    It 'renders an explicit empty content-type report when requested' {
+        $html = ConvertTo-SPSInventoryHtml -InputObject @() -ContentTypes @()
+
+        $html | Should -Match '0</strong> definition/binding row'
+    }
 }

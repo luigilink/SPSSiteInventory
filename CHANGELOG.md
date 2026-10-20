@@ -5,6 +5,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Zone-aware web application authentication inventory, including mixed Windows/FBA,
+  membership/role provider names and explicit identity-review flags. The example
+  configuration treats `HasFbaZone` as a SharePoint Online migration blocker.
+  Existing configurations remain unchanged and receive a warning when FBA is found
+  without that blocking rule.
+- Content-type web definitions and list bindings collected during the existing site
+  walk, with IDs, parent IDs, field types, document-template references and collection
+  completeness. Dedicated `-contenttypes-` CSV/JSON files and authentication/content-type
+  HTML sections complement the per-site summary; standard types are not automatically
+  classified as custom or blocking. (#26)
+
 ## [1.1.0] - 2026-09-21
 
 ### Added

@@ -5,7 +5,9 @@ This guide walks through preparing and running a first inventory.
 ## 1. Prerequisites
 
 - A **SharePoint Server** farm (2016, 2019 or Subscription Edition).
-- Run on a **farm server**, in an elevated **Windows PowerShell 5.1** session (not PowerShell 7).
+- Run on a **farm server**, from an elevated **SharePoint Management Shell**
+  (Windows PowerShell 5.1, not PowerShell 7). This initializes the SharePoint commands
+  before the toolkit imports its module.
 - Sign in as the **farm account** (or an account with read access to all web applications and Full Control on the User Profile service application).
 
 ## 2. Get the toolkit
@@ -31,6 +33,9 @@ notepad .\config\inventory-settings.psd1
 ```
 
 See the [Configuration](Configuration) page for every setting. At minimum, set `OutputFolder`. Custom farm solutions are auto-detected, so `CustomSolutionPrefix` is optional (leave it empty unless you need to override the detection).
+
+When reusing an older settings file, add `HasFbaZone` to `Scoring.BlockingSignals`
+if FBA must block migration to SharePoint Online. The current example includes it.
 
 ## 4. Check readiness
 
