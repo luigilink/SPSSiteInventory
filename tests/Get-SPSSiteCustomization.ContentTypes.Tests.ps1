@@ -160,6 +160,32 @@ Describe 'Get-SPSSiteCustomization content types' {
         ($warnings -join ';') | Should -Match 'Workflow subscription access denied'
     }
 
+    It 'preserves sandbox, site-feature, and InfoPath read failures as warnings' {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $siteFeature = [PSCustomObject]@{ DefinitionId = 'another-feature' }
+        $properties = [PSCustomObject]@{}
+        $properties | Add-Member -MemberType ScriptMethod -Name ContainsKey -Value { throw 'InfoPath properties access denied' }
+        $web.Lists[0].RootFolder.Properties = $properties
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Solutions = [SPSSiteInventoryThrowAfterOne]::new('Sandbox solution')
+            Features = [SPSSiteInventoryThrowAfterOne]::new($siteFeature)
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -CustomFeatureId @('feature-id') -WarningVariable warnings -WarningAction SilentlyContinue
+        $warningText = $warnings -join ';'
+
+        $signals.CustomizationInventoryComplete | Should -BeFalse
+        $warningText | Should -Match 'sandbox solutions for site collection'
+        $warningText | Should -Match 'https://intranet.contoso.com/sites/team'
+        $warningText | Should -Match 'Access denied while advancing the web enumerator'
+        $warningText | Should -Match 'site-scoped features for site collection'
+        $warningText | Should -Match 'Access denied while advancing the web enumerator'
+        $warningText | Should -Match "InfoPath state on list 'Documents' in web 'https://intranet.contoso.com/sites/team'"
+        $warningText | Should -Match 'InfoPath properties access denied'
+    }
+
     It 'marks unreadable field metadata as partial rather than exporting zero fields' {
         $definition = Get-TestContentType -Id '0x0101' -Name 'Document'
         $definition | Add-Member -MemberType ScriptProperty -Name Fields -Value { throw 'Access denied' } -Force

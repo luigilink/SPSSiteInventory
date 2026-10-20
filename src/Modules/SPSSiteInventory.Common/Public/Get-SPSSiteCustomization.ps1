@@ -106,7 +106,7 @@
     }
     catch {
         $signals.CustomizationInventoryComplete = $false
-        Write-Verbose -Message "Could not read sandbox solutions for '$($Site.Url)': $($_.Exception.Message)"
+        Write-Warning -Message "Could not read sandbox solutions for site collection '$($Site.Url)': $($_.Exception.Message)"
     }
 
     $customFeatureSet = [System.Collections.Generic.HashSet[string]]::new(
@@ -128,7 +128,7 @@
         }
         catch {
             $signals.CustomizationInventoryComplete = $false
-            Write-Verbose -Message "Could not read site-scoped features for '$($Site.Url)': $($_.Exception.Message)"
+            Write-Warning -Message "Could not read site-scoped features for site collection '$($Site.Url)': $($_.Exception.Message)"
         }
     }
 
@@ -209,7 +209,7 @@
                         }
                         catch {
                             $signals.CustomizationInventoryComplete = $false
-                            Write-Verbose -Message "Could not read InfoPath state on list '$listTitle': $($_.Exception.Message)"
+                            Write-Warning -Message "Could not read InfoPath state on list '$listTitle' in web '$($web.Url)': $($_.Exception.Message)"
                         }
                     }
                 }

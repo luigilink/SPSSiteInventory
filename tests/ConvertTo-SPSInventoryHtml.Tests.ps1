@@ -257,6 +257,23 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $html | Should -Match '<span class="pill warn">Yes</span>'
     }
 
+    It 'shows authentication metadata from a web-application failure row with zero collections' {
+        $failure = [PSCustomObject]@{
+            InventoryScope = 'WebApplication'
+            WebAppUrl = 'https://intranet'
+            AuthenticationZones = 'Default: Windows; Extranet: FBA'
+            HasFbaZone = $true
+            AuthenticationReviewRequired = $true
+        }
+
+        $html = ConvertTo-SPSInventoryHtml -InputObject @($failure)
+
+        $html | Should -Match 'Web application authentication'
+        $html | Should -Match 'https://intranet'
+        $html | Should -Match 'Default: Windows; Extranet: FBA'
+        $html | Should -Match '<td class="num">0</td></tr>'
+    }
+
     It 'shows unknown FBA state without displaying a false No pill' {
         $site = [PSCustomObject]@{
             Url = 'https://intranet/sites/team'; WebAppUrl = 'https://intranet'

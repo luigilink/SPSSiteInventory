@@ -370,21 +370,22 @@ td.muted, .muted { color: var(--muted); }
         }
     }
 
-    $authenticationSites = @($siteRecords | Where-Object { $_.AuthenticationZones })
-    if ($authenticationSites.Count -gt 0) {
+    $authenticationRecords = @($records | Where-Object { $_.AuthenticationZones })
+    if ($authenticationRecords.Count -gt 0) {
         [void]$sb.AppendLine('<h2>Web application authentication</h2>')
         [void]$sb.AppendLine('<p>Configured providers across all zones, not actual user sign-in activity. FBA requires identity/authentication remediation for SharePoint Online. Categories follow your configured blocking rules.</p>')
         [void]$sb.AppendLine('<div class="table-scroll"><table class="authentication">')
         [void]$sb.AppendLine('<thead><tr><th>Web application</th><th>Zones and providers</th><th>FBA configured</th><th>Identity review</th><th class="num">Collections</th></tr></thead><tbody>')
-        foreach ($group in ($authenticationSites | Group-Object -Property WebAppUrl, AuthenticationZones)) {
+        foreach ($group in ($authenticationRecords | Group-Object -Property WebAppUrl, AuthenticationZones)) {
             $site = $group.Group[0]
+            $collectionCount = @($group.Group | Where-Object { $_.InventoryScope -ne 'WebApplication' }).Count
             $fba = if ($null -eq $site.HasFbaZone) { 'Unknown' } else { Get-SPSYesNoPill -Value $site.HasFbaZone -TruePill 'warn' }
             [void]$sb.AppendLine(('<tr><td>{0}</td><td>{1}</td><td>{2}</td><td>{3}</td><td class="num">{4}</td></tr>' -f
                 (ConvertTo-SPSHtmlText -Value $site.WebAppUrl),
                 (ConvertTo-SPSHtmlText -Value $site.AuthenticationZones),
                 $fba,
                 (Get-SPSYesNoPill -Value $site.AuthenticationReviewRequired -TruePill 'warn'),
-                $group.Count))
+                $collectionCount))
         }
         [void]$sb.AppendLine('</tbody></table></div>')
     }
