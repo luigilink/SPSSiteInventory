@@ -172,7 +172,11 @@
                     }
 
                     try {
-                        $record.SizeGB = [math]::Round($site.Usage.Storage / 1GB, 2)
+                        $storageBytes = $site.Usage.Storage
+                        if ($null -eq $storageBytes) {
+                            throw 'Storage usage is unavailable.'
+                        }
+                        $record.SizeGB = [math]::Round($storageBytes / 1GB, 2)
                     }
                     catch {
                         $warnings.Add("Storage usage could not be read: $($_.Exception.Message)")

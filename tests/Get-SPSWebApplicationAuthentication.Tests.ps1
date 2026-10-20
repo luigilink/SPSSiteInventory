@@ -225,6 +225,43 @@ Describe 'Get-SPSWebApplicationAuthentication' {
         $inventory[0].SiteInventoryWarnings | Should -Match 'Root web metadata could not be fully read'
     }
 
+    It 'keeps an unreadable storage value null and marks the site inventory partial' {
+        $root = [PSCustomObject]@{
+            Title = 'Team'; WebTemplate = 'STS'; Configuration = 0
+            LastItemModifiedDate = [datetime]'2026-01-01'
+        }
+        $root | Add-Member -MemberType ScriptMethod -Name Dispose -Value { }
+        $usage = [PSCustomObject]@{ Storage = 1GB }
+        $usage | Add-Member -MemberType ScriptProperty -Name Storage -Value { throw 'Storage getter denied' } -Force
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/storage-unreadable'
+            RootWeb = $root
+            ContentDatabase = [PSCustomObject]@{ Name = 'WSS_Content' }
+            Usage = $usage
+            AllWebs = @($root)
+        }
+        $site | Add-Member -MemberType ScriptMethod -Name Dispose -Value { }
+        $script:webApp | Add-Member -NotePropertyName Name -NotePropertyValue 'Intranet' -Force
+        $script:webApp | Add-Member -NotePropertyName Sites -NotePropertyValue @($site) -Force
+        Mock Get-SPWebApplication -ModuleName SPSSiteInventory.Common { $script:webApp }
+        Mock Get-SPSWebApplicationAuthentication -ModuleName SPSSiteInventory.Common {
+            [PSCustomObject]@{
+                AuthenticationModes = 'Windows'; AuthenticationZones = 'Default: Windows'
+                HasFbaZone = $false; AuthenticationReviewRequired = $false
+            }
+        }
+        Mock Add-SPSInventoryEvent -ModuleName SPSSiteInventory.Common { }
+        Mock Write-Progress -ModuleName SPSSiteInventory.Common { }
+
+        $inventory = @(Get-SPSSiteInventory -ErrorAction SilentlyContinue)
+
+        $inventory | Should -HaveCount 1
+        $inventory[0].SizeGB | Should -BeNullOrEmpty
+        $inventory[0].SiteInventoryComplete | Should -BeFalse
+        $inventory[0].SiteInventoryWarnings | Should -Match 'Storage usage could not be read'
+        $inventory[0].SiteInventoryWarnings | Should -Match 'Storage usage is unavailable'
+    }
+
     It 'continues with later web applications when one site collection list is inaccessible' {
         $root = [PSCustomObject]@{
             Title = 'Other web app'; WebTemplate = 'STS'; Configuration = 0
