@@ -33,6 +33,11 @@
         Optional farm-solution (WSP) records (from Get-SPSFarmSolutionMap). When provided,
         the HTML report includes a "Farm solutions (WSP)" section.
 
+        .PARAMETER ContentTypes
+        Optional content-type definitions and list bindings collected with the site
+        signals. When supplied, adds a content-type HTML section and dedicated
+        -contenttypes CSV/JSON files, including valid empty reports.
+
         .EXAMPLE
         Export-SPSInventoryReport -InputObject $scored -OutputFolder C:\Inventory
     #>
@@ -41,6 +46,7 @@
     param
     (
         [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
         [System.Object[]]
         $InputObject,
 
@@ -60,7 +66,12 @@
         [AllowEmptyCollection()]
         [AllowNull()]
         [System.Object[]]
-        $SolutionMap = @()
+        $SolutionMap = @(),
+
+        [Parameter()]
+        [AllowEmptyCollection()]
+        [System.Object[]]
+        $ContentTypes = @()
     )
 
     if (-not (Test-Path -Path $OutputFolder)) {
@@ -73,14 +84,43 @@
     $htmlPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-{1}.html' -f $BaseName, $timestamp)
 
     $InputObject | Export-Csv -Path $csvPath -NoTypeInformation -Encoding UTF8
-    $InputObject | ConvertTo-Json -Depth 6 | Set-Content -Path $jsonPath -Encoding UTF8
+    ConvertTo-Json -InputObject @($InputObject) -Depth 6 | Set-Content -Path $jsonPath -Encoding UTF8
 
-    $html = ConvertTo-SPSInventoryHtml -InputObject @($InputObject) -EnvName $EnvName -SolutionMap @($SolutionMap)
+    $htmlParams = @{
+        InputObject = @($InputObject)
+        EnvName = $EnvName
+        SolutionMap = @($SolutionMap)
+    }
+    $contentTypesCsvPath = $null
+    $contentTypesJsonPath = $null
+    if ($PSBoundParameters.ContainsKey('ContentTypes')) {
+        $htmlParams['ContentTypes'] = @($ContentTypes)
+        $contentTypesCsvPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-contenttypes-{1}.csv' -f $BaseName, $timestamp)
+        $contentTypesJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-contenttypes-{1}.json' -f $BaseName, $timestamp)
+        $columns = @(
+            'SiteUrl', 'WebUrl', 'Scope', 'ListTitle', 'ListUrl', 'ContentTypeId', 'Name',
+            'Group', 'ParentContentTypeId', 'FieldCount', 'FieldTypes',
+            'DocumentTemplateUrl', 'Hidden', 'ReadOnly', 'Sealed'
+        )
+        if ($ContentTypes.Count -gt 0) {
+            $ContentTypes | Select-Object -Property $columns |
+                Export-Csv -Path $contentTypesCsvPath -NoTypeInformation -Encoding UTF8
+        }
+        else {
+            Set-Content -Path $contentTypesCsvPath -Value ('"' + ($columns -join '","') + '"') -Encoding UTF8
+        }
+        ConvertTo-Json -InputObject @($ContentTypes) -Depth 6 |
+            Set-Content -Path $contentTypesJsonPath -Encoding UTF8
+    }
+
+    $html = ConvertTo-SPSInventoryHtml @htmlParams
     $html | Set-Content -Path $htmlPath -Encoding UTF8
 
     return [PSCustomObject]@{
         CsvPath  = $csvPath
         JsonPath = $jsonPath
         HtmlPath = $htmlPath
+        ContentTypesCsvPath = $contentTypesCsvPath
+        ContentTypesJsonPath = $contentTypesJsonPath
     }
 }

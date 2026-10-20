@@ -42,6 +42,11 @@
         ContainsWebApplicationResource / FeatureCount / FeatureScopes. Omitted cleanly when
         no map is passed.
 
+        .PARAMETER ContentTypes
+        Optional web content-type definitions and list bindings. When supplied,
+        renders their metadata without classifying standard types as custom or
+        blocking. Site-level completeness flags identify partial collection.
+
         .EXAMPLE
         $html = ConvertTo-SPSInventoryHtml -InputObject $scored -EnvName 'PROD'
         Set-Content -Path report.html -Value $html -Encoding UTF8
@@ -74,7 +79,12 @@
         [AllowEmptyCollection()]
         [AllowNull()]
         [System.Object[]]
-        $SolutionMap = @()
+        $SolutionMap = @(),
+
+        [Parameter()]
+        [AllowEmptyCollection()]
+        [System.Object[]]
+        $ContentTypes = @()
     )
 
     # Category metadata: name and accent colour for each complexity level. A plain
@@ -348,6 +358,65 @@ td.muted, .muted { color: var(--muted); }
         }
     }
 
+    $authenticationSites = @($records | Where-Object { $_.AuthenticationZones })
+    if ($authenticationSites.Count -gt 0) {
+        [void]$sb.AppendLine('<h2>Web application authentication</h2>')
+        [void]$sb.AppendLine('<p>Configured providers across all zones, not actual user sign-in activity. FBA requires identity/authentication remediation for SharePoint Online. Categories follow your configured blocking rules.</p>')
+        [void]$sb.AppendLine('<div class="table-scroll"><table class="authentication">')
+        [void]$sb.AppendLine('<thead><tr><th>Web application</th><th>Zones and providers</th><th>FBA configured</th><th>Identity review</th><th class="num">Collections</th></tr></thead><tbody>')
+        foreach ($group in ($authenticationSites | Group-Object -Property WebAppUrl, AuthenticationZones)) {
+            $site = $group.Group[0]
+            $fba = if ($null -eq $site.HasFbaZone) { 'Unknown' } else { Get-SPSYesNoPill -Value $site.HasFbaZone -TruePill 'warn' }
+            [void]$sb.AppendLine(('<tr><td>{0}</td><td>{1}</td><td>{2}</td><td>{3}</td><td class="num">{4}</td></tr>' -f
+                (ConvertTo-SPSHtmlText -Value $site.WebAppUrl),
+                (ConvertTo-SPSHtmlText -Value $site.AuthenticationZones),
+                $fba,
+                (Get-SPSYesNoPill -Value $site.AuthenticationReviewRequired -TruePill 'warn'),
+                $group.Count))
+        }
+        [void]$sb.AppendLine('</tbody></table></div>')
+    }
+
+    if ($PSBoundParameters.ContainsKey('ContentTypes')) {
+        $partialSites = @($records | Where-Object { $_.ContentTypeInventoryComplete -eq $false })
+        [void]$sb.AppendLine('<h2>Content types and list bindings</h2>')
+        [void]$sb.AppendLine(('<p><strong>{0}</strong> definition/binding row(s). Standard types are included; presence alone is not a migration blocker. List bindings are not item counts or distinct business designs.</p>' -f $ContentTypes.Count))
+        if ($partialSites.Count -gt 0) {
+            [void]$sb.AppendLine(('<p><strong>Partial collection:</strong> {0} site collection(s). Counts are lower bounds; consult ContentTypeInventoryComplete and the run warnings.</p>' -f $partialSites.Count))
+        }
+        [void]$sb.AppendLine('<div class="table-scroll"><table class="contenttypes">')
+        $contentTypeColumns = @(
+            @{ Key = 'SiteUrl'; Label = 'Site' }
+            @{ Key = 'WebUrl'; Label = 'Web' }
+            @{ Key = 'Scope'; Label = 'Scope' }
+            @{ Key = 'ListTitle'; Label = 'List' }
+            @{ Key = 'ListUrl'; Label = 'List URL' }
+            @{ Key = 'Name'; Label = 'Content type' }
+            @{ Key = 'ContentTypeId'; Label = 'ID' }
+            @{ Key = 'ParentContentTypeId'; Label = 'Parent ID' }
+            @{ Key = 'Group'; Label = 'Group' }
+            @{ Key = 'FieldCount'; Label = 'Fields' }
+            @{ Key = 'FieldTypes'; Label = 'Field types' }
+            @{ Key = 'DocumentTemplateUrl'; Label = 'Document template' }
+            @{ Key = 'Hidden'; Label = 'Hidden' }
+            @{ Key = 'ReadOnly'; Label = 'Read only' }
+            @{ Key = 'Sealed'; Label = 'Sealed' }
+        )
+        [void]$sb.AppendLine('<thead><tr>')
+        foreach ($column in $contentTypeColumns) {
+            [void]$sb.AppendLine(('<th>{0}</th>' -f $column.Label))
+        }
+        [void]$sb.AppendLine('</tr></thead><tbody>')
+        foreach ($contentType in $ContentTypes) {
+            [void]$sb.AppendLine('<tr>')
+            foreach ($column in $contentTypeColumns) {
+                [void]$sb.AppendLine(('<td>{0}</td>' -f (ConvertTo-SPSHtmlText -Value $contentType.($column.Key))))
+            }
+            [void]$sb.AppendLine('</tr>')
+        }
+        [void]$sb.AppendLine('</tbody></table></div>')
+    }
+
     # Filter bar.
     [void]$sb.AppendLine('<div class="filters">')
     [void]$sb.AppendLine('<button data-filter="all" class="active">All</button>')
@@ -366,6 +435,11 @@ td.muted, .muted { color: var(--muted); }
         @{ Key = 'SizeGB'; Label = 'Size (GB)'; Class = 'num'; Type = 'num' }
         @{ Key = 'SubWebCount'; Label = 'Sub-webs'; Class = 'num'; Type = 'num' }
         @{ Key = 'LastModified'; Label = 'Last modified'; Class = ''; Type = 'text' }
+        @{ Key = 'AuthenticationModes'; Label = 'Authentication'; Class = ''; Type = 'text' }
+        @{ Key = 'HasFbaZone'; Label = 'FBA configured'; Class = ''; Type = 'text' }
+        @{ Key = 'ContentTypeCount'; Label = 'Content types (unique web IDs)'; Class = 'num'; Type = 'num' }
+        @{ Key = 'ListContentTypeBindingCount'; Label = 'List content-type bindings'; Class = 'num'; Type = 'num' }
+        @{ Key = 'ContentTypeInventoryComplete'; Label = 'Content types complete'; Class = ''; Type = 'text' }
         @{ Key = 'Wave'; Label = 'Wave'; Class = 'num'; Type = 'num' }
         @{ Key = 'Score'; Label = 'Score'; Class = 'num'; Type = 'num' }
     )
@@ -390,7 +464,11 @@ td.muted, .muted { color: var(--muted); }
         [void]$sb.AppendLine(('<tr data-category="{0}">' -f $cat))
         foreach ($col in $columns) {
             $raw = $record.$($col.Key)
-            if ($col.Key -eq 'LastModified' -and $raw -is [datetime]) {
+            if ($col.Key -eq 'HasFbaZone' -and $null -eq $raw -and
+                $null -ne $record.PSObject.Properties['HasFbaZone']) {
+                $raw = 'Unknown'
+            }
+            elseif ($col.Key -eq 'LastModified' -and $raw -is [datetime]) {
                 $raw = $raw.ToString('yyyy-MM-dd')
             }
             elseif ($col.Type -eq 'num' -and ($raw -is [double] -or $raw -is [single] -or $raw -is [decimal] -or $raw -is [int] -or $raw -is [long])) {
