@@ -4,8 +4,9 @@
         Exports the scored inventory to CSV and JSON.
 
         .DESCRIPTION
-        Writes the consolidated inventory (one record per site, including the complexity
-        category and score) to three files in the output folder (created when missing):
+        Writes the consolidated inventory (site records plus any web-application
+        enumeration failure records, including complexity category and score where
+        available) to three files in the output folder (created when missing):
 
         - a CSV file for review in Excel;
         - a JSON file for downstream automation (for example feeding migration wave

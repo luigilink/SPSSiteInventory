@@ -7,7 +7,8 @@
         Walks the requested web applications (or all content web applications when none
         is specified) and returns one record per site collection with the fields that
         drive the migration plan: URL, title, content database, root-web template, size,
-        sub-web count and last activity date.
+        sub-web count and last activity date. Progress is displayed as sites are visited.
+        Individual metadata failures are returned as partial records with warning details.
 
         This collector returns volumetry, identity and authentication configuration
         across every web application zone. FBA configured
@@ -45,38 +46,187 @@
         Get-SPWebApplication -ErrorAction Stop
     }
 
-    $inventory = foreach ($webApp in $webApps) {
+    $inventory = [System.Collections.Generic.List[object]]::new()
+    foreach ($webApp in $webApps) {
         $authentication = Get-SPSWebApplicationAuthentication -WebApplication $webApp
-        foreach ($site in $webApp.Sites) {
-            try {
-                $rootWeb = $site.RootWeb
-                [PSCustomObject]@{
-                    Url          = $site.Url
-                    Title        = $rootWeb.Title
-                    WebApp       = $webApp.Name
-                    WebAppUrl    = [string]$webApp.Url
+        Write-Progress -Id 1 -Activity 'Enumerating site collections' -Status "Opening the site collection list for $($webApp.Url)" -PercentComplete 0
+        Add-SPSInventoryEvent -Message "Starting site collection enumeration for web application '$($webApp.Url)'." -Level Information | Out-Host
+        $addEnumerationFailure = {
+            param ([string]$Message)
+            $null = $inventory.Add([PSCustomObject]@{
+                InventoryScope = 'WebApplication'
+                Url = [string]$webApp.Url
+                Title = 'Site collection enumeration failed'
+                WebApp = $webApp.Name
+                WebAppUrl = [string]$webApp.Url
+                AuthenticationModes = $authentication.AuthenticationModes
+                AuthenticationZones = $authentication.AuthenticationZones
+                FbaMembershipProviders = $authentication.FbaMembershipProviders
+                FbaRoleProviders = $authentication.FbaRoleProviders
+                HasFbaZone = $authentication.HasFbaZone
+                AuthenticationReviewRequired = $authentication.AuthenticationReviewRequired
+                ContentDb = ''
+                Template = ''
+                SizeGB = $null
+                SubWebCount = $null
+                LastModified = $null
+                SiteInventoryComplete = $false
+                SiteInventoryWarnings = $Message
+            })
+        }
+        try {
+            $sites = $webApp.Sites
+            if ($null -eq $sites) {
+                throw "The site collection list is unavailable for web application '$($webApp.Url)'."
+            }
+        }
+        catch {
+            $failureMessage = "Site collection list could not be accessed: $($_.Exception.Message)"
+            $null = Add-SPSInventoryEvent -Message "Could not access site collections for web application '$($webApp.Url)': $failureMessage" -Level Warning
+            & $addEnumerationFailure $failureMessage
+            Write-Progress -Id 1 -Activity 'Enumerating site collections' -Completed
+            continue
+        }
+
+        $siteCount = $null
+        try {
+            $siteCount = [int]$sites.Count
+        }
+        catch {
+            $null = Add-SPSInventoryEvent -Message "Could not determine the site count for web application '$($webApp.Url)'; progress will show an unknown total. $($_.Exception.Message)" -Level Warning
+        }
+
+        $siteIndex = 0
+        try {
+            foreach ($site in $sites) {
+                $siteIndex++
+                $siteUrl = ''
+                $warnings = [System.Collections.Generic.List[string]]::new()
+                try {
+                    $siteUrl = [string]$site.Url
+                }
+                catch {
+                    $warnings.Add("Site URL could not be read: $($_.Exception.Message)")
+                }
+
+                $progressStatus = if ($null -ne $siteCount) {
+                    '{0}/{1}: {2}' -f $siteIndex, $siteCount, $siteUrl
+                }
+                else {
+                    'Site {0} (total unknown): {1}' -f $siteIndex, $siteUrl
+                }
+                $percentComplete = if ($null -ne $siteCount -and $siteCount -gt 0) {
+                    [int](($siteIndex / $siteCount) * 100)
+                }
+                else {
+                    0
+                }
+                Write-Progress -Id 1 -Activity "Enumerating site collections in $($webApp.Url)" -Status $progressStatus -PercentComplete $percentComplete
+
+                if ($siteIndex -eq 1 -or $siteIndex % 10 -eq 0 -or
+                    ($null -ne $siteCount -and $siteIndex -eq $siteCount)) {
+                    Add-SPSInventoryEvent -Message "Enumerating site collections in '$($webApp.Url)' ($progressStatus)." -Level Information | Out-Host
+                }
+
+                $rootWeb = $null
+                $record = [ordered]@{
+                    InventoryScope = 'SiteCollection'
+                    Url = $siteUrl
+                    Title = ''
+                    WebApp = $webApp.Name
+                    WebAppUrl = [string]$webApp.Url
                     AuthenticationModes = $authentication.AuthenticationModes
                     AuthenticationZones = $authentication.AuthenticationZones
                     FbaMembershipProviders = $authentication.FbaMembershipProviders
                     FbaRoleProviders = $authentication.FbaRoleProviders
                     HasFbaZone = $authentication.HasFbaZone
                     AuthenticationReviewRequired = $authentication.AuthenticationReviewRequired
-                    ContentDb    = $site.ContentDatabase.Name
-                    Template     = ('{0}#{1}' -f $rootWeb.WebTemplate, $rootWeb.Configuration)
-                    SizeGB       = [math]::Round($site.Usage.Storage / 1GB, 2)
-                    SubWebCount  = $site.AllWebs.Count
-                    LastModified = $rootWeb.LastItemModifiedDate
+                    ContentDb = ''
+                    Template = ''
+                    SizeGB = $null
+                    SubWebCount = $null
+                    LastModified = $null
+                    SiteInventoryComplete = $true
+                    SiteInventoryWarnings = ''
                 }
-                $rootWeb.Dispose()
+
+                try {
+                    try {
+                        $rootWeb = $site.RootWeb
+                        if ($null -eq $rootWeb) {
+                            throw "The root web is unavailable."
+                        }
+                        $record.Title = $rootWeb.Title
+                        $record.Template = '{0}#{1}' -f $rootWeb.WebTemplate, $rootWeb.Configuration
+                        $record.LastModified = $rootWeb.LastItemModifiedDate
+                    }
+                    catch {
+                        $warnings.Add("Root web metadata could not be fully read: $($_.Exception.Message)")
+                    }
+
+                    try {
+                        $record.ContentDb = $site.ContentDatabase.Name
+                    }
+                    catch {
+                        $warnings.Add("Content database could not be read: $($_.Exception.Message)")
+                    }
+
+                    try {
+                        $storageBytes = $site.Usage.Storage
+                        if ($null -eq $storageBytes) {
+                            throw 'Storage usage is unavailable.'
+                        }
+                        $record.SizeGB = [math]::Round($storageBytes / 1GB, 2)
+                    }
+                    catch {
+                        $warnings.Add("Storage usage could not be read: $($_.Exception.Message)")
+                    }
+
+                    try {
+                        $siteWebs = $site.AllWebs
+                        if ($null -eq $siteWebs) {
+                            throw "The web collection is unavailable."
+                        }
+                        $record.SubWebCount = $siteWebs.Count
+                    }
+                    catch {
+                        $warnings.Add("Sub-web count could not be read: $($_.Exception.Message)")
+                    }
+                }
+                finally {
+                    if ($null -ne $rootWeb) {
+                        try {
+                            $rootWeb.Dispose()
+                        }
+                        catch {
+                            $warnings.Add("Root web disposal failed: $($_.Exception.Message)")
+                        }
+                    }
+                    try {
+                        $site.Dispose()
+                    }
+                    catch {
+                        $warnings.Add("Site collection disposal failed: $($_.Exception.Message)")
+                    }
+                }
+
+                $record.SiteInventoryComplete = ($warnings.Count -eq 0)
+                $record.SiteInventoryWarnings = $warnings -join '; '
+                if (-not $record.SiteInventoryComplete) {
+                    $null = Add-SPSInventoryEvent -Message "Site inventory is partial for '$siteUrl': $($record.SiteInventoryWarnings)" -Level Warning
+                }
+                $inventory.Add([PSCustomObject]$record)
             }
-            catch {
-                Write-Warning -Message "Failed to inventory site '$($site.Url)': $($_.Exception.Message)"
-            }
-            finally {
-                $site.Dispose()
-            }
+        }
+        catch {
+            $failureMessage = "Site collection enumeration stopped early after $siteIndex site collection(s): $($_.Exception.Message)"
+            $null = Add-SPSInventoryEvent -Message "Site enumeration stopped early for web application '$($webApp.Url)': $failureMessage" -Level Warning
+            & $addEnumerationFailure $failureMessage
+        }
+        finally {
+            Write-Progress -Id 1 -Activity "Enumerating site collections in $($webApp.Url)" -Completed
         }
     }
 
-    return @($inventory)
+    return $inventory.ToArray()
 }

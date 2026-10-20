@@ -38,7 +38,7 @@ param
 
 $ErrorActionPreference = 'Stop'
 
-Import-Module -Name (Join-Path -Path $PSScriptRoot -ChildPath 'Modules\SPSSiteInventory.Common\SPSSiteInventory.Common.psd1') -Force
+$commonModule = Import-Module -Name (Join-Path -Path $PSScriptRoot -ChildPath 'Modules\SPSSiteInventory.Common\SPSSiteInventory.Common.psd1') -Force -PassThru
 
 $context = Initialize-SPSScript -ScriptName 'Invoke-SPSSiteInventory' -ScriptRoot $PSScriptRoot
 
@@ -62,58 +62,19 @@ try {
     $fullTrustFeatureId = @($solutionMap | Where-Object { $_.IsFullTrustCode } | ForEach-Object { $_.FeatureIds } | Sort-Object -Unique)
 
     Add-SPSInventoryEvent -Message 'Enumerating site collections.' -Level Information
-    $inventory = Get-SPSSiteInventory -WebApplicationUrl $settings.WebApplicationUrl
+    $inventory = @(Get-SPSSiteInventory -WebApplicationUrl $settings.WebApplicationUrl)
     if (@($inventory | Where-Object { $_.HasFbaZone }).Count -gt 0 -and
         @($settings.Scoring.BlockingSignals) -notcontains 'HasFbaZone') {
         Add-SPSInventoryEvent -Message 'FBA is configured, but HasFbaZone is not in Scoring.BlockingSignals. Add it to your settings to classify FBA as a SharePoint Online migration blocker.' -Level Warning
     }
 
-    $contentTypes = [System.Collections.Generic.List[object]]::new()
-    $scored = foreach ($item in $inventory) {
-        $site = Get-SPSite -Identity $item.Url -ErrorAction Stop
-        try {
-            $signals = Get-SPSSiteCustomization -Site $site -CustomFeatureId $customFeatureId -FullTrustFeatureId $fullTrustFeatureId
-            $signals['SizeGB'] = $item.SizeGB
-            $signals['HasFbaZone'] = $item.HasFbaZone
-            foreach ($contentType in $signals.ContentTypes) {
-                $contentTypes.Add($contentType)
-            }
-
-            $result = Measure-SPSSiteComplexity -Signals $signals -Scoring $settings.Scoring
-
-            [PSCustomObject]@{
-                Url               = $item.Url
-                Title             = $item.Title
-                WebApp            = $item.WebApp
-                WebAppUrl         = $item.WebAppUrl
-                AuthenticationModes = $item.AuthenticationModes
-                AuthenticationZones = $item.AuthenticationZones
-                FbaMembershipProviders = $item.FbaMembershipProviders
-                FbaRoleProviders = $item.FbaRoleProviders
-                HasFbaZone = $item.HasFbaZone
-                AuthenticationReviewRequired = $item.AuthenticationReviewRequired
-                ContentDb         = $item.ContentDb
-                Template          = $item.Template
-                SizeGB            = $item.SizeGB
-                SubWebCount       = $item.SubWebCount
-                LastModified      = $item.LastModified
-                Workflow2010Count = $signals['Workflow2010Count']
-                Workflow2013Count = $signals['Workflow2013Count']
-                InfoPathFormCount = $signals['InfoPathFormCount']
-                UsesFullTrustCode = $signals['UsesFullTrustCode']
-                ContentTypeCount = $signals['ContentTypeCount']
-                ListContentTypeBindingCount = $signals['ListContentTypeBindingCount']
-                ContentTypeInventoryComplete = $signals['ContentTypeInventoryComplete']
-                Category          = $result.Category
-                CategoryName      = $result.CategoryName
-                Score             = $result.Score
-                Reasons           = ($result.Reasons -join '; ')
-            }
-        }
-        finally {
-            $site.Dispose()
-        }
-    }
+    Add-SPSInventoryEvent -Message ("Discovered {0} site collection(s); collecting customization signals." -f @($inventory).Count) -Level Information
+    $assessment = & $commonModule {
+        param ($Inventory, $CustomFeatureId, $FullTrustFeatureId, $Scoring)
+        Invoke-SPSiteAssessment -Inventory $Inventory -CustomFeatureId $CustomFeatureId -FullTrustFeatureId $FullTrustFeatureId -Scoring $Scoring
+    } $inventory $customFeatureId $fullTrustFeatureId $settings.Scoring
+    $scored = @($assessment.Inventory)
+    $contentTypes = @($assessment.ContentTypes)
 
     $waves = if ($settings.ContainsKey('MigrationWaves')) {
         @($settings.MigrationWaves)
@@ -126,9 +87,9 @@ try {
             @{ Wave = 4; Name = 'Projects / blockers'; Categories = @(4) }
         )
     }
-    $scored = @(Group-SPSMigrationWave -InputObject @($scored) -MigrationWaves $waves)
+    $scored = @(Group-SPSMigrationWave -InputObject $scored -MigrationWaves $waves)
 
-    $output = Export-SPSInventoryReport -InputObject @($scored) -OutputFolder $settings.OutputFolder -BaseName ('SPSSiteInventory-' + $settings.EnvName) -EnvName $settings.EnvName -SolutionMap @($solutionMap) -ContentTypes $contentTypes.ToArray()
+    $output = Export-SPSInventoryReport -InputObject @($scored) -OutputFolder $settings.OutputFolder -BaseName ('SPSSiteInventory-' + $settings.EnvName) -EnvName $settings.EnvName -SolutionMap @($solutionMap) -ContentTypes $contentTypes
     $solutionOutput = Export-SPSSolutionReport -InputObject @($solutionMap) -OutputFolder $settings.OutputFolder -BaseName ('SPSSiteInventory-' + $settings.EnvName)
 
     Add-SPSInventoryEvent -Message "Inventory complete. CSV: $($output.CsvPath) | JSON: $($output.JsonPath) | HTML: $($output.HtmlPath)" -Level Information

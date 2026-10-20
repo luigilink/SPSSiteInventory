@@ -54,6 +54,18 @@ Describe 'Group-SPSMigrationWave' {
         $blocking.WaveName | Should -Be 'Unassigned'
     }
 
+    It 'keeps failed assessments in the Not assessed wave' {
+        $failed = [PSCustomObject]@{
+            Url = 'https://s/failed'; AssessmentStatus = 'Failed'
+            Category = $null; CategoryName = 'Not assessed'
+        }
+
+        $result = Group-SPSMigrationWave -InputObject @($failed) -MigrationWaves $script:DefaultWaves
+
+        $result.Wave | Should -Be 0
+        $result.WaveName | Should -Be 'Not assessed'
+    }
+
     It 'inserts Wave and WaveName right after CategoryName, preserving other columns' {
         $result = Group-SPSMigrationWave -InputObject $script:Sites -MigrationWaves $script:DefaultWaves
 

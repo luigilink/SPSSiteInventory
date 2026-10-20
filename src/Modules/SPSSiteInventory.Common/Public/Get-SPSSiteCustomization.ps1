@@ -29,9 +29,9 @@
         those forms must be rebuilt (Power Apps) - often a migration blocker.
 
         The returned hashtable is designed to be passed straight to
-        Measure-SPSSiteComplexity. Signal collection is best-effort: a failure to read one
-        signal logs a verbose message and leaves that signal at its default rather than
-        aborting the whole site.
+        Measure-SPSSiteComplexity. CustomizationInventoryComplete is false when a signal
+        cannot be read; partial results are returned with warnings rather than aborting
+        collection of the remaining site data.
 
         ContentTypes contains web definitions and list bindings, including standard
         types. ContentTypeCount counts distinct web-definition IDs in the collection;
@@ -93,6 +93,7 @@
         EventReceivers           = 0
         UsesCustomFarmFeature    = $false
         UsesFullTrustCode        = $false
+        CustomizationInventoryComplete = $true
         ContentTypeCount         = 0
         ListContentTypeBindingCount = 0
         ContentTypeInventoryComplete = $true
@@ -104,7 +105,8 @@
         $signals.SandboxSolutions = @($Site.Solutions).Count
     }
     catch {
-        Write-Verbose -Message "Could not read sandbox solutions for '$($Site.Url)': $($_.Exception.Message)"
+        $signals.CustomizationInventoryComplete = $false
+        Write-Warning -Message "Could not read sandbox solutions for site collection '$($Site.Url)': $($_.Exception.Message)"
     }
 
     $customFeatureSet = [System.Collections.Generic.HashSet[string]]::new(
@@ -125,129 +127,156 @@
             }
         }
         catch {
-            Write-Verbose -Message "Could not read site-scoped features for '$($Site.Url)': $($_.Exception.Message)"
+            $signals.CustomizationInventoryComplete = $false
+            Write-Warning -Message "Could not read site-scoped features for site collection '$($Site.Url)': $($_.Exception.Message)"
         }
     }
 
-    foreach ($web in $Site.AllWebs) {
-        try {
+    try {
+        $siteWebs = $Site.AllWebs
+        if ($null -eq $siteWebs) {
+            throw "The web collection is unavailable for '$($Site.Url)'."
+        }
+        foreach ($web in $siteWebs) {
             try {
-                $webContentTypes = $web.ContentTypes
-                if ($null -eq $webContentTypes) {
-                    throw "Content-type definitions are unavailable on '$($web.Url)'."
-                }
-                foreach ($contentType in $webContentTypes) {
-                    $record = ConvertTo-SPSContentTypeRecord -ContentType $contentType -SiteUrl $Site.Url -WebUrl $web.Url -Scope Web
-                    $contentTypes.Add($record)
-                    [void]$contentTypeIds.Add($record.ContentTypeId)
-                }
-            }
-            catch {
-                $signals.ContentTypeInventoryComplete = $false
-                Write-Warning -Message "Content-type definitions could not be fully read on '$($web.Url)': $($_.Exception.Message)"
-            }
-
-            # SharePoint 2010 platform: classic workflow associations at web and list scope.
-            $signals.Workflow2010Count += @($web.WorkflowAssociations).Count
-
-            foreach ($list in $web.Lists) {
                 try {
-                    $listContentTypes = $list.ContentTypes
-                    if ($null -eq $listContentTypes) {
-                        throw "Content-type bindings are unavailable on list '$($list.Title)'."
+                    $webContentTypes = $web.ContentTypes
+                    if ($null -eq $webContentTypes) {
+                        throw "Content-type definitions are unavailable on '$($web.Url)'."
                     }
-                    foreach ($contentType in $listContentTypes) {
-                        $record = ConvertTo-SPSContentTypeRecord -ContentType $contentType -SiteUrl $Site.Url -WebUrl $web.Url -Scope List -ListTitle $list.Title -ListUrl $list.RootFolder.ServerRelativeUrl
+                    foreach ($contentType in $webContentTypes) {
+                        $record = ConvertTo-SPSContentTypeRecord -ContentType $contentType -SiteUrl $Site.Url -WebUrl $web.Url -Scope Web
                         $contentTypes.Add($record)
-                        $signals.ListContentTypeBindingCount++
+                        [void]$contentTypeIds.Add($record.ContentTypeId)
                     }
                 }
                 catch {
+                    $signals.CustomizationInventoryComplete = $false
                     $signals.ContentTypeInventoryComplete = $false
-                    Write-Warning -Message "Content-type bindings could not be fully read on list '$($list.Title)' in '$($web.Url)': $($_.Exception.Message)"
+                    Write-Warning -Message "Content-type definitions could not be fully read on '$($web.Url)': $($_.Exception.Message)"
                 }
 
-                $signals.Workflow2010Count += @($list.WorkflowAssociations).Count
+                # SharePoint 2010 platform: classic workflow associations at web and list scope.
+                $signals.Workflow2010Count += @($web.WorkflowAssociations).Count
 
-                # Count only custom event receivers. Out-of-the-box lists (Search Center,
-                # App Catalog, MySite host, ...) carry many native receivers from Microsoft
-                # assemblies that are not a migration concern; counting them inflates the
-                # score and wrongly promotes stock sites. Test-SPSCustomAssembly filters
-                # them out by assembly.
-                foreach ($receiver in $list.EventReceivers) {
-                    if (Test-SPSCustomAssembly -Assembly $receiver.Assembly) {
-                        $signals.EventReceivers++
-                    }
-                }
-
-                # InfoPath detection: an InfoPath form library (XMLForm base template) or
-                # a list whose forms were customized with InfoPath (the _ipfs_* marker
-                # properties are stamped on the list root folder). InfoPath Forms Services
-                # is retired and unavailable in SharePoint Online.
-                $listTitle = $list.Title
                 try {
-                    if ($list.BaseTemplate -eq [Microsoft.SharePoint.SPListTemplateType]::XMLForm) {
-                        $signals.InfoPathFormCount++
+                    $webLists = $web.Lists
+                    if ($null -eq $webLists) {
+                        throw "The list collection is unavailable on '$($web.Url)'."
                     }
-                    else {
-                        $listProperties = $list.RootFolder.Properties
-                        if ($listProperties -and $listProperties.ContainsKey('_ipfs_infopathenabled') -and
-                            [string]$listProperties['_ipfs_infopathenabled'] -eq 'True') {
-                            $signals.InfoPathFormCount++
+                    foreach ($list in $webLists) {
+                        try {
+                            $listContentTypes = $list.ContentTypes
+                            if ($null -eq $listContentTypes) {
+                                throw "Content-type bindings are unavailable on list '$($list.Title)'."
+                            }
+                            foreach ($contentType in $listContentTypes) {
+                                $record = ConvertTo-SPSContentTypeRecord -ContentType $contentType -SiteUrl $Site.Url -WebUrl $web.Url -Scope List -ListTitle $list.Title -ListUrl $list.RootFolder.ServerRelativeUrl
+                                $contentTypes.Add($record)
+                                $signals.ListContentTypeBindingCount++
+                            }
+                        }
+                        catch {
+                            $signals.CustomizationInventoryComplete = $false
+                            $signals.ContentTypeInventoryComplete = $false
+                            Write-Warning -Message "Content-type bindings could not be fully read on list '$($list.Title)' in '$($web.Url)': $($_.Exception.Message)"
+                        }
+
+                        $signals.Workflow2010Count += @($list.WorkflowAssociations).Count
+
+                        # Count only custom event receivers. Out-of-the-box lists carry many
+                        # native receivers from Microsoft assemblies that are not a migration
+                        # concern; counting them inflates the score and wrongly promotes stock sites.
+                        foreach ($receiver in $list.EventReceivers) {
+                            if (Test-SPSCustomAssembly -Assembly $receiver.Assembly) {
+                                $signals.EventReceivers++
+                            }
+                        }
+
+                        # InfoPath forms use an XMLForm library or _ipfs_* root-folder markers.
+                        $listTitle = $list.Title
+                        try {
+                            if ([string]$list.BaseTemplate -eq 'XMLForm') {
+                                $signals.InfoPathFormCount++
+                            }
+                            else {
+                                $listProperties = $list.RootFolder.Properties
+                                if ($listProperties -and $listProperties.ContainsKey('_ipfs_infopathenabled') -and
+                                    [string]$listProperties['_ipfs_infopathenabled'] -eq 'True') {
+                                    $signals.InfoPathFormCount++
+                                }
+                            }
+                        }
+                        catch {
+                            $signals.CustomizationInventoryComplete = $false
+                            Write-Warning -Message "Could not read InfoPath state on list '$listTitle' in web '$($web.Url)': $($_.Exception.Message)"
                         }
                     }
                 }
                 catch {
-                    Write-Verbose -Message "Could not read InfoPath state on list '$listTitle': $($_.Exception.Message)"
+                    $signals.CustomizationInventoryComplete = $false
+                    $signals.ContentTypeInventoryComplete = $false
+                    Write-Warning -Message "Lists could not be fully enumerated on web '$($web.Url)': $($_.Exception.Message)"
                 }
-            }
 
-            # SharePoint 2013 platform: Workflow Manager subscriptions. Best-effort - the
-            # type may be unavailable or Workflow Manager may not be connected, in which
-            # case the count stays at 0 instead of failing the whole site.
-            try {
-                $workflowManager = [Microsoft.SharePoint.WorkflowServices.WorkflowServicesManager]::new($web)
-                if ($workflowManager.IsConnected) {
-                    $subscriptions = $workflowManager.GetWorkflowSubscriptionService().EnumerateSubscriptions()
-                    $signals.Workflow2013Count += @($subscriptions).Count
+                # SharePoint 2013 platform: Workflow Manager subscriptions. An unavailable
+                # optional API stays best-effort; a connected read failure is incomplete data.
+                try {
+                    $workflowSubscriptionCount = Get-SPSWorkflowSubscriptionCount -Web $web
+                    if ($null -ne $workflowSubscriptionCount) {
+                        $signals.Workflow2013Count += [int]$workflowSubscriptionCount
+                    }
+                }
+                catch {
+                    $signals.CustomizationInventoryComplete = $false
+                    Write-Warning -Message "Workflow Manager subscriptions could not be read on web '$($web.Url)': $($_.Exception.Message)"
+                }
+
+                if ($web.HasUniqueRoleAssignments) {
+                    $signals.UniquePermissionsCount += @($web.RoleAssignments).Count
+                }
+
+                $master = [string]$web.CustomMasterUrl
+                if ($master -and $master -notmatch 'seattle\.master|oslo\.master|v4\.master') {
+                    $signals.CustomMasterPage = $true
+                }
+
+                if (($customFeatureSet.Count -gt 0 -or $fullTrustFeatureSet.Count -gt 0) -and
+                    -not ($signals.UsesCustomFarmFeature -and $signals.UsesFullTrustCode)) {
+                    foreach ($feature in $web.Features) {
+                        $featureId = $feature.DefinitionId.ToString()
+                        if ($customFeatureSet.Contains($featureId)) {
+                            $signals.UsesCustomFarmFeature = $true
+                        }
+                        if ($fullTrustFeatureSet.Contains($featureId)) {
+                            $signals.UsesFullTrustCode = $true
+                        }
+                        if ($signals.UsesCustomFarmFeature -and $signals.UsesFullTrustCode) {
+                            break
+                        }
+                    }
                 }
             }
             catch {
-                Write-Verbose -Message "Could not read 2013 workflow subscriptions on web '$($web.Url)': $($_.Exception.Message)"
+                $signals.CustomizationInventoryComplete = $false
+                $signals.ContentTypeInventoryComplete = $false
+                Write-Warning -Message "Signal collection issue on web '$($web.Url)': $($_.Exception.Message)"
             }
-
-            if ($web.HasUniqueRoleAssignments) {
-                $signals.UniquePermissionsCount += @($web.RoleAssignments).Count
-            }
-
-            $master = [string]$web.CustomMasterUrl
-            if ($master -and $master -notmatch 'seattle\.master|oslo\.master|v4\.master') {
-                $signals.CustomMasterPage = $true
-            }
-
-            if (($customFeatureSet.Count -gt 0 -or $fullTrustFeatureSet.Count -gt 0) -and
-                -not ($signals.UsesCustomFarmFeature -and $signals.UsesFullTrustCode)) {
-                foreach ($feature in $web.Features) {
-                    $featureId = $feature.DefinitionId.ToString()
-                    if ($customFeatureSet.Contains($featureId)) {
-                        $signals.UsesCustomFarmFeature = $true
-                    }
-                    if ($fullTrustFeatureSet.Contains($featureId)) {
-                        $signals.UsesFullTrustCode = $true
-                    }
-                    if ($signals.UsesCustomFarmFeature -and $signals.UsesFullTrustCode) {
-                        break
-                    }
+            finally {
+                try {
+                    $web.Dispose()
+                }
+                catch {
+                    $signals.CustomizationInventoryComplete = $false
+                    Write-Warning -Message "Could not dispose web '$($web.Url)': $($_.Exception.Message)"
                 }
             }
         }
-        catch {
-            $signals.ContentTypeInventoryComplete = $false
-            Write-Warning -Message "Signal collection issue on web '$($web.Url)': $($_.Exception.Message)"
-        }
-        finally {
-            $web.Dispose()
-        }
+    }
+    catch {
+        $signals.CustomizationInventoryComplete = $false
+        $signals.ContentTypeInventoryComplete = $false
+        Write-Warning -Message "Webs could not be fully enumerated for '$($Site.Url)': $($_.Exception.Message)"
     }
 
     $signals.ContentTypeCount = $contentTypeIds.Count

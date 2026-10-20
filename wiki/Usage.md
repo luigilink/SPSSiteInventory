@@ -15,6 +15,15 @@ The orchestrator:
 5. collects customization signals, content-type definitions and list bindings, and scores each site;
 6. exports CSV, JSON and a self-contained HTML report to the configured output folder.
 
+Progress is reported for both site-collection enumeration and per-site assessment.
+Collection read failures are recorded as partial or failed assessments and do not
+prevent later site collections from being processed. A web application whose site
+list cannot be read, or whose lazy enumeration stops early, is represented by a
+`WebApplication`-scope failure row; earlier site records are retained. Partial scores
+are provisional; failed site assessments have no category or score and are placed in
+the `Not assessed` wave. Review collector warning details, transcript progress and
+the report's status fields before planning migration waves.
+
 ## Output files
 
 Each run writes the site inventory in three timestamped formats, plus a dedicated
@@ -37,7 +46,7 @@ FBA was positively detected in another provider or zone.
 
 ## Output fields
 
-Each row in the CSV/JSON describes one site collection:
+CSV/JSON rows describe site collections and any web-application enumeration failures:
 
 | Field | Description |
 | --- | --- |
@@ -54,6 +63,9 @@ Each row in the CSV/JSON describes one site collection:
 | `SizeGB` | Storage used, in GB |
 | `SubWebCount` | Number of sub-webs |
 | `LastModified` | Last item modified date (dormancy signal) |
+| `InventoryScope` | `SiteCollection` for site rows or `WebApplication` for enumeration failure rows |
+| `SiteInventoryComplete` / `SiteInventoryWarnings` | Whether identity, size and root-web metadata were collected; warning text describes missing data |
+| `CustomizationInventoryComplete` | False means one or more customization signals may be missing |
 | `Workflow2010Count` | SharePoint 2010 workflow associations (legacy engine, retired in SPO) |
 | `Workflow2013Count` | SharePoint 2013 workflow subscriptions (Workflow Manager) |
 | `InfoPathFormCount` | InfoPath-driven lists/libraries (retired, no SPO equivalent) |
@@ -61,6 +73,8 @@ Each row in the CSV/JSON describes one site collection:
 | `ContentTypeCount` | Distinct content-type IDs seen in web definition collections, deduplicated within this site collection |
 | `ListContentTypeBindingCount` | Number of content-type bindings across the collection's lists, not the number of distinct designs |
 | `ContentTypeInventoryComplete` | False means partial collection: review warnings before interpreting counts or missing definitions |
+| `AssessmentStatus` | `Complete`, `Partial` (score may omit unreadable inputs), or `Failed` (not scored) |
+| `AssessmentWarnings` | Collection/assessment failures associated with this record; also shown in the HTML report |
 | `Category` | Complexity category 1–4 |
 | `CategoryName` | Simple / Moderate / Complex / Blocking |
 | `Wave` | Proposed migration wave number (from the category-to-wave mapping) |

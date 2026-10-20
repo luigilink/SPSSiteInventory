@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Site scans now retain web-application enumeration failures and collector warning
+  details in exported reports, preserve authentication metadata for inaccessible
+  applications, keep progress messages in the transcript, and mark unknown storage
+  values as partial rather than zero. (#28)
 - Zone-aware web application authentication inventory, including mixed Windows/FBA,
   membership/role provider names and explicit identity-review flags. The example
   configuration treats `HasFbaZone` as a SharePoint Online migration blocker.
