@@ -132,7 +132,11 @@
     foreach ($web in $Site.AllWebs) {
         try {
             try {
-                foreach ($contentType in $web.ContentTypes) {
+                $webContentTypes = $web.ContentTypes
+                if ($null -eq $webContentTypes) {
+                    throw "Content-type definitions are unavailable on '$($web.Url)'."
+                }
+                foreach ($contentType in $webContentTypes) {
                     $record = ConvertTo-SPSContentTypeRecord -ContentType $contentType -SiteUrl $Site.Url -WebUrl $web.Url -Scope Web
                     $contentTypes.Add($record)
                     [void]$contentTypeIds.Add($record.ContentTypeId)
@@ -148,7 +152,11 @@
 
             foreach ($list in $web.Lists) {
                 try {
-                    foreach ($contentType in $list.ContentTypes) {
+                    $listContentTypes = $list.ContentTypes
+                    if ($null -eq $listContentTypes) {
+                        throw "Content-type bindings are unavailable on list '$($list.Title)'."
+                    }
+                    foreach ($contentType in $listContentTypes) {
                         $record = ConvertTo-SPSContentTypeRecord -ContentType $contentType -SiteUrl $Site.Url -WebUrl $web.Url -Scope List -ListTitle $list.Title -ListUrl $list.RootFolder.ServerRelativeUrl
                         $contentTypes.Add($record)
                         $signals.ListContentTypeBindingCount++

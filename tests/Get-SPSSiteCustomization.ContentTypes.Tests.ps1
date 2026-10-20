@@ -84,4 +84,75 @@ Describe 'Get-SPSSiteCustomization content types' {
         $signals.ListContentTypeBindingCount | Should -Be 0
         $signals.ContentTypes | Should -HaveCount 1
     }
+
+    It 'marks unreadable field metadata as partial rather than exporting zero fields' {
+        $definition = Get-TestContentType -Id '0x0101' -Name 'Document'
+        $definition | Add-Member -MemberType ScriptProperty -Name Fields -Value { throw 'Access denied' } -Force
+        $binding = Get-TestContentType -Id '0x010100AAAA' -Name 'Document'
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Solutions = @()
+            AllWebs = @(Get-TestWeb -Definitions @($definition) -Bindings @($binding))
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -WarningVariable warnings -WarningAction SilentlyContinue
+
+        $signals.ContentTypeInventoryComplete | Should -BeFalse
+        $signals.ContentTypeCount | Should -Be 0
+        $signals.ListContentTypeBindingCount | Should -Be 1
+        $signals.ContentTypes | Should -HaveCount 1
+        $signals.ContentTypes[0].FieldCount | Should -Be 2
+        ($warnings -join ';') | Should -Match 'Content-type definitions could not be fully read'
+    }
+
+    It 'marks null field metadata as partial' {
+        $definition = Get-TestContentType -Id '0x0101' -Name 'Document'
+        $definition.Fields = $null
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Solutions = @()
+            AllWebs = @(Get-TestWeb -Definitions @($definition) -Bindings @())
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -WarningAction SilentlyContinue
+
+        $signals.ContentTypeInventoryComplete | Should -BeFalse
+        $signals.ContentTypes | Should -HaveCount 0
+    }
+
+    It 'marks missing web definitions as partial while retaining list bindings' {
+        $binding = Get-TestContentType -Id '0x010100AAAA' -Name 'Document'
+        $web = Get-TestWeb -Definitions @() -Bindings @($binding)
+        $web.ContentTypes = $null
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -WarningAction SilentlyContinue
+
+        $signals.ContentTypeInventoryComplete | Should -BeFalse
+        $signals.ContentTypeCount | Should -Be 0
+        $signals.ListContentTypeBindingCount | Should -Be 1
+        $signals.ContentTypes | Should -HaveCount 1
+    }
+
+    It 'marks a throwing list ContentTypes getter as partial while retaining definitions' {
+        $definition = Get-TestContentType -Id '0x0101' -Name 'Document'
+        $web = Get-TestWeb -Definitions @($definition) -Bindings @()
+        $web.Lists[0] | Add-Member -MemberType ScriptProperty -Name ContentTypes -Value { throw 'Access denied' } -Force
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -WarningAction SilentlyContinue
+
+        $signals.ContentTypeInventoryComplete | Should -BeFalse
+        $signals.ContentTypeCount | Should -Be 1
+        $signals.ListContentTypeBindingCount | Should -Be 0
+        $signals.ContentTypes | Should -HaveCount 1
+    }
 }

@@ -14,10 +14,10 @@ Describe 'Export-SPSInventoryReport content types' {
         })
         $types = @([PSCustomObject]@{
             SiteUrl = 'https://intranet/sites/team'; WebUrl = 'https://intranet/sites/team'
-            Scope = 'List'; ListTitle = 'Legal, & Compliance'; ListUrl = '/sites/team/legal'
+            Scope = 'List'; ListTitle = 'Legal, & Compliance'; ListUrl = '/sites/team/legal?a=1&b=2'
             ContentTypeId = '0x010100AA'; Name = 'Agreement'; Group = 'Contoso'
             ParentContentTypeId = '0x0101'; FieldCount = 2; FieldTypes = 'Text; DateTime'
-            DocumentTemplateUrl = ''; Hidden = $false; ReadOnly = $false; Sealed = $false
+            DocumentTemplateUrl = ''; Hidden = $true; ReadOnly = $true; Sealed = $false
         })
 
         $output = Export-SPSInventoryReport -InputObject $sites -ContentTypes $types -OutputFolder $TestDrive -BaseName 'Test'
@@ -27,8 +27,11 @@ Describe 'Export-SPSInventoryReport content types' {
         (Import-Csv $output.CsvPath)[0].HasFbaZone | Should -Be 'True'
         @(Import-Csv $output.ContentTypesCsvPath) | Should -HaveCount 1
         (Import-Csv $output.ContentTypesCsvPath)[0].ListTitle | Should -Be 'Legal, & Compliance'
+        (Import-Csv $output.ContentTypesCsvPath)[0].ListUrl | Should -Be '/sites/team/legal?a=1&b=2'
         @(Get-Content $output.ContentTypesJsonPath -Raw | ConvertFrom-Json) | Should -HaveCount 1
         (Get-Content $output.HtmlPath -Raw) | Should -Match 'Legal, &amp; Compliance'
+        (Get-Content $output.HtmlPath -Raw) | Should -Match '/sites/team/legal\?a=1&amp;b=2'
+        (Get-Content $output.HtmlPath -Raw) | Should -Match '(?s)<th>Hidden</th>.*<th>Read only</th>.*<th>Sealed</th>'
     }
 
     It 'writes a valid empty content-type report instead of dropping the files' {

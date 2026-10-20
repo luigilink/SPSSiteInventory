@@ -205,9 +205,11 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         }
         $types = @([PSCustomObject]@{
             SiteUrl = 'https://intranet/sites/team'; WebUrl = 'https://intranet/sites/team'
-            Scope = 'List'; ListTitle = 'Records <Admin>'; Name = 'Contract & Agreement'
+            Scope = 'List'; ListTitle = 'Records <Admin>'; ListUrl = '/sites/team/records?a=1&b=2'
+            Name = 'Contract & Agreement'
             ContentTypeId = '0x01'; ParentContentTypeId = '0x0'; Group = 'Custom'
             FieldCount = 1; FieldTypes = 'Text'; DocumentTemplateUrl = 'a&b.dotx'
+            Hidden = $true; ReadOnly = $true; Sealed = $false
         })
 
         $html = ConvertTo-SPSInventoryHtml -InputObject @($site) -ContentTypes $types
@@ -215,8 +217,12 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $html | Should -Match 'Content types and list bindings'
         $html | Should -Match 'Partial collection'
         $html | Should -Match 'Records &lt;Admin&gt;'
+        $html | Should -Match 'List URL'
+        $html | Should -Match '/sites/team/records\?a=1&amp;b=2'
         $html | Should -Match 'Contract &amp; Agreement'
         $html | Should -Match 'a&amp;b.dotx'
+        $html | Should -Match '(?s)<th>Hidden</th>.*<th>Read only</th>.*<th>Sealed</th>'
+        $html | Should -Match '(?s)<td>True</td>\s*<td>True</td>\s*<td>False</td>'
         $html | Should -Not -Match 'Records <Admin>'
     }
 

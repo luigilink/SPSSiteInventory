@@ -42,7 +42,11 @@
     if ([string]::IsNullOrWhiteSpace($id)) {
         throw "A content type on '$WebUrl' has no readable ID."
     }
-    $fields = @($ContentType.Fields | Where-Object { $null -ne $_ })
+    $fieldCollection = $ContentType.Fields
+    if ($null -eq $fieldCollection) {
+        throw "Could not read fields for content type '$id' on '$WebUrl'."
+    }
+    $fields = @($fieldCollection | Where-Object { $null -ne $_ })
 
     [PSCustomObject]@{
         SiteUrl             = $SiteUrl

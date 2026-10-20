@@ -390,6 +390,7 @@ td.muted, .muted { color: var(--muted); }
             @{ Key = 'WebUrl'; Label = 'Web' }
             @{ Key = 'Scope'; Label = 'Scope' }
             @{ Key = 'ListTitle'; Label = 'List' }
+            @{ Key = 'ListUrl'; Label = 'List URL' }
             @{ Key = 'Name'; Label = 'Content type' }
             @{ Key = 'ContentTypeId'; Label = 'ID' }
             @{ Key = 'ParentContentTypeId'; Label = 'Parent ID' }
@@ -397,6 +398,9 @@ td.muted, .muted { color: var(--muted); }
             @{ Key = 'FieldCount'; Label = 'Fields' }
             @{ Key = 'FieldTypes'; Label = 'Field types' }
             @{ Key = 'DocumentTemplateUrl'; Label = 'Document template' }
+            @{ Key = 'Hidden'; Label = 'Hidden' }
+            @{ Key = 'ReadOnly'; Label = 'Read only' }
+            @{ Key = 'Sealed'; Label = 'Sealed' }
         )
         [void]$sb.AppendLine('<thead><tr>')
         foreach ($column in $contentTypeColumns) {
