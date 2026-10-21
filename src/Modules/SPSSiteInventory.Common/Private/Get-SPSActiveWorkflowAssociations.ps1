@@ -10,9 +10,9 @@
 
         Detection order:
         1. Explicit metadata (`IsCurrent = $false`, `IsLatestVersion = $false`).
-        2. Name fallback only when metadata is unavailable: "BaseName (...:date...)"
-           is treated as historical if another association exists with the same
-           base name.
+        2. Name fallback only when metadata is unavailable: "BaseName (Previous
+           Version: ...)" and "BaseName (version précédente: ...)" are treated
+           as historical if another association exists with the same base name.
     #>
     [CmdletBinding()]
     [OutputType([System.Object[]])]
@@ -56,11 +56,17 @@
             $name = [string]$association.Name
             $match = [System.Text.RegularExpressions.Regex]::Match(
                 $name,
-                '^(?<base>.+?)\s*\((?<meta>[^)]*:[^)]*\d{2,})\)$')
+                '^(?<base>.+?)\s*\((?<meta>[^)]*)\)$')
 
             if ($match.Success) {
                 $baseName = $match.Groups['base'].Value.Trim()
-                if (-not [string]::IsNullOrWhiteSpace($baseName)) {
+                $metadata = $match.Groups['meta'].Value
+                $isPreviousVersionMarker = [System.Text.RegularExpressions.Regex]::IsMatch(
+                    $metadata,
+                    '^\s*(previous\s+version|version\s+pr[ée]c[ée]dente)\s*:',
+                    [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+
+                if ($isPreviousVersionMarker -and -not [string]::IsNullOrWhiteSpace($baseName)) {
                     $hasBaseAssociation = @($associations | Where-Object {
                             $candidateName = [string]$_.Name
                             $candidateName.Trim().Equals($baseName, [System.StringComparison]::OrdinalIgnoreCase)

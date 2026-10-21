@@ -236,6 +236,57 @@ Describe 'Get-SPSSiteCustomization content types' {
         $signals.Workflow2010Count | Should -Be 1
     }
 
+    It 'uses name fallback for previous-version names with AM or PM timestamps' {
+        $historical = Get-TestWorkflowAssociation -Name 'WF for Statistics (Previous Version: 08/07/2016 02:50:34 PM)'
+        $active = Get-TestWorkflowAssociation -Name 'WF for Statistics'
+
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Lists[0].WorkflowAssociations = @($historical, $active)
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site
+
+        $signals.Workflow2010Count | Should -Be 1
+    }
+
+    It 'uses name fallback for French previous-version markers' {
+        $historical = Get-TestWorkflowAssociation -Name 'WF pour les Statistiques (version précédente : 08/07/2016 14:50:34)'
+        $active = Get-TestWorkflowAssociation -Name 'WF pour les Statistiques'
+
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Lists[0].WorkflowAssociations = @($historical, $active)
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site
+
+        $signals.Workflow2010Count | Should -Be 1
+    }
+
+    It 'does not treat non version qualifiers as historical associations' {
+        $qualified = Get-TestWorkflowAssociation -Name 'WF for Statistics (SLA: 48)'
+        $active = Get-TestWorkflowAssociation -Name 'WF for Statistics'
+
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Lists[0].WorkflowAssociations = @($qualified, $active)
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site
+
+        $signals.Workflow2010Count | Should -Be 2
+    }
+
     It 'does not count a singleton workflow association flagged as historical by metadata' {
         $historical = Get-TestWorkflowAssociation -Name 'WF for Statistics (Previous Version: 08/07/2016 14:50:34)' -HasIsCurrent $true -IsCurrent $false
 
