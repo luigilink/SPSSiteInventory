@@ -8,6 +8,8 @@ BeforeAll {
         Weights = @{
             Workflow2010Count        = 3.0
             Workflow2013Count        = 1.5
+            Workflow2010RunningInstanceCount = 1.0
+            Workflow2013RunningInstanceCount = 0.5
             InfoPathFormCount        = 3.0
             IsLargeSite              = 1.5
             LargeListCount           = 0.5
@@ -59,6 +61,15 @@ Describe 'Measure-SPSSiteComplexity' {
         $result2013 = Measure-SPSSiteComplexity -Signals @{ Workflow2013Count = 1 } -Scoring $script:Scoring
 
         $result2010.Score | Should -BeGreaterThan $result2013.Score
+    }
+
+    It 'scores running workflow instances separately for 2010 and 2013 platforms' {
+        $running2010 = Measure-SPSSiteComplexity -Signals @{ Workflow2010RunningInstanceCount = 2 } -Scoring $script:Scoring
+        $running2013 = Measure-SPSSiteComplexity -Signals @{ Workflow2013RunningInstanceCount = 2 } -Scoring $script:Scoring
+
+        $running2010.Score | Should -BeGreaterThan $running2013.Score
+        ($running2010.Reasons -join '; ') | Should -Match 'Workflow2010RunningInstanceCount'
+        ($running2013.Reasons -join '; ') | Should -Match 'Workflow2013RunningInstanceCount'
     }
 
     It 'promotes a heavily customized site to Complex (category 3)' {

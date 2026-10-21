@@ -46,6 +46,8 @@ Scoring = @{
     Weights = @{
         Workflow2010Count        = 3.0
         Workflow2013Count        = 1.5
+        Workflow2010RunningInstanceCount = 1.0
+        Workflow2013RunningInstanceCount = 0.5
         InfoPathFormCount        = 3.0
         IrmEnabledListCount      = 2.5
         IsLargeSite              = 1.5
@@ -88,8 +90,12 @@ Workflows are split by platform because their migration cost differs:
   need a rebuild, so they are weighted heavily. Add
   `Workflow2010Count` to `BlockingSignals` if you want any legacy workflow to force
   **Blocking (4)**.
+- `Workflow2010RunningInstanceCount` — active runtime instances on the 2010
+  platform where per-association counters are available.
 - `Workflow2013Count` — SharePoint 2013 workflows (Workflow Manager). A lighter, more
   direct remediation, so they are weighted less than their 2010 counterparts.
+- `Workflow2013RunningInstanceCount` — active runtime instances on the 2013
+  platform when Workflow Manager instance APIs are available.
 
 `InfoPathFormCount` counts the InfoPath-driven lists and libraries on the site. InfoPath
 Forms Services is **retired and unavailable in SharePoint Online**, so it is weighted

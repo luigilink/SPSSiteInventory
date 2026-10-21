@@ -11,6 +11,7 @@ Describe 'Export-SPSInventoryReport content types' {
             HasFbaZone = $true; ContentTypeCount = 1
             ListContentTypeBindingCount = 1; ContentTypeInventoryComplete = $true
             Workflow2010Count = 1; Workflow2013Count = 0; InfoPathFormCount = 0
+            Workflow2010RunningInstanceCount = 2; Workflow2013RunningInstanceCount = 1
             IrmEnabledListCount = 2; SiteLockState = 'ReadOnly'; IsLockedSite = $true
             IsLargeSite = $true
             LargeListCount = 1; LargeListExamples = 'Documents (7000)'
@@ -43,6 +44,8 @@ Describe 'Export-SPSInventoryReport content types' {
         Test-Path $output.AlertsJsonPath | Should -BeTrue
         Test-Path $output.ManifestJsonPath | Should -BeTrue
         @(Get-Content $output.WorkflowsJsonPath -Raw | ConvertFrom-Json) | Should -HaveCount 1
+        (Get-Content $output.WorkflowsJsonPath -Raw | ConvertFrom-Json)[0].Workflow2010RunningInstanceCount | Should -Be 2
+        (Get-Content $output.WorkflowsJsonPath -Raw | ConvertFrom-Json)[0].Workflow2013RunningInstanceCount | Should -Be 1
         @(Get-Content $output.IrmLocksJsonPath -Raw | ConvertFrom-Json) | Should -HaveCount 1
         @(Get-Content $output.LargeContentJsonPath -Raw | ConvertFrom-Json) | Should -HaveCount 1
         @(Get-Content $output.AlertsJsonPath -Raw | ConvertFrom-Json) | Should -Not -BeNullOrEmpty
@@ -102,6 +105,8 @@ Describe 'Export-SPSInventoryReport content types' {
                 AssessmentStatus = 'Failed'
                 AssessmentWarnings = 'Assessment failed: Access denied'
                 Category = $null
+                Workflow2010RunningInstanceCount = 3
+                Workflow2013RunningInstanceCount = 4
                 IsLargeSite = $true
                 LargeListCount = 1
                 LargeListViewCount = 1
@@ -116,6 +121,8 @@ Describe 'Export-SPSInventoryReport content types' {
         @($alerts | Where-Object { $_.AlertType -eq 'WebApplicationEnumerationFailed' -and $_.Url -eq 'https://intranet' }).Count | Should -Be 1
         @($alerts | Where-Object { $_.AlertType -eq 'AssessmentFailed' -and $_.Url -eq 'https://intranet/sites/failed-fba' }).Count | Should -Be 1
         @($alerts | Where-Object { $_.AlertType -eq 'FbaConfigured' -and $_.Url -eq 'https://intranet/sites/failed-fba' }).Count | Should -Be 1
+        @($alerts | Where-Object { $_.AlertType -eq 'Workflow2010Running' -and $_.Url -eq 'https://intranet/sites/failed-fba' }).Count | Should -Be 1
+        @($alerts | Where-Object { $_.AlertType -eq 'Workflow2013Running' -and $_.Url -eq 'https://intranet/sites/failed-fba' }).Count | Should -Be 1
         @($alerts | Where-Object { $_.AlertType -eq 'LargeSite' -and $_.Url -eq 'https://intranet/sites/failed-fba' }).Count | Should -Be 1
         @($alerts | Where-Object { $_.AlertType -eq 'LargeLists' -and $_.Url -eq 'https://intranet/sites/failed-fba' }).Count | Should -Be 1
         @($alerts | Where-Object { $_.AlertType -eq 'LargeListViews' -and $_.Url -eq 'https://intranet/sites/failed-fba' }).Count | Should -Be 1

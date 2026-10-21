@@ -132,7 +132,9 @@
                     AssessmentStatus = $assessmentStatus
                     AssessmentWarnings = $siteWarnings -join '; '
                     Workflow2010Count = $signals['Workflow2010Count']
+                    Workflow2010RunningInstanceCount = $signals['Workflow2010RunningInstanceCount']
                     Workflow2013Count = $signals['Workflow2013Count']
+                    Workflow2013RunningInstanceCount = $signals['Workflow2013RunningInstanceCount']
                     InfoPathFormCount = $signals['InfoPathFormCount']
                     IrmEnabledListCount = $signals['IrmEnabledListCount']
                     IsLargeSite = $signals['IsLargeSite']
@@ -183,7 +185,9 @@
                     AssessmentStatus = 'Failed'
                     AssessmentWarnings = $siteWarnings -join '; '
                     Workflow2010Count = $null
+                    Workflow2010RunningInstanceCount = $null
                     Workflow2013Count = $null
+                    Workflow2013RunningInstanceCount = $null
                     InfoPathFormCount = $null
                     IrmEnabledListCount = $null
                     IsLargeSite = $null

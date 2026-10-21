@@ -106,12 +106,16 @@ public sealed class SPSSiteInventoryThrowAfterOne : IEnumerable
         param (
             [string]$Name,
             [bool]$HasIsCurrent = $false,
-            [bool]$IsCurrent = $true
+            [bool]$IsCurrent = $true,
+            [Nullable[int]]$RunningInstances = $null
         )
 
         $association = [PSCustomObject]@{ Name = $Name }
         if ($HasIsCurrent) {
             $association | Add-Member -MemberType NoteProperty -Name IsCurrent -Value $IsCurrent
+        }
+        if ($null -ne $RunningInstances) {
+            $association | Add-Member -MemberType NoteProperty -Name RunningInstances -Value $RunningInstances
         }
         return $association
     }
@@ -176,8 +180,47 @@ Describe 'Get-SPSSiteCustomization content types' {
         $signals = Get-SPSSiteCustomization -Site $site -WarningVariable warnings -WarningAction SilentlyContinue
 
         $signals.CustomizationInventoryComplete | Should -BeFalse
-        ($warnings -join ';') | Should -Match 'Workflow Manager subscriptions could not be read'
+        ($warnings -join ';') | Should -Match 'Workflow Manager subscriptions or running instances could not be read'
         ($warnings -join ';') | Should -Match 'Workflow subscription access denied'
+    }
+
+    It 'collects running workflow instance counts for 2010 and 2013 platforms when APIs are available' {
+        $webWorkflow = Get-TestWorkflowAssociation -Name 'Web workflow' -HasIsCurrent $true -IsCurrent $true -RunningInstances 2
+        $listWorkflow = Get-TestWorkflowAssociation -Name 'List workflow' -HasIsCurrent $true -IsCurrent $true -RunningInstances 1
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.WorkflowAssociations = @($webWorkflow)
+        $web.Lists[0].WorkflowAssociations = @($listWorkflow)
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Solutions = @()
+            AllWebs = @($web)
+        }
+        Mock Get-SPSWorkflowSubscriptionCount -ModuleName SPSSiteInventory.Common { 4 }
+        Mock Get-SPSWorkflowRunningInstanceCount -ModuleName SPSSiteInventory.Common { 3 }
+
+        $signals = Get-SPSSiteCustomization -Site $site
+
+        $signals.Workflow2010Count | Should -Be 2
+        $signals.Workflow2010RunningInstanceCount | Should -Be 3
+        $signals.Workflow2013Count | Should -Be 4
+        $signals.Workflow2013RunningInstanceCount | Should -Be 3
+    }
+
+    It 'keeps running workflow counts at zero when Workflow Manager APIs are unavailable' {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Solutions = @()
+            AllWebs = @($web)
+        }
+        Mock Get-SPSWorkflowSubscriptionCount -ModuleName SPSSiteInventory.Common { $null }
+        Mock Get-SPSWorkflowRunningInstanceCount -ModuleName SPSSiteInventory.Common { $null }
+
+        $signals = Get-SPSSiteCustomization -Site $site
+
+        $signals.Workflow2013Count | Should -Be 0
+        $signals.Workflow2013RunningInstanceCount | Should -Be 0
+        $signals.CustomizationInventoryComplete | Should -BeTrue
     }
 
     It 'preserves sandbox, site-feature, and InfoPath read failures as warnings' {

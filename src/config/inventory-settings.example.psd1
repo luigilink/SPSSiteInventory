@@ -81,6 +81,10 @@
             # SharePoint 2013 workflows (Workflow Manager) are a lighter, more direct
             # remediation, so they weigh less than their 2010 counterparts.
             Workflow2013Count        = 1.5
+            # Running workflow instances indicate immediate cutover risk and cleanup
+            # effort in addition to workflow definition migration.
+            Workflow2010RunningInstanceCount = 1.0
+            Workflow2013RunningInstanceCount = 0.5
             # InfoPath forms (retired, no SharePoint Online equivalent) must be rebuilt in
             # Power Apps. Weighted heavily and listed as a blocking signal below.
             InfoPathFormCount        = 3.0
