@@ -66,7 +66,7 @@ CSV/JSON rows describe site collections and any web-application enumeration fail
 | `InventoryScope` | `SiteCollection` for site rows or `WebApplication` for enumeration failure rows |
 | `SiteInventoryComplete` / `SiteInventoryWarnings` | Whether identity, size and root-web metadata were collected; warning text describes missing data |
 | `CustomizationInventoryComplete` | False means one or more customization signals may be missing |
-| `Workflow2010Count` | SharePoint 2010 workflow associations (legacy engine, retired in SPO) |
+| `Workflow2010Count` | Active SharePoint 2010 workflow associations (legacy engine, retired in SPO); historical "previous version" associations are excluded when detectable |
 | `Workflow2013Count` | SharePoint 2013 workflow subscriptions (Workflow Manager) |
 | `InfoPathFormCount` | InfoPath-driven lists/libraries (retired, no SPO equivalent) |
 | `UsesFullTrustCode` | Site activates a feature from a custom full-trust WSP (GAC assembly) |

@@ -73,8 +73,10 @@ weight to `0` (or omit the key) to ignore a signal.
 
 Workflows are split by platform because their migration cost differs:
 
-- `Workflow2010Count` — SharePoint 2010 workflows (legacy engine, **retired in SharePoint
-  Online**). They always need a rebuild, so they are weighted heavily. Add
+- `Workflow2010Count` — active SharePoint 2010 workflows (legacy engine,
+  **retired in SharePoint Online**). Historical "previous version" associations
+  are excluded when detectable so the score tracks active workflows. They always
+  need a rebuild, so they are weighted heavily. Add
   `Workflow2010Count` to `BlockingSignals` if you want any legacy workflow to force
   **Blocking (4)**.
 - `Workflow2013Count` — SharePoint 2013 workflows (Workflow Manager). A lighter, more
