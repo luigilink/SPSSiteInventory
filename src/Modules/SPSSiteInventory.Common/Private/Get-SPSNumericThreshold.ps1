@@ -1,4 +1,4 @@
-function Get-SPSNumericThreshold {
+﻿function Get-SPSNumericThreshold {
     [CmdletBinding()]
     [OutputType([System.Double])]
     param
