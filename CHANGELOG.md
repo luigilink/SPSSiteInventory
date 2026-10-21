@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   details in exported reports, preserve authentication metadata for inaccessible
   applications, keep progress messages in the transcript, and mark unknown storage
   values as partial rather than zero. (#28)
+- Pull request template now aligns with contribution guidelines by making
+  validation expectations explicit (Pester, ScriptAnalyzer, docs/wiki updates,
+  changelog, and Windows PowerShell 5.1 compatibility). (#30)
 - Zone-aware web application authentication inventory, including mixed Windows/FBA,
   membership/role provider names and explicit identity-review flags. The example
   configuration treats `HasFbaZone` as a SharePoint Online migration blocker.
