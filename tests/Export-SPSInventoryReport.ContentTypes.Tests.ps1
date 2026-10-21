@@ -9,6 +9,14 @@ Describe 'Export-SPSInventoryReport content types' {
             Url = 'https://intranet/sites/team'; WebApp = 'Intranet'
             InventoryScope = 'SiteCollection'
             HasFbaZone = $true; ContentTypeCount = 1
+            Template = 'APP#0'
+            IsUnsupportedSiteTemplate = $true
+            TemplateCompatibility = 'Unsupported'
+            TemplateCompatibilityReason = 'App web templates are not migration targets in SharePoint Online.'
+            TemplateLanguageLcid = 1036
+            TemplateLanguageTag = 'fr-FR'
+            TemplateLanguageReviewRequired = $true
+            TemplateLanguageReason = "Template language LCID '1036' is outside SupportedLanguageLcid."
             ListContentTypeBindingCount = 1; ContentTypeInventoryComplete = $true
             Workflow2010Count = 1; Workflow2013Count = 0; InfoPathFormCount = 0
             Workflow2010RunningInstanceCount = 2; Workflow2013RunningInstanceCount = 1
@@ -46,9 +54,13 @@ Describe 'Export-SPSInventoryReport content types' {
         @(Get-Content $output.WorkflowsJsonPath -Raw | ConvertFrom-Json) | Should -HaveCount 1
         (Get-Content $output.WorkflowsJsonPath -Raw | ConvertFrom-Json)[0].Workflow2010RunningInstanceCount | Should -Be 2
         (Get-Content $output.WorkflowsJsonPath -Raw | ConvertFrom-Json)[0].Workflow2013RunningInstanceCount | Should -Be 1
+        (Get-Content $output.WorkflowsJsonPath -Raw | ConvertFrom-Json)[0].TemplateCompatibility | Should -Be 'Unsupported'
+        (Get-Content $output.WorkflowsJsonPath -Raw | ConvertFrom-Json)[0].TemplateLanguageReviewRequired | Should -BeTrue
         @(Get-Content $output.IrmLocksJsonPath -Raw | ConvertFrom-Json) | Should -HaveCount 1
         @(Get-Content $output.LargeContentJsonPath -Raw | ConvertFrom-Json) | Should -HaveCount 1
         @(Get-Content $output.AlertsJsonPath -Raw | ConvertFrom-Json) | Should -Not -BeNullOrEmpty
+        @((Get-Content $output.AlertsJsonPath -Raw | ConvertFrom-Json) | Where-Object { $_.AlertType -eq 'UnsupportedSiteTemplate' }).Count | Should -Be 1
+        @((Get-Content $output.AlertsJsonPath -Raw | ConvertFrom-Json) | Where-Object { $_.AlertType -eq 'TemplateLanguageReview' }).Count | Should -Be 1
         @(Import-Csv $output.ContentTypesCsvPath) | Should -HaveCount 1
         (Import-Csv $output.ContentTypesCsvPath)[0].ListTitle | Should -Be 'Legal, & Compliance'
         (Import-Csv $output.ContentTypesCsvPath)[0].ListUrl | Should -Be '/sites/team/legal?a=1&b=2'
@@ -107,6 +119,13 @@ Describe 'Export-SPSInventoryReport content types' {
                 Category = $null
                 Workflow2010RunningInstanceCount = 3
                 Workflow2013RunningInstanceCount = 4
+                Template = 'CUSTOM#42'
+                IsUnsupportedSiteTemplate = $false
+                TemplateCompatibility = 'Review'
+                TemplateCompatibilityReason = 'Template is not mapped; review compatibility.'
+                TemplateLanguageLcid = 999999
+                TemplateLanguageReviewRequired = $true
+                TemplateLanguageReason = "Template language LCID '999999' is not recognized."
                 IsLargeSite = $true
                 LargeListCount = 1
                 LargeListViewCount = 1
@@ -123,6 +142,8 @@ Describe 'Export-SPSInventoryReport content types' {
         @($alerts | Where-Object { $_.AlertType -eq 'FbaConfigured' -and $_.Url -eq 'https://intranet/sites/failed-fba' }).Count | Should -Be 1
         @($alerts | Where-Object { $_.AlertType -eq 'Workflow2010Running' -and $_.Url -eq 'https://intranet/sites/failed-fba' }).Count | Should -Be 1
         @($alerts | Where-Object { $_.AlertType -eq 'Workflow2013Running' -and $_.Url -eq 'https://intranet/sites/failed-fba' }).Count | Should -Be 1
+        @($alerts | Where-Object { $_.AlertType -eq 'TemplateCompatibilityReview' -and $_.Url -eq 'https://intranet/sites/failed-fba' }).Count | Should -Be 1
+        @($alerts | Where-Object { $_.AlertType -eq 'TemplateLanguageReview' -and $_.Url -eq 'https://intranet/sites/failed-fba' }).Count | Should -Be 1
         @($alerts | Where-Object { $_.AlertType -eq 'LargeSite' -and $_.Url -eq 'https://intranet/sites/failed-fba' }).Count | Should -Be 1
         @($alerts | Where-Object { $_.AlertType -eq 'LargeLists' -and $_.Url -eq 'https://intranet/sites/failed-fba' }).Count | Should -Be 1
         @($alerts | Where-Object { $_.AlertType -eq 'LargeListViews' -and $_.Url -eq 'https://intranet/sites/failed-fba' }).Count | Should -Be 1

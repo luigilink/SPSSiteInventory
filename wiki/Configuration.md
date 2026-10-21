@@ -16,6 +16,7 @@ and adjust it. No client-specific value ships in the repository.
 | `OutputFolder` | string | Folder where the CSV/JSON reports are written. |
 | `LogRetentionDays` | int | Days of run logs kept under the `Logs` folder. |
 | `LargeContentThresholds` | hashtable | Thresholds for large-content parity signals (large site/list/view, checked-out files, file versions). Optional; defaults apply when omitted. |
+| `TemplateParity` | hashtable | Template compatibility and language rules (supported/unsupported/review mapping, optional language allow-list). Optional; built-in defaults apply when omitted. |
 | `Scoring` | hashtable | The scoring engine configuration (see below). **Mandatory.** |
 | `MigrationWaves` | hashtable[] | The category-to-wave mapping (see below). Optional; a one-wave-per-category default applies when omitted. |
 
@@ -48,6 +49,8 @@ Scoring = @{
         Workflow2013Count        = 1.5
         Workflow2010RunningInstanceCount = 1.0
         Workflow2013RunningInstanceCount = 0.5
+        IsUnsupportedSiteTemplate = 5.0
+        TemplateLanguageReviewRequired = 0.5
         InfoPathFormCount        = 3.0
         IrmEnabledListCount      = 2.5
         IsLargeSite              = 1.5
@@ -72,6 +75,7 @@ Scoring = @{
         'IsLockedSite'
         'IrmEnabledListCount'
         'HasFbaZone'
+        'IsUnsupportedSiteTemplate'
     )
 }
 ```
@@ -96,6 +100,10 @@ Workflows are split by platform because their migration cost differs:
   direct remediation, so they are weighted less than their 2010 counterparts.
 - `Workflow2013RunningInstanceCount` — active runtime instances on the 2013
   platform when Workflow Manager instance APIs are available.
+- `IsUnsupportedSiteTemplate` — root-web template is explicitly mapped as
+  unsupported for direct SharePoint Online migration.
+- `TemplateLanguageReviewRequired` — root-web language metadata needs review
+  (missing, unrecognized LCID, or outside the optional allow-list).
 
 `InfoPathFormCount` counts the InfoPath-driven lists and libraries on the site. InfoPath
 Forms Services is **retired and unavailable in SharePoint Online**, so it is weighted
@@ -141,10 +149,62 @@ non-portable as-is:
   forms-based authentication. This requires an identity/authentication redesign for
   SharePoint Online, not an on-premises farm repair. The signal does not prove that
   FBA is actively used by the site or its users.
+- `IsUnsupportedSiteTemplate` — template compatibility mapping identified the
+  root-web template as unsupported for direct migration.
 
-Existing settings files are not rewritten. Add `HasFbaZone`, `IsLockedSite` and
-`IrmEnabledListCount` to your existing `Scoring.BlockingSignals` to apply these
-blocker overrides.
+Existing settings files are not rewritten. Add `HasFbaZone`, `IsLockedSite`,
+`IrmEnabledListCount` and `IsUnsupportedSiteTemplate` to your existing
+`Scoring.BlockingSignals` to apply these blocker overrides.
+
+## TemplateParity section
+
+```powershell
+TemplateParity = @{
+    UnsupportedTemplates = @(
+        'APP#0'
+        'SPSMSITEHOST#0'
+    )
+    SupportedTemplatePrefixes = @(
+        'STS#'
+        'COMMUNITY#'
+        'PROJECTSITE#'
+        'SITEPAGEPUBLISHING#'
+        'CMSPUBLISHING#'
+        'BLANKINTERNET#'
+        'SRCHCEN#'
+        'WIKI#'
+        'ENTERWIKI#'
+        'BDR#'
+        'OFFILE#'
+        'GROUP#'
+        'SPSPERS#'
+        'SPSNEWS#'
+        'SPSNHOME#'
+    )
+    ReviewTemplatePrefixes = @('BLOG#')
+    SupportedLanguageLcid = @()
+}
+```
+
+Detection order is explicit and deterministic:
+
+1. Exact template key in `UnsupportedTemplates` => `TemplateCompatibility = Unsupported`.
+2. Template key starts with `ReviewTemplatePrefixes` => `TemplateCompatibility = Review`.
+3. Template key starts with `SupportedTemplatePrefixes` => `TemplateCompatibility = Compatible`.
+4. Anything else => `TemplateCompatibility = Review`.
+
+Default intent:
+
+- Personal sites (`SPSPERS#0`) are treated as compatible migration sources
+  (migrate to OneDrive), not as unsupported blockers.
+- Blog templates are flagged as `Review` by default because migrations usually
+  require remapping to modern SharePoint Online structures.
+
+Language behavior:
+
+- `TemplateLanguageLcid` comes from the root web.
+- If LCID is missing or not recognized by .NET culture metadata, `TemplateLanguageReviewRequired = True`.
+- If `SupportedLanguageLcid` is non-empty, LCIDs outside that allow-list are flagged for review.
 
 Content types are inventoried for review, including standard definitions and list
 bindings. They do not contribute to the default score. Names, groups and content-type

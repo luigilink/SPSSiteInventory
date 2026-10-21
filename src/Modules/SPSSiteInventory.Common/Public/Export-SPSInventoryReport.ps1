@@ -142,6 +142,11 @@
                 Workflow2010RunningInstanceCount = $record.Workflow2010RunningInstanceCount
                 Workflow2013Count = $record.Workflow2013Count
                 Workflow2013RunningInstanceCount = $record.Workflow2013RunningInstanceCount
+                IsUnsupportedSiteTemplate = $record.IsUnsupportedSiteTemplate
+                TemplateCompatibility = $record.TemplateCompatibility
+                TemplateLanguageLcid = $record.TemplateLanguageLcid
+                TemplateLanguageTag = $record.TemplateLanguageTag
+                TemplateLanguageReviewRequired = $record.TemplateLanguageReviewRequired
             }
         }
     )
@@ -231,6 +236,33 @@
                     Url = $record.Url
                     Value = [int]$record.Workflow2013RunningInstanceCount
                     Message = 'Active SharePoint 2013 workflow instances were detected.'
+                })
+        }
+        if ($scope -eq 'SiteCollection' -and [bool]$record.IsUnsupportedSiteTemplate) {
+            $alerts.Add([PSCustomObject]@{
+                    AlertType = 'UnsupportedSiteTemplate'
+                    Severity = 'High'
+                    Url = $record.Url
+                    Value = $record.Template
+                    Message = if ($record.TemplateCompatibilityReason) { [string]$record.TemplateCompatibilityReason } else { 'Site template is not supported for direct SharePoint Online migration.' }
+                })
+        }
+        if ($scope -eq 'SiteCollection' -and -not [bool]$record.IsUnsupportedSiteTemplate -and [string]$record.TemplateCompatibility -eq 'Review') {
+            $alerts.Add([PSCustomObject]@{
+                    AlertType = 'TemplateCompatibilityReview'
+                    Severity = 'Medium'
+                    Url = $record.Url
+                    Value = $record.Template
+                    Message = if ($record.TemplateCompatibilityReason) { [string]$record.TemplateCompatibilityReason } else { 'Site template compatibility requires manual validation.' }
+                })
+        }
+        if ($scope -eq 'SiteCollection' -and [bool]$record.TemplateLanguageReviewRequired) {
+            $alerts.Add([PSCustomObject]@{
+                    AlertType = 'TemplateLanguageReview'
+                    Severity = 'Medium'
+                    Url = $record.Url
+                    Value = if ($null -ne $record.TemplateLanguageLcid) { [int]$record.TemplateLanguageLcid } else { $null }
+                    Message = if ($record.TemplateLanguageReason) { [string]$record.TemplateLanguageReason } else { 'Template language requires manual compatibility review.' }
                 })
         }
         if ($scope -eq 'SiteCollection' -and [int]$record.InfoPathFormCount -gt 0) {

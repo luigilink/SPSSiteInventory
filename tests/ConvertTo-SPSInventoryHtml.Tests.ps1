@@ -8,6 +8,10 @@ BeforeAll {
         [PSCustomObject]@{
             Url = 'https://intranet/sites/team'; Title = 'Team & Co'; WebApp = 'Intranet'
             ContentDb = 'WSS_Content'; Template = 'STS#3'; SizeGB = 1.5; SubWebCount = 2
+            TemplateCompatibility = 'Compatible'; IsUnsupportedSiteTemplate = $false
+            TemplateCompatibilityReason = "Template 'STS#3' matches a compatibility prefix."
+            TemplateLanguageLcid = 1033; TemplateLanguageTag = 'en-US'; TemplateLanguageName = 'English (United States)'
+            TemplateLanguageReviewRequired = $false; TemplateLanguageReason = ''
             Workflow2010RunningInstanceCount = 0; Workflow2013RunningInstanceCount = 0
             IsLargeSite = $false; LargeListCount = 0; LargeListExamples = ''
             LargeListViewCount = 0; LargeListViewExamples = ''
@@ -20,6 +24,10 @@ BeforeAll {
         [PSCustomObject]@{
             Url = 'https://intranet/sites/legacy'; Title = 'Legacy <workflows>'; WebApp = 'Intranet'
             ContentDb = 'WSS_Content'; Template = 'STS#0'; SizeGB = 12.25; SubWebCount = 8
+            TemplateCompatibility = 'Review'; IsUnsupportedSiteTemplate = $false
+            TemplateCompatibilityReason = "Template 'STS#0' requires manual validation."
+            TemplateLanguageLcid = 999999; TemplateLanguageTag = ''; TemplateLanguageName = ''
+            TemplateLanguageReviewRequired = $true; TemplateLanguageReason = 'Template language LCID is not recognized.'
             Workflow2010RunningInstanceCount = 4; Workflow2013RunningInstanceCount = 2
             IsLargeSite = $true; LargeListCount = 2; LargeListExamples = 'Documents (7000); Records (5100)'
             LargeListViewCount = 1; LargeListViewExamples = 'Documents/All Documents (7000)'
@@ -318,6 +326,9 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $html | Should -Match 'Risk indicators'
         $html | Should -Match 'Sites with locked state'
         $html | Should -Match 'Sites with IRM-enabled lists'
+        $html | Should -Match 'Sites with unsupported templates'
+        $html | Should -Match 'Sites with template compatibility review'
+        $html | Should -Match 'Sites with template-language review'
         $html | Should -Match 'Sites with Workflow 2010'
         $html | Should -Match 'Sites with running Workflow 2010'
         $html | Should -Match 'Sites with running Workflow 2013'
@@ -340,6 +351,10 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $html | Should -Match 'High-version files'
         $html | Should -Match 'Running WF 2010'
         $html | Should -Match 'Running WF 2013'
+        $html | Should -Match 'Template compatibility'
+        $html | Should -Match 'Unsupported template'
+        $html | Should -Match 'Template language LCID'
+        $html | Should -Match 'Template language review'
         $html | Should -Match 'Documents \(7000\); Records \(5100\)'
         $html | Should -Match 'Documents/All Documents \(7000\)'
     }
