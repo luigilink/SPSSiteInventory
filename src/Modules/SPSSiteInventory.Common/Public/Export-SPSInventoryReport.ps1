@@ -155,7 +155,17 @@
     )
 
     $alerts = [System.Collections.Generic.List[object]]::new()
-    foreach ($record in $siteRecords) {
+    foreach ($record in $records) {
+        $scope = if ($null -ne $record.PSObject.Properties['InventoryScope']) { [string]$record.InventoryScope } else { 'SiteCollection' }
+        if ($scope -eq 'WebApplication') {
+            $alerts.Add([PSCustomObject]@{
+                    AlertType = 'WebApplicationEnumerationFailed'
+                    Severity = 'High'
+                    Url = if ($record.WebAppUrl) { $record.WebAppUrl } else { $record.Url }
+                    Value = if ($record.SiteInventoryWarnings) { $record.SiteInventoryWarnings } else { $record.AssessmentWarnings }
+                    Message = 'Site collection enumeration failed for this web application.'
+                })
+        }
         if ($record.AssessmentStatus -eq 'Failed') {
             $alerts.Add([PSCustomObject]@{
                     AlertType = 'AssessmentFailed'
@@ -164,7 +174,6 @@
                     Value = $record.AssessmentWarnings
                     Message = 'Site assessment failed.'
                 })
-            continue
         }
         if ($record.AssessmentStatus -eq 'Partial') {
             $alerts.Add([PSCustomObject]@{
@@ -175,7 +184,7 @@
                     Message = 'Site assessment is partial and may miss signals.'
                 })
         }
-        if ([int]$record.Workflow2010Count -gt 0) {
+        if ($scope -eq 'SiteCollection' -and [int]$record.Workflow2010Count -gt 0) {
             $alerts.Add([PSCustomObject]@{
                     AlertType = 'Workflow2010'
                     Severity = 'High'
@@ -184,7 +193,7 @@
                     Message = 'Legacy SharePoint 2010 workflows require migration remediation.'
                 })
         }
-        if ([int]$record.InfoPathFormCount -gt 0) {
+        if ($scope -eq 'SiteCollection' -and [int]$record.InfoPathFormCount -gt 0) {
             $alerts.Add([PSCustomObject]@{
                     AlertType = 'InfoPath'
                     Severity = 'High'
@@ -193,7 +202,7 @@
                     Message = 'InfoPath forms are not supported in SharePoint Online.'
                 })
         }
-        if ([bool]$record.UsesFullTrustCode) {
+        if ($scope -eq 'SiteCollection' -and [bool]$record.UsesFullTrustCode) {
             $alerts.Add([PSCustomObject]@{
                     AlertType = 'FullTrustCode'
                     Severity = 'High'
@@ -211,7 +220,7 @@
                     Message = 'Forms-based authentication requires identity remediation.'
                 })
         }
-        if ([bool]$record.IsLockedSite) {
+        if ($scope -eq 'SiteCollection' -and [bool]$record.IsLockedSite) {
             $alerts.Add([PSCustomObject]@{
                     AlertType = 'LockedSite'
                     Severity = 'High'
@@ -220,7 +229,7 @@
                     Message = 'Site lock state blocks or delays migration.'
                 })
         }
-        if ([int]$record.IrmEnabledListCount -gt 0) {
+        if ($scope -eq 'SiteCollection' -and [int]$record.IrmEnabledListCount -gt 0) {
             $alerts.Add([PSCustomObject]@{
                     AlertType = 'IrmEnabledLists'
                     Severity = 'High'

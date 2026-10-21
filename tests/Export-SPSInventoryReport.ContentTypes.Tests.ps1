@@ -74,4 +74,34 @@ Describe 'Export-SPSInventoryReport content types' {
         (Get-Content $output.ManifestJsonPath -Raw | ConvertFrom-Json).Files.ContentTypesJson | Should -BeNullOrEmpty
         (Get-Content $output.HtmlPath -Raw) | Should -Not -Match 'Content types and list bindings'
     }
+
+    It 'writes scope-aware alerts for web-app enumeration failures and failed FBA sites' {
+        $records = @(
+            [PSCustomObject]@{
+                InventoryScope = 'WebApplication'
+                Url = 'https://intranet'
+                WebAppUrl = 'https://intranet'
+                SiteInventoryWarnings = 'Site collection list could not be accessed: Access denied'
+                AssessmentStatus = 'Failed'
+                AssessmentWarnings = 'Site collection enumeration failed for web application'
+                HasFbaZone = $true
+            },
+            [PSCustomObject]@{
+                InventoryScope = 'SiteCollection'
+                Url = 'https://intranet/sites/failed-fba'
+                WebApp = 'Intranet'
+                HasFbaZone = $true
+                AssessmentStatus = 'Failed'
+                AssessmentWarnings = 'Assessment failed: Access denied'
+                Category = $null
+            }
+        )
+
+        $output = Export-SPSInventoryReport -InputObject $records -OutputFolder $TestDrive -BaseName 'Alerts'
+        $alerts = @(Get-Content $output.AlertsJsonPath -Raw | ConvertFrom-Json)
+
+        @($alerts | Where-Object { $_.AlertType -eq 'WebApplicationEnumerationFailed' -and $_.Url -eq 'https://intranet' }).Count | Should -Be 1
+        @($alerts | Where-Object { $_.AlertType -eq 'AssessmentFailed' -and $_.Url -eq 'https://intranet/sites/failed-fba' }).Count | Should -Be 1
+        @($alerts | Where-Object { $_.AlertType -eq 'FbaConfigured' -and $_.Url -eq 'https://intranet/sites/failed-fba' }).Count | Should -Be 1
+    }
 }

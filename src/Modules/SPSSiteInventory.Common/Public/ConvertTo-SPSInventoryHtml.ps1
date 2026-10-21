@@ -123,12 +123,12 @@
     }
     $totalSize = [math]::Round($totalSize, 2)
     $riskCards = @(
-        [PSCustomObject]@{ Label = 'Full-trust code'; Count = @($siteRecords | Where-Object { $_.UsesFullTrustCode }).Count }
-        [PSCustomObject]@{ Label = 'FBA configured'; Count = @($siteRecords | Where-Object { $_.HasFbaZone }).Count }
-        [PSCustomObject]@{ Label = 'InfoPath forms'; Count = @($siteRecords | Where-Object { [int]$_.InfoPathFormCount -gt 0 }).Count }
-        [PSCustomObject]@{ Label = 'IRM-enabled lists'; Count = @($siteRecords | Where-Object { [int]$_.IrmEnabledListCount -gt 0 }).Count }
-        [PSCustomObject]@{ Label = 'Locked sites'; Count = @($siteRecords | Where-Object { $_.IsLockedSite }).Count }
-        [PSCustomObject]@{ Label = 'Workflow 2010'; Count = @($siteRecords | Where-Object { [int]$_.Workflow2010Count -gt 0 }).Count }
+        [PSCustomObject]@{ Label = 'Sites with full-trust code'; Count = @($siteRecords | Where-Object { $_.UsesFullTrustCode }).Count }
+        [PSCustomObject]@{ Label = 'Sites with FBA configured'; Count = @($siteRecords | Where-Object { $_.HasFbaZone }).Count }
+        [PSCustomObject]@{ Label = 'Sites with InfoPath forms'; Count = @($siteRecords | Where-Object { [int]$_.InfoPathFormCount -gt 0 }).Count }
+        [PSCustomObject]@{ Label = 'Sites with IRM-enabled lists'; Count = @($siteRecords | Where-Object { [int]$_.IrmEnabledListCount -gt 0 }).Count }
+        [PSCustomObject]@{ Label = 'Sites with locked state'; Count = @($siteRecords | Where-Object { $_.IsLockedSite }).Count }
+        [PSCustomObject]@{ Label = 'Sites with Workflow 2010'; Count = @($siteRecords | Where-Object { [int]$_.Workflow2010Count -gt 0 }).Count }
     )
 
     # Per-wave aggregation for the migration wave plan. Waves are discovered from the
@@ -152,6 +152,9 @@
     $waveKeys = @($waveAgg.Keys | Sort-Object `
         @{ Expression = { if ($waveAgg[$_].Wave -eq 0) { [int]::MaxValue } else { [int]$waveAgg[$_].Wave } } },
         @{ Expression = { [string]$waveAgg[$_].Name } })
+    $solutions = @($SolutionMap | Where-Object { $null -ne $_ })
+    $authenticationRecords = @($records | Where-Object { $_.AuthenticationZones })
+    $hasContentTypeSection = $PSBoundParameters.ContainsKey('ContentTypes')
 
     $encTitle = ConvertTo-SPSHtmlText -Value $Title
     $encEnv = ConvertTo-SPSHtmlText -Value $EnvName
@@ -297,11 +300,19 @@ td.muted, .muted { color: var(--muted); }
     [void]$sb.AppendLine('<div class="nav">')
     [void]$sb.AppendLine('<a href="#summary">Summary</a>')
     [void]$sb.AppendLine('<a href="#risk-indicators">Risk indicators</a>')
-    [void]$sb.AppendLine('<a href="#wave-plan">Migration waves</a>')
+    if ($waveKeys.Count -gt 0) {
+        [void]$sb.AppendLine('<a href="#wave-plan">Migration waves</a>')
+    }
     [void]$sb.AppendLine('<a href="#inventory-table">Inventory table</a>')
-    [void]$sb.AppendLine('<a href="#farm-solutions">Farm solutions</a>')
-    [void]$sb.AppendLine('<a href="#authentication">Authentication</a>')
-    [void]$sb.AppendLine('<a href="#content-types">Content types</a>')
+    if ($solutions.Count -gt 0) {
+        [void]$sb.AppendLine('<a href="#farm-solutions">Farm solutions</a>')
+    }
+    if ($authenticationRecords.Count -gt 0) {
+        [void]$sb.AppendLine('<a href="#authentication">Authentication</a>')
+    }
+    if ($hasContentTypeSection) {
+        [void]$sb.AppendLine('<a href="#content-types">Content types</a>')
+    }
     [void]$sb.AppendLine('</div>')
 
     # Summary box.
@@ -347,7 +358,6 @@ td.muted, .muted { color: var(--muted); }
     }
 
     # Farm solutions (WSP) section.
-    $solutions = @($SolutionMap | Where-Object { $null -ne $_ })
     if ($solutions.Count -gt 0) {
         $solTotal = $solutions.Count
         $solCustom = @($solutions | Where-Object { $_.IsCustom }).Count
@@ -415,7 +425,6 @@ td.muted, .muted { color: var(--muted); }
         }
     }
 
-    $authenticationRecords = @($records | Where-Object { $_.AuthenticationZones })
     if ($authenticationRecords.Count -gt 0) {
         [void]$sb.AppendLine('<h2 id="authentication">Web application authentication</h2>')
         [void]$sb.AppendLine('<p>Configured providers across all zones, not actual user sign-in activity. FBA requires identity/authentication remediation for SharePoint Online. Categories follow your configured blocking rules.</p>')
@@ -435,7 +444,7 @@ td.muted, .muted { color: var(--muted); }
         [void]$sb.AppendLine('</tbody></table></div>')
     }
 
-    if ($PSBoundParameters.ContainsKey('ContentTypes')) {
+    if ($hasContentTypeSection) {
         $partialSites = @($siteRecords | Where-Object { $_.ContentTypeInventoryComplete -eq $false })
         [void]$sb.AppendLine('<h2 id="content-types">Content types and list bindings</h2>')
         [void]$sb.AppendLine(('<p><strong>{0}</strong> definition/binding row(s). Standard types are included; presence alone is not a migration blocker. List bindings are not item counts or distinct business designs.</p>' -f $ContentTypes.Count))
