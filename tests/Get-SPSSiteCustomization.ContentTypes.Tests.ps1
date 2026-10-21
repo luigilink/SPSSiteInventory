@@ -331,6 +331,113 @@ Describe 'Get-SPSSiteCustomization content types' {
         $signals.FileVersionExamples | Should -Match '/sites/team/Projects/spec\.docx \(80\)'
     }
 
+    It 'counts ordinary checked-out files that are not listed in CheckedOutFiles' {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Lists[0].Title = 'Shared Documents'
+        $web.Lists[0].CheckedOutFiles = @()
+        $web.Lists[0].Items = @(
+            [PSCustomObject]@{
+                Name = 'proposal.docx'
+                File = [PSCustomObject]@{
+                    ServerRelativeUrl = '/sites/team/Shared%20Documents/proposal.docx'
+                    CheckOutType = 'Online'
+                    Versions = @()
+                }
+            },
+            [PSCustomObject]@{
+                Name = 'minutes.docx'
+                File = [PSCustomObject]@{
+                    ServerRelativeUrl = '/sites/team/Shared%20Documents/minutes.docx'
+                    CheckOutType = 'None'
+                    Versions = @()
+                }
+            }
+        )
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -LargeContentThresholds @{
+            CheckedOutFileCount = 1
+        }
+
+        $signals.CheckedOutFileCount | Should -Be 1
+        $signals.CheckedOutFileExamples | Should -Match 'Shared Documents \(1\)'
+    }
+
+    It 'uses paged item retrieval for version scans and marks partial when capped' {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Lists[0].Title = 'Architecture'
+        $web.Lists[0].ItemCount = 12000
+        $web.Lists[0].EnableVersioning = $true
+        $web.Lists[0].Views = @()
+        $web.Lists[0].CheckedOutFiles = @()
+        $web.Lists[0] | Add-Member -MemberType NoteProperty -Name VersionBatchIndex -Value 0 -Force
+        $web.Lists[0] | Add-Member -MemberType NoteProperty -Name VersionItemOne -Value ([PSCustomObject]@{
+                Name = 'a.docx'
+                File = [PSCustomObject]@{
+                    ServerRelativeUrl = '/sites/team/Architecture/a.docx'
+                    Versions = @(1..60)
+                }
+            }) -Force
+        $web.Lists[0] | Add-Member -MemberType NoteProperty -Name VersionItemTwo -Value ([PSCustomObject]@{
+                Name = 'b.docx'
+                File = [PSCustomObject]@{
+                    ServerRelativeUrl = '/sites/team/Architecture/b.docx'
+                    Versions = @(1..55)
+                }
+            }) -Force
+        $web.Lists[0] | Add-Member -MemberType NoteProperty -Name VersionItemThree -Value ([PSCustomObject]@{
+                Name = 'c.docx'
+                File = [PSCustomObject]@{
+                    ServerRelativeUrl = '/sites/team/Architecture/c.docx'
+                    Versions = @(1..80)
+                }
+            }) -Force
+        $web.Lists[0] | Add-Member -MemberType ScriptMethod -Name GetItems -Value {
+            param ($Query)
+            $queryText = ''
+            if ($null -ne $Query.PSObject.Properties['Query'] -and $Query.Query) {
+                $queryText = [string]$Query.Query
+            }
+            if ($queryText -match 'CheckoutUser') {
+                return [PSCustomObject]@{
+                    Items = @()
+                    ListItemCollectionPosition = $null
+                }
+            }
+            if ($this.VersionBatchIndex -eq 0) {
+                $this.VersionBatchIndex = 1
+                return [PSCustomObject]@{
+                    Items = @($this.VersionItemOne, $this.VersionItemTwo)
+                    ListItemCollectionPosition = 'next'
+                }
+            }
+            return [PSCustomObject]@{
+                Items = @($this.VersionItemThree)
+                ListItemCollectionPosition = $null
+            }
+        } -Force
+        $web.Lists[0] | Add-Member -MemberType ScriptProperty -Name Items -Value { throw 'Version scan must use paged GetItems retrieval.' } -Force
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -LargeContentThresholds @{
+            FileVersionCount = 50
+            MaxItemsForVersionScanPerLibrary = 2
+        } -WarningVariable warnings -WarningAction SilentlyContinue
+
+        $signals.FileVersionCount | Should -Be 2
+        $signals.FileVersionExamples | Should -Match '/sites/team/Architecture/a\.docx \(60\)'
+        $signals.CustomizationInventoryComplete | Should -BeFalse
+        ($warnings -join '; ') | Should -Match 'File-version scan stopped'
+    }
+
     It 'counts only active workflow associations when historical versions are flagged by metadata' {
         $webWorkflow = Get-TestWorkflowAssociation -Name 'WF for Statistics' -HasIsCurrent $true -IsCurrent $true
         $oldListWorkflow = Get-TestWorkflowAssociation -Name 'WF pour les Statistiques (version précédente: 08/07/2016 14:50:34)' -HasIsCurrent $true -IsCurrent $false

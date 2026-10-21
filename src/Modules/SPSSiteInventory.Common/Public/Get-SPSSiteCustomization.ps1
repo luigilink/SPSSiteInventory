@@ -137,6 +137,64 @@
     $checkedOutFileThreshold = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'CheckedOutFileCount' -DefaultValue 1 -MinimumValue 1)
     $fileVersionThreshold = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'FileVersionCount' -DefaultValue 50 -MinimumValue 1)
     $maxItemsForVersionScan = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'MaxItemsForVersionScanPerLibrary' -DefaultValue 2000 -MinimumValue 1)
+    $setQueryProperty = {
+        param([object]$QueryObject, [string]$PropertyName, [object]$Value)
+        if ($null -ne $QueryObject.PSObject.Properties[$PropertyName]) {
+            $QueryObject.$PropertyName = $Value
+        }
+        else {
+            $QueryObject | Add-Member -MemberType NoteProperty -Name $PropertyName -Value $Value -Force
+        }
+    }
+    $newPagedQuery = {
+        param([uint32]$RowLimit, [string]$QueryText = '')
+        $spQueryType = [Type]::GetType('Microsoft.SharePoint.SPQuery, Microsoft.SharePoint', $false)
+        $queryObject = if ($null -ne $spQueryType) { New-Object -TypeName Microsoft.SharePoint.SPQuery } else { [PSCustomObject]@{} }
+        & $setQueryProperty $queryObject 'RowLimit' $RowLimit
+        & $setQueryProperty $queryObject 'ViewAttributes' "Scope='RecursiveAll'"
+        if ($QueryText) {
+            & $setQueryProperty $queryObject 'Query' $QueryText
+        }
+        & $setQueryProperty $queryObject 'ListItemCollectionPosition' $null
+        return $queryObject
+    }
+    $getBatchItems = {
+        param([object]$Batch)
+        if ($null -eq $Batch) { return @() }
+        if ($null -ne $Batch.PSObject.Properties['Items']) {
+            return @($Batch.Items)
+        }
+        if ($Batch -is [System.Collections.IEnumerable] -and -not ($Batch -is [string])) {
+            return @($Batch)
+        }
+        return @()
+    }
+    $getBatchPosition = {
+        param([object]$Batch)
+        if ($null -eq $Batch) { return $null }
+        if ($null -ne $Batch.PSObject.Properties['ListItemCollectionPosition']) {
+            return $Batch.ListItemCollectionPosition
+        }
+        return $null
+    }
+    $getFileIdentity = {
+        param([object]$FileObject, [object]$FallbackObject)
+        if ($FileObject -is [string] -and -not [string]::IsNullOrWhiteSpace($FileObject)) {
+            return [string]$FileObject
+        }
+        if ($null -ne $FileObject) {
+            if ($null -ne $FileObject.PSObject.Properties['ServerRelativeUrl'] -and $FileObject.ServerRelativeUrl) { return [string]$FileObject.ServerRelativeUrl }
+            if ($null -ne $FileObject.PSObject.Properties['Url'] -and $FileObject.Url) { return [string]$FileObject.Url }
+            if ($null -ne $FileObject.PSObject.Properties['UniqueId'] -and $FileObject.UniqueId) { return [string]$FileObject.UniqueId }
+            if ($null -ne $FileObject.PSObject.Properties['Name'] -and $FileObject.Name) { return [string]$FileObject.Name }
+        }
+        if ($null -ne $FallbackObject) {
+            if ($null -ne $FallbackObject.PSObject.Properties['Url'] -and $FallbackObject.Url) { return [string]$FallbackObject.Url }
+            if ($null -ne $FallbackObject.PSObject.Properties['ServerRelativeUrl'] -and $FallbackObject.ServerRelativeUrl) { return [string]$FallbackObject.ServerRelativeUrl }
+            if ($null -ne $FallbackObject.PSObject.Properties['Name'] -and $FallbackObject.Name) { return [string]$FallbackObject.Name }
+        }
+        return $null
+    }
 
     try {
         $signals.SandboxSolutions = @($Site.Solutions).Count
@@ -357,13 +415,70 @@
                             Write-Warning -Message "Could not read list views on '$listTitle' in web '$($web.Url)': $($_.Exception.Message)"
                         }
 
+                        $isDocumentLibrary = [string]$list.BaseTemplate -eq '101' -or
+                            ($null -ne $list.PSObject.Properties['BaseType'] -and [string]$list.BaseType -eq 'DocumentLibrary')
                         try {
+                            $libraryCheckedOutKeys = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
                             if ($null -ne $list.PSObject.Properties['CheckedOutFiles'] -and $null -ne $list.CheckedOutFiles) {
-                                $checkedOutFilesCount = @($list.CheckedOutFiles).Count
-                                $signals.CheckedOutFileCount += $checkedOutFilesCount
-                                if ($checkedOutFilesCount -ge $checkedOutFileThreshold -and $checkedOutFileExamples.Count -lt 5) {
-                                    $checkedOutFileExamples.Add(('{0} ({1})' -f $listTitle, $checkedOutFilesCount))
+                                foreach ($checkedOutFile in @($list.CheckedOutFiles)) {
+                                    $fileKey = & $getFileIdentity $checkedOutFile $null
+                                    if (-not [string]::IsNullOrWhiteSpace($fileKey)) {
+                                        [void]$libraryCheckedOutKeys.Add($fileKey)
+                                    }
                                 }
+                            }
+
+                            if ($isDocumentLibrary -and $null -ne $list.PSObject.Methods['GetItems']) {
+                                $checkoutQuery = & $newPagedQuery -RowLimit 200 -QueryText '<Where><IsNotNull><FieldRef Name="CheckoutUser" /></IsNotNull></Where>'
+                                $checkoutPosition = $null
+                                do {
+                                    & $setQueryProperty $checkoutQuery 'ListItemCollectionPosition' $checkoutPosition
+                                    $checkoutBatch = $list.GetItems($checkoutQuery)
+                                    foreach ($checkedOutItem in (& $getBatchItems $checkoutBatch)) {
+                                        $itemFile = if ($null -ne $checkedOutItem.PSObject.Properties['File']) { $checkedOutItem.File } else { $null }
+                                        $fileKey = & $getFileIdentity $itemFile $checkedOutItem
+                                        if (-not [string]::IsNullOrWhiteSpace($fileKey)) {
+                                            [void]$libraryCheckedOutKeys.Add($fileKey)
+                                        }
+                                    }
+                                    $checkoutPosition = & $getBatchPosition $checkoutBatch
+                                } while ($null -ne $checkoutPosition)
+                            }
+                            elseif ($isDocumentLibrary -and $null -ne $list.PSObject.Properties['Items'] -and $null -ne $list.Items) {
+                                foreach ($checkedOutItem in @($list.Items)) {
+                                    $itemFile = if ($null -ne $checkedOutItem.PSObject.Properties['File']) { $checkedOutItem.File } else { $null }
+                                    if ($null -eq $itemFile) { continue }
+                                    $isCheckedOut = $false
+                                    if ($null -ne $itemFile.PSObject.Properties['CheckOutType'] -and
+                                        $null -ne $itemFile.CheckOutType -and
+                                        [string]$itemFile.CheckOutType -ne '' -and
+                                        [string]$itemFile.CheckOutType -ne 'None' -and
+                                        [string]$itemFile.CheckOutType -ne '0') {
+                                        $isCheckedOut = $true
+                                    }
+                                    elseif ($null -ne $itemFile.PSObject.Properties['CheckoutUser'] -and $null -ne $itemFile.CheckoutUser) {
+                                        $isCheckedOut = $true
+                                    }
+                                    elseif ($null -ne $itemFile.PSObject.Properties['CheckOutUser'] -and $null -ne $itemFile.CheckOutUser) {
+                                        $isCheckedOut = $true
+                                    }
+                                    elseif ($null -ne $checkedOutItem.PSObject.Properties['CheckoutUser'] -and $null -ne $checkedOutItem.CheckoutUser) {
+                                        $isCheckedOut = $true
+                                    }
+
+                                    if ($isCheckedOut) {
+                                        $fileKey = & $getFileIdentity $itemFile $checkedOutItem
+                                        if (-not [string]::IsNullOrWhiteSpace($fileKey)) {
+                                            [void]$libraryCheckedOutKeys.Add($fileKey)
+                                        }
+                                    }
+                                }
+                            }
+
+                            $checkedOutFilesCount = $libraryCheckedOutKeys.Count
+                            $signals.CheckedOutFileCount += $checkedOutFilesCount
+                            if ($checkedOutFilesCount -ge $checkedOutFileThreshold -and $checkedOutFileExamples.Count -lt 5) {
+                                $checkedOutFileExamples.Add(('{0} ({1})' -f $listTitle, $checkedOutFilesCount))
                             }
                         }
                         catch {
@@ -372,29 +487,64 @@
                         }
 
                         try {
-                            $isDocumentLibrary = [string]$list.BaseTemplate -eq '101' -or
-                                ($null -ne $list.PSObject.Properties['BaseType'] -and [string]$list.BaseType -eq 'DocumentLibrary')
                             $versioningEnabled = $null -ne $list.PSObject.Properties['EnableVersioning'] -and [bool]$list.EnableVersioning
                             if ($isDocumentLibrary -and $versioningEnabled) {
                                 $scanCount = 0
-                                foreach ($item in $list.Items) {
-                                    $scanCount++
-                                    if ($scanCount -gt $maxItemsForVersionScan) {
-                                        $signals.CustomizationInventoryComplete = $false
-                                        Write-Warning -Message "File-version scan stopped on '$listTitle' in web '$($web.Url)' after $maxItemsForVersionScan item(s). Increase LargeContentThresholds.MaxItemsForVersionScanPerLibrary to scan more items."
-                                        break
-                                    }
-                                    if ($null -eq $item.PSObject.Properties['File'] -or $null -eq $item.File) {
-                                        continue
-                                    }
-                                    $fileVersionCount = @($item.File.Versions).Count
-                                    if ($fileVersionCount -ge $fileVersionThreshold) {
-                                        $signals.FileVersionCount++
-                                        if ($fileVersionExamples.Count -lt 5) {
-                                            $fileUrl = if ($item.File.PSObject.Properties['ServerRelativeUrl']) { [string]$item.File.ServerRelativeUrl } else { [string]$item.Name }
-                                            $fileVersionExamples.Add(('{0} ({1})' -f $fileUrl, $fileVersionCount))
+                                $hasUnscannedItems = $false
+                                if ($null -ne $list.PSObject.Methods['GetItems']) {
+                                    $versionQuery = & $newPagedQuery -RowLimit 200
+                                    $versionPosition = $null
+                                    do {
+                                        & $setQueryProperty $versionQuery 'ListItemCollectionPosition' $versionPosition
+                                        $versionBatch = $list.GetItems($versionQuery)
+                                        foreach ($item in (& $getBatchItems $versionBatch)) {
+                                            if ($scanCount -ge $maxItemsForVersionScan) {
+                                                $hasUnscannedItems = $true
+                                                break
+                                            }
+                                            $scanCount++
+                                            if ($null -eq $item.PSObject.Properties['File'] -or $null -eq $item.File) {
+                                                continue
+                                            }
+                                            $fileVersionCount = @($item.File.Versions).Count
+                                            if ($fileVersionCount -ge $fileVersionThreshold) {
+                                                $signals.FileVersionCount++
+                                                if ($fileVersionExamples.Count -lt 5) {
+                                                    $fileUrl = & $getFileIdentity $item.File $item
+                                                    $fileVersionExamples.Add(('{0} ({1})' -f $fileUrl, $fileVersionCount))
+                                                }
+                                            }
+                                        }
+                                        $versionPosition = & $getBatchPosition $versionBatch
+                                        if ($scanCount -ge $maxItemsForVersionScan -and $null -ne $versionPosition) {
+                                            $hasUnscannedItems = $true
+                                        }
+                                    } while ($null -ne $versionPosition -and $scanCount -lt $maxItemsForVersionScan)
+                                }
+                                else {
+                                    foreach ($item in @($list.Items)) {
+                                        if ($scanCount -ge $maxItemsForVersionScan) {
+                                            $hasUnscannedItems = $true
+                                            break
+                                        }
+                                        $scanCount++
+                                        if ($null -eq $item.PSObject.Properties['File'] -or $null -eq $item.File) {
+                                            continue
+                                        }
+                                        $fileVersionCount = @($item.File.Versions).Count
+                                        if ($fileVersionCount -ge $fileVersionThreshold) {
+                                            $signals.FileVersionCount++
+                                            if ($fileVersionExamples.Count -lt 5) {
+                                                $fileUrl = & $getFileIdentity $item.File $item
+                                                $fileVersionExamples.Add(('{0} ({1})' -f $fileUrl, $fileVersionCount))
+                                            }
                                         }
                                     }
+                                }
+
+                                if ($hasUnscannedItems) {
+                                    $signals.CustomizationInventoryComplete = $false
+                                    Write-Warning -Message "File-version scan stopped on '$listTitle' in web '$($web.Url)' after $maxItemsForVersionScan item(s). Increase LargeContentThresholds.MaxItemsForVersionScanPerLibrary to scan more items."
                                 }
                             }
                         }
