@@ -49,6 +49,8 @@ Scoring = @{
         Workflow2013Count        = 1.5
         Workflow2010RunningInstanceCount = 1.0
         Workflow2013RunningInstanceCount = 0.5
+        AppInstanceCount         = 1.0
+        AppWebCount              = 1.5
         IsUnsupportedSiteTemplate = 5.0
         TemplateLanguageReviewRequired = 0.5
         InfoPathFormCount        = 3.0
@@ -100,6 +102,10 @@ Workflows are split by platform because their migration cost differs:
   direct remediation, so they are weighted less than their 2010 counterparts.
 - `Workflow2013RunningInstanceCount` — active runtime instances on the 2013
   platform when Workflow Manager instance APIs are available.
+- `AppInstanceCount` — SharePoint add-in instances detected across the site
+  collection. This helps estimate add-in replacement effort.
+- `AppWebCount` — webs identified as app webs (`APP#*` / `IsAppWeb`), which are
+  typically migration redesign candidates rather than direct targets.
 - `IsUnsupportedSiteTemplate` — root-web template is explicitly mapped as
   unsupported for direct SharePoint Online migration.
 - `TemplateLanguageReviewRequired` — root-web language metadata needs review

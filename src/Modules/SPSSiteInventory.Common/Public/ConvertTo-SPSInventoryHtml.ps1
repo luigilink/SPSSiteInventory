@@ -134,6 +134,8 @@
         [PSCustomObject]@{ Label = 'Sites with Workflow 2010'; Count = @($siteRecords | Where-Object { [int]$_.Workflow2010Count -gt 0 }).Count }
         [PSCustomObject]@{ Label = 'Sites with running Workflow 2010'; Count = @($siteRecords | Where-Object { [int]$_.Workflow2010RunningInstanceCount -gt 0 }).Count }
         [PSCustomObject]@{ Label = 'Sites with running Workflow 2013'; Count = @($siteRecords | Where-Object { [int]$_.Workflow2013RunningInstanceCount -gt 0 }).Count }
+        [PSCustomObject]@{ Label = 'Sites with app instances'; Count = @($siteRecords | Where-Object { [int]$_.AppInstanceCount -gt 0 }).Count }
+        [PSCustomObject]@{ Label = 'Sites with app webs'; Count = @($siteRecords | Where-Object { [int]$_.AppWebCount -gt 0 }).Count }
         [PSCustomObject]@{ Label = 'Sites above large-size threshold'; Count = @($siteRecords | Where-Object { $_.IsLargeSite }).Count }
         [PSCustomObject]@{ Label = 'Sites with large lists'; Count = @($siteRecords | Where-Object { [int]$_.LargeListCount -gt 0 }).Count }
         [PSCustomObject]@{ Label = 'Sites with checked-out files'; Count = @($siteRecords | Where-Object { [int]$_.CheckedOutFileCount -gt 0 }).Count }
@@ -519,6 +521,9 @@ td.muted, .muted { color: var(--muted); }
         @{ Key = 'TemplateLanguageTag'; Label = 'Template language'; Class = ''; Type = 'text' }
         @{ Key = 'TemplateLanguageReviewRequired'; Label = 'Template language review'; Class = ''; Type = 'text' }
         @{ Key = 'TemplateLanguageReason'; Label = 'Template language reason'; Class = 'reasons'; Type = 'text' }
+        @{ Key = 'AppInstanceCount'; Label = 'App instances'; Class = 'num'; Type = 'num' }
+        @{ Key = 'AppWebCount'; Label = 'App webs'; Class = 'num'; Type = 'num' }
+        @{ Key = 'AppInstanceExamples'; Label = 'App instance examples'; Class = 'reasons'; Type = 'text' }
         @{ Key = 'SizeGB'; Label = 'Size (GB)'; Class = 'num'; Type = 'num' }
         @{ Key = 'SubWebCount'; Label = 'Sub-webs'; Class = 'num'; Type = 'num' }
         @{ Key = 'LastModified'; Label = 'Last modified'; Class = ''; Type = 'text' }
