@@ -23,6 +23,8 @@ BeforeAll {
             'UsesCustomFarmFeature'
             'UsesFullTrustCode'
             'InfoPathFormCount'
+            'IrmEnabledListCount'
+            'IsLockedSite'
             'HasFbaZone'
         )
     }
@@ -75,6 +77,24 @@ Describe 'Measure-SPSSiteComplexity' {
 
     It 'forces Blocking (category 4) when a site uses InfoPath forms' {
         $signals = @{ InfoPathFormCount = 1 }
+
+        $result = Measure-SPSSiteComplexity -Signals $signals -Scoring $script:Scoring
+
+        $result.Category | Should -Be 4
+        $result.CategoryName | Should -Be 'Blocking'
+    }
+
+    It 'forces Blocking (category 4) when a site has IRM-enabled lists' {
+        $signals = @{ IrmEnabledListCount = 1 }
+
+        $result = Measure-SPSSiteComplexity -Signals $signals -Scoring $script:Scoring
+
+        $result.Category | Should -Be 4
+        $result.CategoryName | Should -Be 'Blocking'
+    }
+
+    It 'forces Blocking (category 4) when a site collection is locked' {
+        $signals = @{ IsLockedSite = $true }
 
         $result = Measure-SPSSiteComplexity -Signals $signals -Scoring $script:Scoring
 

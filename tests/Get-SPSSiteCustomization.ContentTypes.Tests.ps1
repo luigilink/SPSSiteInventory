@@ -82,6 +82,7 @@ public sealed class SPSSiteInventoryThrowAfterOne : IEnumerable
             ContentTypes = $Bindings
             WorkflowAssociations = @()
             EventReceivers = @()
+            IrmEnabled = $false
             BaseTemplate = 101
         }
         $web = [PSCustomObject]@{
@@ -198,6 +199,68 @@ Describe 'Get-SPSSiteCustomization content types' {
         $warningText | Should -Match 'Access denied while advancing the web enumerator'
         $warningText | Should -Match "InfoPath state on list 'Documents' in web 'https://intranet.contoso.com/sites/team'"
         $warningText | Should -Match 'InfoPath properties access denied'
+    }
+
+    It 'counts IRM-enabled lists and keeps unlocked sites non-blocking' {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Lists[0].IrmEnabled = $true
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Solutions = @()
+            LockState = 'Unlock'
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site
+
+        $signals.IrmEnabledListCount | Should -Be 1
+        $signals.SiteLockState | Should -Be 'Unlock'
+        $signals.IsLockedSite | Should -BeFalse
+    }
+
+    It 'flags locked site collections from lock state metadata' {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Solutions = @()
+            LockState = 'NoAccess'
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site
+
+        $signals.SiteLockState | Should -Be 'NoAccess'
+        $signals.IsLockedSite | Should -BeTrue
+    }
+
+    It 'falls back to the read-only flag when lock state metadata is unavailable' {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Solutions = @()
+            ReadOnly = $true
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site
+
+        $signals.SiteLockState | Should -Be 'ReadOnly'
+        $signals.IsLockedSite | Should -BeTrue
+    }
+
+    It 'does not count lists when IRM is disabled' {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Solutions = @()
+            LockState = 'Unlock'
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site
+
+        $signals.IrmEnabledListCount | Should -Be 0
+        $signals.CustomizationInventoryComplete | Should -BeTrue
     }
 
     It 'counts only active workflow associations when historical versions are flagged by metadata' {

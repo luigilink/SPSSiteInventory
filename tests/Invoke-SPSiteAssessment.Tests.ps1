@@ -32,6 +32,9 @@ Describe 'Invoke-SPSiteAssessment' {
                     Workflow2010Count = 0
                     Workflow2013Count = 0
                     InfoPathFormCount = 0
+                    IrmEnabledListCount = 0
+                    IsLockedSite = $false
+                    SiteLockState = 'Unlock'
                     UsesFullTrustCode = $false
                     ContentTypeCount = 0
                     ListContentTypeBindingCount = 0
@@ -53,9 +56,15 @@ Describe 'Invoke-SPSiteAssessment' {
 
             $result.Inventory | Should -HaveCount 3
             $result.Inventory[0].AssessmentStatus | Should -Be 'Complete'
+            $result.Inventory[0].IrmEnabledListCount | Should -Be 0
+            $result.Inventory[0].IsLockedSite | Should -BeFalse
+            $result.Inventory[0].SiteLockState | Should -Be 'Unlock'
             $result.Inventory[1].AssessmentStatus | Should -Be 'Failed'
             $result.Inventory[1].Category | Should -BeNullOrEmpty
             $result.Inventory[1].Score | Should -BeNullOrEmpty
+            $result.Inventory[1].IrmEnabledListCount | Should -BeNullOrEmpty
+            $result.Inventory[1].IsLockedSite | Should -BeNullOrEmpty
+            $result.Inventory[1].SiteLockState | Should -BeNullOrEmpty
             $result.Inventory[2].AssessmentStatus | Should -Be 'Complete'
             @($result.ContentTypes).Count | Should -Be 0
             Should -Invoke Get-SPSite -Times 3 -Exactly
@@ -76,6 +85,9 @@ Describe 'Invoke-SPSiteAssessment' {
                     Workflow2010Count = 0
                     Workflow2013Count = 0
                     InfoPathFormCount = 0
+                    IrmEnabledListCount = 0
+                    IsLockedSite = $false
+                    SiteLockState = 'Unlock'
                     UsesFullTrustCode = $false
                     ContentTypeCount = 0
                     ListContentTypeBindingCount = 0
@@ -117,6 +129,9 @@ Describe 'Invoke-SPSiteAssessment' {
                     Workflow2010Count = 0
                     Workflow2013Count = 0
                     InfoPathFormCount = 0
+                    IrmEnabledListCount = 0
+                    IsLockedSite = $false
+                    SiteLockState = 'Unlock'
                     UsesFullTrustCode = $false
                     ContentTypeCount = 0
                     ListContentTypeBindingCount = 0

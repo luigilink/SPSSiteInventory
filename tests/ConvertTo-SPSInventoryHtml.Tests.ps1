@@ -8,12 +8,14 @@ BeforeAll {
         [PSCustomObject]@{
             Url = 'https://intranet/sites/team'; Title = 'Team & Co'; WebApp = 'Intranet'
             ContentDb = 'WSS_Content'; Template = 'STS#3'; SizeGB = 1.5; SubWebCount = 2
+            SiteLockState = 'Unlock'; IsLockedSite = $false; IrmEnabledListCount = 0
             LastModified = [datetime]'2025-01-15'; Category = 1; CategoryName = 'Simple'
             Wave = 1; WaveName = 'Quick wins'; Score = 0; Reasons = ''
         },
         [PSCustomObject]@{
             Url = 'https://intranet/sites/legacy'; Title = 'Legacy <workflows>'; WebApp = 'Intranet'
             ContentDb = 'WSS_Content'; Template = 'STS#0'; SizeGB = 12.25; SubWebCount = 8
+            SiteLockState = 'NoAccess'; IsLockedSite = $true; IrmEnabledListCount = 3
             LastModified = [datetime]'2024-06-01'; Category = 4; CategoryName = 'Blocking'
             UsesFullTrustCode = $true
             Wave = 4; WaveName = 'Projects / blockers'; Score = 9.5; Reasons = 'blocking: UsesFullTrustCode'
@@ -284,6 +286,16 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $html = ConvertTo-SPSInventoryHtml -InputObject @($site)
 
         $html | Should -Match '<td>Unknown</td><td><span class="pill warn">Yes</span>'
+    }
+
+    It 'renders lock-state and IRM columns in the main table' {
+        $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
+
+        $html | Should -Match 'Site lock state'
+        $html | Should -Match 'Site locked'
+        $html | Should -Match 'IRM-enabled lists'
+        $html | Should -Match 'NoAccess'
+        $html | Should -Match '>3</td>'
     }
 
     It 'renders encoded content-type detail and surfaces partial collection' {
