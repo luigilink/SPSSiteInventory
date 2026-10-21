@@ -8,6 +8,7 @@ BeforeAll {
         [PSCustomObject]@{
             Url = 'https://intranet/sites/team'; Title = 'Team & Co'; WebApp = 'Intranet'
             ContentDb = 'WSS_Content'; Template = 'STS#3'; SizeGB = 1.5; SubWebCount = 2
+            Workflow2010RunningInstanceCount = 0; Workflow2013RunningInstanceCount = 0
             IsLargeSite = $false; LargeListCount = 0; LargeListExamples = ''
             LargeListViewCount = 0; LargeListViewExamples = ''
             CheckedOutFileCount = 0; CheckedOutFileExamples = ''
@@ -19,6 +20,7 @@ BeforeAll {
         [PSCustomObject]@{
             Url = 'https://intranet/sites/legacy'; Title = 'Legacy <workflows>'; WebApp = 'Intranet'
             ContentDb = 'WSS_Content'; Template = 'STS#0'; SizeGB = 12.25; SubWebCount = 8
+            Workflow2010RunningInstanceCount = 4; Workflow2013RunningInstanceCount = 2
             IsLargeSite = $true; LargeListCount = 2; LargeListExamples = 'Documents (7000); Records (5100)'
             LargeListViewCount = 1; LargeListViewExamples = 'Documents/All Documents (7000)'
             CheckedOutFileCount = 3; CheckedOutFileExamples = 'Documents (3)'
@@ -317,6 +319,8 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $html | Should -Match 'Sites with locked state'
         $html | Should -Match 'Sites with IRM-enabled lists'
         $html | Should -Match 'Sites with Workflow 2010'
+        $html | Should -Match 'Sites with running Workflow 2010'
+        $html | Should -Match 'Sites with running Workflow 2013'
         $html | Should -Match 'Sites above large-size threshold'
         $html | Should -Match 'Sites with large lists'
         $html | Should -Match 'Sites with checked-out files'
@@ -334,6 +338,8 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $html | Should -Match 'Large-list views'
         $html | Should -Match 'Checked-out files'
         $html | Should -Match 'High-version files'
+        $html | Should -Match 'Running WF 2010'
+        $html | Should -Match 'Running WF 2013'
         $html | Should -Match 'Documents \(7000\); Records \(5100\)'
         $html | Should -Match 'Documents/All Documents \(7000\)'
     }

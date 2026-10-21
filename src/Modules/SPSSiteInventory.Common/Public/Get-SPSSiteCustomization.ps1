@@ -21,9 +21,13 @@
         - Workflow2010Count counts classic SPWorkflowAssociation objects (the SharePoint
           2010 workflow platform, whose engine is retired in SharePoint Online, so those
           workflows always need a rebuild).
+        - Workflow2010RunningInstanceCount counts active 2010 workflow instances where
+          runtime counters are exposed by the platform.
         - Workflow2013Count counts Workflow Manager subscriptions (the SharePoint 2013
           platform), read through WorkflowServicesManager. This is best-effort: when
           Workflow Manager is not connected the count stays at 0 rather than failing.
+        - Workflow2013RunningInstanceCount counts active Workflow Manager instances where
+          the instance API is available.
 
         InfoPathFormCount counts the InfoPath-driven lists and libraries on the site
         (InfoPath form libraries, and lists whose forms were customized with InfoPath).
@@ -100,7 +104,9 @@
 
     $signals = @{
         Workflow2010Count        = 0
+        Workflow2010RunningInstanceCount = 0
         Workflow2013Count        = 0
+        Workflow2013RunningInstanceCount = 0
         InfoPathFormCount        = 0
         IrmEnabledListCount      = 0
         IsLargeSite              = $false
@@ -286,9 +292,12 @@
                 }
 
                 # SharePoint 2010 platform: classic workflow associations at web and list scope.
-                # SharePoint can keep historical "previous version" associations; only active
-                # associations should count toward migration complexity.
-                $signals.Workflow2010Count += @(Get-SPSActiveWorkflowAssociations -WorkflowAssociations @($web.WorkflowAssociations)).Count
+                # Keep definition counts tied to active associations only, but include historical
+                # associations for running-instance totals because previous versions can still run.
+                $allWebWorkflowAssociations = @($web.WorkflowAssociations)
+                $webWorkflowAssociations = @(Get-SPSActiveWorkflowAssociations -WorkflowAssociations $allWebWorkflowAssociations)
+                $signals.Workflow2010Count += $webWorkflowAssociations.Count
+                $signals.Workflow2010RunningInstanceCount += Get-SPSWorkflowAssociationRunningCount -WorkflowAssociations $allWebWorkflowAssociations
 
                 try {
                     $webLists = $web.Lists
@@ -313,7 +322,10 @@
                             Write-Warning -Message "Content-type bindings could not be fully read on list '$($list.Title)' in '$($web.Url)': $($_.Exception.Message)"
                         }
 
-                        $signals.Workflow2010Count += @(Get-SPSActiveWorkflowAssociations -WorkflowAssociations @($list.WorkflowAssociations)).Count
+                        $allListWorkflowAssociations = @($list.WorkflowAssociations)
+                        $listWorkflowAssociations = @(Get-SPSActiveWorkflowAssociations -WorkflowAssociations $allListWorkflowAssociations)
+                        $signals.Workflow2010Count += $listWorkflowAssociations.Count
+                        $signals.Workflow2010RunningInstanceCount += Get-SPSWorkflowAssociationRunningCount -WorkflowAssociations $allListWorkflowAssociations
 
                         # Count only custom event receivers. Out-of-the-box lists carry many
                         # native receivers from Microsoft assemblies that are not a migration
@@ -568,10 +580,15 @@
                     if ($null -ne $workflowSubscriptionCount) {
                         $signals.Workflow2013Count += [int]$workflowSubscriptionCount
                     }
+
+                    $workflowRunningCount = Get-SPSWorkflowRunningInstanceCount -Web $web
+                    if ($null -ne $workflowRunningCount) {
+                        $signals.Workflow2013RunningInstanceCount += [int]$workflowRunningCount
+                    }
                 }
                 catch {
                     $signals.CustomizationInventoryComplete = $false
-                    Write-Warning -Message "Workflow Manager subscriptions could not be read on web '$($web.Url)': $($_.Exception.Message)"
+                    Write-Warning -Message "Workflow Manager subscriptions or running instances could not be read on web '$($web.Url)': $($_.Exception.Message)"
                 }
 
                 if ($web.HasUniqueRoleAssignments) {

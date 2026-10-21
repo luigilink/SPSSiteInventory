@@ -31,6 +31,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   high version counts. CSV/JSON/HTML outputs now surface these fields and
   examples; report-pack adds `-large-content-*.json`; alerts include dedicated
   large-content entries. (#36)
+- Added SMAT workflow running-instance parity signals:
+  `Workflow2010RunningInstanceCount` and `Workflow2013RunningInstanceCount`,
+  including CSV/JSON/HTML/report-pack fields and dedicated alerts, with
+  best-effort behavior when Workflow Manager instance APIs are unavailable. (#37)
 - Zone-aware web application authentication inventory, including mixed Windows/FBA,
   membership/role provider names and explicit identity-review flags. The example
   configuration treats `HasFbaZone` as a SharePoint Online migration blocker.

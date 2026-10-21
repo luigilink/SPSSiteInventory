@@ -139,7 +139,9 @@
                 AssessmentStatus = $record.AssessmentStatus
                 Category = $record.Category
                 Workflow2010Count = $record.Workflow2010Count
+                Workflow2010RunningInstanceCount = $record.Workflow2010RunningInstanceCount
                 Workflow2013Count = $record.Workflow2013Count
+                Workflow2013RunningInstanceCount = $record.Workflow2013RunningInstanceCount
             }
         }
     )
@@ -211,6 +213,24 @@
                     Url = $record.Url
                     Value = [int]$record.Workflow2010Count
                     Message = 'Legacy SharePoint 2010 workflows require migration remediation.'
+                })
+        }
+        if ($scope -eq 'SiteCollection' -and [int]$record.Workflow2010RunningInstanceCount -gt 0) {
+            $alerts.Add([PSCustomObject]@{
+                    AlertType = 'Workflow2010Running'
+                    Severity = 'High'
+                    Url = $record.Url
+                    Value = [int]$record.Workflow2010RunningInstanceCount
+                    Message = 'Active SharePoint 2010 workflow instances were detected.'
+                })
+        }
+        if ($scope -eq 'SiteCollection' -and [int]$record.Workflow2013RunningInstanceCount -gt 0) {
+            $alerts.Add([PSCustomObject]@{
+                    AlertType = 'Workflow2013Running'
+                    Severity = 'Medium'
+                    Url = $record.Url
+                    Value = [int]$record.Workflow2013RunningInstanceCount
+                    Message = 'Active SharePoint 2013 workflow instances were detected.'
                 })
         }
         if ($scope -eq 'SiteCollection' -and [int]$record.InfoPathFormCount -gt 0) {

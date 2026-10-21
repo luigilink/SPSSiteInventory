@@ -30,7 +30,9 @@ Describe 'Invoke-SPSiteAssessment' {
             Mock Get-SPSSiteCustomization {
                 @{
                     Workflow2010Count = 0
+                    Workflow2010RunningInstanceCount = 0
                     Workflow2013Count = 0
+                    Workflow2013RunningInstanceCount = 0
                     InfoPathFormCount = 0
                     IrmEnabledListCount = 0
                     IsLargeSite = $false
@@ -66,6 +68,8 @@ Describe 'Invoke-SPSiteAssessment' {
             $result.Inventory | Should -HaveCount 3
             $result.Inventory[0].AssessmentStatus | Should -Be 'Complete'
             $result.Inventory[0].IrmEnabledListCount | Should -Be 0
+            $result.Inventory[0].Workflow2010RunningInstanceCount | Should -Be 0
+            $result.Inventory[0].Workflow2013RunningInstanceCount | Should -Be 0
             $result.Inventory[0].IsLargeSite | Should -BeFalse
             $result.Inventory[0].IsLockedSite | Should -BeFalse
             $result.Inventory[0].SiteLockState | Should -Be 'Unlock'
@@ -73,6 +77,8 @@ Describe 'Invoke-SPSiteAssessment' {
             $result.Inventory[1].Category | Should -BeNullOrEmpty
             $result.Inventory[1].Score | Should -BeNullOrEmpty
             $result.Inventory[1].IrmEnabledListCount | Should -BeNullOrEmpty
+            $result.Inventory[1].Workflow2010RunningInstanceCount | Should -BeNullOrEmpty
+            $result.Inventory[1].Workflow2013RunningInstanceCount | Should -BeNullOrEmpty
             $result.Inventory[1].IsLargeSite | Should -BeNullOrEmpty
             $result.Inventory[1].IsLockedSite | Should -BeNullOrEmpty
             $result.Inventory[1].SiteLockState | Should -BeNullOrEmpty
@@ -94,7 +100,9 @@ Describe 'Invoke-SPSiteAssessment' {
             Mock Get-SPSSiteCustomization {
                 @{
                     Workflow2010Count = 0
+                    Workflow2010RunningInstanceCount = 0
                     Workflow2013Count = 0
+                    Workflow2013RunningInstanceCount = 0
                     InfoPathFormCount = 0
                     IrmEnabledListCount = 0
                     IsLargeSite = $false
@@ -147,7 +155,9 @@ Describe 'Invoke-SPSiteAssessment' {
                 Write-Warning -Message "Lists could not be fully enumerated on '$($Site.Url)': Access denied"
                 @{
                     Workflow2010Count = 0
+                    Workflow2010RunningInstanceCount = 0
                     Workflow2013Count = 0
+                    Workflow2013RunningInstanceCount = 0
                     InfoPathFormCount = 0
                     IrmEnabledListCount = 0
                     IsLargeSite = $false
@@ -197,7 +207,9 @@ Describe 'Invoke-SPSiteAssessment' {
             Mock Get-SPSSiteCustomization {
                 @{
                     Workflow2010Count = 0
+                    Workflow2010RunningInstanceCount = 0
                     Workflow2013Count = 0
+                    Workflow2013RunningInstanceCount = 0
                     InfoPathFormCount = 0
                     IrmEnabledListCount = 0
                     IsLargeSite = $false

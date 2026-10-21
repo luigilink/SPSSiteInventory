@@ -37,7 +37,7 @@ report pack, plus a dedicated farm-solution report, to the output folder:
 | `*-manifest-*.json` | Report-pack manifest with generation metadata, top-level counters and file references. |
 | `*-sites-*.json` | Site inventory dataset used by the dashboard/report-pack consumers. |
 | `*-auth-*.json` | Authentication-by-web-application dataset (zone/provider summary + collection counts). |
-| `*-workflows-*.json` | Workflow-focused dataset (`Workflow2010Count`, `Workflow2013Count`, status, category). |
+| `*-workflows-*.json` | Workflow-focused dataset (`Workflow2010Count`, `Workflow2013Count`, running-instance counts, status, category). |
 | `*-irm-locks-*.json` | Security/lock dataset (`IrmEnabledListCount`, `SiteLockState`, `IsLockedSite`). |
 | `*-large-content-*.json` | Large-content risk dataset (`IsLargeSite`, large lists/views, checked-out files, high file-version counts, plus examples). |
 | `*-alerts-*.json` | Normalized risk alerts extracted from site signals (partial/failed, FBA, full-trust, workflows, InfoPath, IRM, lock, large content). |
@@ -75,6 +75,8 @@ CSV/JSON rows describe site collections and any web-application enumeration fail
 | `CustomizationInventoryComplete` | False means one or more customization signals may be missing |
 | `Workflow2010Count` | Active SharePoint 2010 workflow associations (legacy engine, retired in SPO); historical "previous version" associations are excluded when detectable |
 | `Workflow2013Count` | SharePoint 2013 workflow subscriptions (Workflow Manager) |
+| `Workflow2010RunningInstanceCount` | Active SharePoint 2010 workflow runtime instances where counters are exposed |
+| `Workflow2013RunningInstanceCount` | Active SharePoint 2013 workflow runtime instances where instance APIs are available |
 | `InfoPathFormCount` | InfoPath-driven lists/libraries (retired, no SPO equivalent) |
 | `IrmEnabledListCount` | Number of lists/libraries with IRM enabled |
 | `IsLargeSite` | Site is above the configured large-site threshold |
