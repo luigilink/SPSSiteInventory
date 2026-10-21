@@ -9,6 +9,11 @@ BeforeAll {
             Workflow2010Count        = 3.0
             Workflow2013Count        = 1.5
             InfoPathFormCount        = 3.0
+            IsLargeSite              = 1.5
+            LargeListCount           = 0.5
+            LargeListViewCount       = 0.5
+            CheckedOutFileCount      = 0.05
+            FileVersionCount         = 0.02
             SandboxSolutions         = 3.0
             CustomMasterPage         = 2.0
             EventReceivers           = 1.5
@@ -143,6 +148,18 @@ Describe 'Measure-SPSSiteComplexity' {
         $result = Measure-SPSSiteComplexity -Signals $signals -Scoring $script:Scoring
 
         ($result.Reasons -join ' ') | Should -Match 'SandboxSolutions'
+    }
+
+    It 'scores large-content signals with their configured weights' {
+        $signals = @{ IsLargeSite = $true; LargeListCount = 2; CheckedOutFileCount = 10; FileVersionCount = 50 }
+
+        $result = Measure-SPSSiteComplexity -Signals $signals -Scoring $script:Scoring
+
+        $result.Score | Should -BeGreaterThan 0
+        ($result.Reasons -join '; ') | Should -Match 'IsLargeSite'
+        ($result.Reasons -join '; ') | Should -Match 'LargeListCount'
+        ($result.Reasons -join '; ') | Should -Match 'CheckedOutFileCount'
+        ($result.Reasons -join '; ') | Should -Match 'FileVersionCount'
     }
 
     It 'counts booleans as 1 in the weighted score' {

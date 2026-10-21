@@ -33,6 +33,15 @@ Describe 'Invoke-SPSiteAssessment' {
                     Workflow2013Count = 0
                     InfoPathFormCount = 0
                     IrmEnabledListCount = 0
+                    IsLargeSite = $false
+                    LargeListCount = 0
+                    LargeListExamples = ''
+                    LargeListViewCount = 0
+                    LargeListViewExamples = ''
+                    CheckedOutFileCount = 0
+                    CheckedOutFileExamples = ''
+                    FileVersionCount = 0
+                    FileVersionExamples = ''
                     IsLockedSite = $false
                     SiteLockState = 'Unlock'
                     UsesFullTrustCode = $false
@@ -57,12 +66,14 @@ Describe 'Invoke-SPSiteAssessment' {
             $result.Inventory | Should -HaveCount 3
             $result.Inventory[0].AssessmentStatus | Should -Be 'Complete'
             $result.Inventory[0].IrmEnabledListCount | Should -Be 0
+            $result.Inventory[0].IsLargeSite | Should -BeFalse
             $result.Inventory[0].IsLockedSite | Should -BeFalse
             $result.Inventory[0].SiteLockState | Should -Be 'Unlock'
             $result.Inventory[1].AssessmentStatus | Should -Be 'Failed'
             $result.Inventory[1].Category | Should -BeNullOrEmpty
             $result.Inventory[1].Score | Should -BeNullOrEmpty
             $result.Inventory[1].IrmEnabledListCount | Should -BeNullOrEmpty
+            $result.Inventory[1].IsLargeSite | Should -BeNullOrEmpty
             $result.Inventory[1].IsLockedSite | Should -BeNullOrEmpty
             $result.Inventory[1].SiteLockState | Should -BeNullOrEmpty
             $result.Inventory[2].AssessmentStatus | Should -Be 'Complete'
@@ -86,6 +97,15 @@ Describe 'Invoke-SPSiteAssessment' {
                     Workflow2013Count = 0
                     InfoPathFormCount = 0
                     IrmEnabledListCount = 0
+                    IsLargeSite = $false
+                    LargeListCount = 0
+                    LargeListExamples = ''
+                    LargeListViewCount = 0
+                    LargeListViewExamples = ''
+                    CheckedOutFileCount = 0
+                    CheckedOutFileExamples = ''
+                    FileVersionCount = 0
+                    FileVersionExamples = ''
                     IsLockedSite = $false
                     SiteLockState = 'Unlock'
                     UsesFullTrustCode = $false
@@ -130,6 +150,15 @@ Describe 'Invoke-SPSiteAssessment' {
                     Workflow2013Count = 0
                     InfoPathFormCount = 0
                     IrmEnabledListCount = 0
+                    IsLargeSite = $false
+                    LargeListCount = 0
+                    LargeListExamples = ''
+                    LargeListViewCount = 0
+                    LargeListViewExamples = ''
+                    CheckedOutFileCount = 0
+                    CheckedOutFileExamples = ''
+                    FileVersionCount = 0
+                    FileVersionExamples = ''
                     IsLockedSite = $false
                     SiteLockState = 'Unlock'
                     UsesFullTrustCode = $false
@@ -155,6 +184,55 @@ Describe 'Invoke-SPSiteAssessment' {
             $result.Inventory[0].AssessmentStatus | Should -Be 'Partial'
             $result.Inventory[0].AssessmentWarnings | Should -Match 'Lists could not be fully enumerated'
             $result.Inventory[0].AssessmentWarnings | Should -Match 'Access denied'
+        }
+    }
+
+    It 'flags large sites from configured size thresholds during assessment' {
+        InModuleScope SPSSiteInventory.Common {
+            Mock Get-SPSite {
+                $site = [PSCustomObject]@{ Url = $Identity }
+                $site | Add-Member -MemberType ScriptMethod -Name Dispose -Value { }
+                $site
+            }
+            Mock Get-SPSSiteCustomization {
+                @{
+                    Workflow2010Count = 0
+                    Workflow2013Count = 0
+                    InfoPathFormCount = 0
+                    IrmEnabledListCount = 0
+                    IsLargeSite = $false
+                    LargeListCount = 0
+                    LargeListExamples = ''
+                    LargeListViewCount = 0
+                    LargeListViewExamples = ''
+                    CheckedOutFileCount = 0
+                    CheckedOutFileExamples = ''
+                    FileVersionCount = 0
+                    FileVersionExamples = ''
+                    IsLockedSite = $false
+                    SiteLockState = 'Unlock'
+                    UsesFullTrustCode = $false
+                    ContentTypeCount = 0
+                    ListContentTypeBindingCount = 0
+                    ContentTypeInventoryComplete = $true
+                    CustomizationInventoryComplete = $true
+                    ContentTypes = @()
+                }
+            }
+            Mock Add-SPSInventoryEvent { }
+            Mock Write-Progress { }
+
+            $inventory = @(
+                [PSCustomObject]@{
+                    Url = 'https://intranet/sites/large'; Title = 'Large'
+                    SiteInventoryComplete = $true; SiteInventoryWarnings = ''
+                    SizeGB = 150
+                }
+            )
+            $scoring = @{ Weights = @{}; Thresholds = @{}; BlockingSignals = @() }
+            $result = Invoke-SPSiteAssessment -Inventory $inventory -Scoring $scoring -LargeContentThresholds @{ LargeSiteSizeGB = 100 }
+
+            $result.Inventory[0].IsLargeSite | Should -BeTrue
         }
     }
 

@@ -26,13 +26,18 @@
 
         [Parameter(Mandatory = $true)]
         [System.Collections.IDictionary]
-        $Scoring
+        $Scoring,
+
+        [Parameter()]
+        [System.Collections.IDictionary]
+        $LargeContentThresholds = @{}
     )
 
     $contentTypes = [System.Collections.Generic.List[object]]::new()
     $scored = [System.Collections.Generic.List[object]]::new()
     $siteTotal = $Inventory.Count
     $siteIndex = 0
+    $largeSiteSizeThresholdGb = Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'LargeSiteSizeGB' -DefaultValue 100 -MinimumValue 0
 
     try {
         foreach ($item in $Inventory) {
@@ -67,12 +72,23 @@
                     throw "SharePoint did not return a site collection for '$($item.Url)'."
                 }
                 $customizationWarnings = @()
-                $signals = Get-SPSSiteCustomization -Site $site -CustomFeatureId $CustomFeatureId -FullTrustFeatureId $FullTrustFeatureId -WarningVariable customizationWarnings
+                $signals = Get-SPSSiteCustomization -Site $site -CustomFeatureId $CustomFeatureId -FullTrustFeatureId $FullTrustFeatureId -LargeContentThresholds $LargeContentThresholds -WarningVariable customizationWarnings
                 foreach ($warning in $customizationWarnings) {
                     $siteWarnings.Add([string]$warning)
                 }
                 $signals['SizeGB'] = $item.SizeGB
                 $signals['HasFbaZone'] = $item.HasFbaZone
+                $signals['IsLargeSite'] = $false
+                if ($null -ne $item.SizeGB) {
+                    try {
+                        if ([double]$item.SizeGB -ge $largeSiteSizeThresholdGb) {
+                            $signals['IsLargeSite'] = $true
+                        }
+                    }
+                    catch {
+                        $signals['IsLargeSite'] = $false
+                    }
+                }
                 foreach ($contentType in $signals.ContentTypes) {
                     $contentTypes.Add($contentType)
                 }
@@ -119,6 +135,15 @@
                     Workflow2013Count = $signals['Workflow2013Count']
                     InfoPathFormCount = $signals['InfoPathFormCount']
                     IrmEnabledListCount = $signals['IrmEnabledListCount']
+                    IsLargeSite = $signals['IsLargeSite']
+                    LargeListCount = $signals['LargeListCount']
+                    LargeListExamples = $signals['LargeListExamples']
+                    LargeListViewCount = $signals['LargeListViewCount']
+                    LargeListViewExamples = $signals['LargeListViewExamples']
+                    CheckedOutFileCount = $signals['CheckedOutFileCount']
+                    CheckedOutFileExamples = $signals['CheckedOutFileExamples']
+                    FileVersionCount = $signals['FileVersionCount']
+                    FileVersionExamples = $signals['FileVersionExamples']
                     IsLockedSite = $signals['IsLockedSite']
                     SiteLockState = $signals['SiteLockState']
                     UsesFullTrustCode = $signals['UsesFullTrustCode']
@@ -161,6 +186,15 @@
                     Workflow2013Count = $null
                     InfoPathFormCount = $null
                     IrmEnabledListCount = $null
+                    IsLargeSite = $null
+                    LargeListCount = $null
+                    LargeListExamples = $null
+                    LargeListViewCount = $null
+                    LargeListViewExamples = $null
+                    CheckedOutFileCount = $null
+                    CheckedOutFileExamples = $null
+                    FileVersionCount = $null
+                    FileVersionExamples = $null
                     IsLockedSite = $null
                     SiteLockState = $null
                     UsesFullTrustCode = $null

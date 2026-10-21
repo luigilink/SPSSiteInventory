@@ -39,7 +39,8 @@ report pack, plus a dedicated farm-solution report, to the output folder:
 | `*-auth-*.json` | Authentication-by-web-application dataset (zone/provider summary + collection counts). |
 | `*-workflows-*.json` | Workflow-focused dataset (`Workflow2010Count`, `Workflow2013Count`, status, category). |
 | `*-irm-locks-*.json` | Security/lock dataset (`IrmEnabledListCount`, `SiteLockState`, `IsLockedSite`). |
-| `*-alerts-*.json` | Normalized risk alerts extracted from site signals (partial/failed, FBA, full-trust, workflows, InfoPath, IRM, lock). |
+| `*-large-content-*.json` | Large-content risk dataset (`IsLargeSite`, large lists/views, checked-out files, high file-version counts, plus examples). |
+| `*-alerts-*.json` | Normalized risk alerts extracted from site signals (partial/failed, FBA, full-trust, workflows, InfoPath, IRM, lock, large content). |
 | `*-solutions-*.csv` | Farm-solution (WSP) inventory for Excel; one row per solution, with the feature scopes/ids flattened. |
 | `*-solutions-*.json` | Farm-solution (WSP) inventory for automation, with the feature scopes/ids kept as arrays. |
 | `*-contenttypes-*.csv` / `*-contenttypes-*.json` | Content-type definitions and list bindings, including standard types. One row per web definition or list binding, not per item. |
@@ -76,6 +77,11 @@ CSV/JSON rows describe site collections and any web-application enumeration fail
 | `Workflow2013Count` | SharePoint 2013 workflow subscriptions (Workflow Manager) |
 | `InfoPathFormCount` | InfoPath-driven lists/libraries (retired, no SPO equivalent) |
 | `IrmEnabledListCount` | Number of lists/libraries with IRM enabled |
+| `IsLargeSite` | Site is above the configured large-site threshold |
+| `LargeListCount` / `LargeListExamples` | Number of large lists and up to five list examples with item counts |
+| `LargeListViewCount` / `LargeListViewExamples` | Number of large-list views and up to five list/view examples with row limits |
+| `CheckedOutFileCount` / `CheckedOutFileExamples` | Number of checked-out files and up to five impacted libraries |
+| `FileVersionCount` / `FileVersionExamples` | Number of files above the configured file-version threshold and up to five examples |
 | `SiteLockState` / `IsLockedSite` | Site collection lock state (`Unlock`, `ReadOnly`, `NoAdditions`, `NoAccess`, `Unknown`) and whether that state is blocking |
 | `UsesFullTrustCode` | Site activates a feature from a custom full-trust WSP (GAC assembly) |
 | `ContentTypeCount` | Distinct content-type IDs seen in web definition collections, deduplicated within this site collection |

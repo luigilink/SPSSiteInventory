@@ -8,6 +8,10 @@ BeforeAll {
         [PSCustomObject]@{
             Url = 'https://intranet/sites/team'; Title = 'Team & Co'; WebApp = 'Intranet'
             ContentDb = 'WSS_Content'; Template = 'STS#3'; SizeGB = 1.5; SubWebCount = 2
+            IsLargeSite = $false; LargeListCount = 0; LargeListExamples = ''
+            LargeListViewCount = 0; LargeListViewExamples = ''
+            CheckedOutFileCount = 0; CheckedOutFileExamples = ''
+            FileVersionCount = 0; FileVersionExamples = ''
             SiteLockState = 'Unlock'; IsLockedSite = $false; IrmEnabledListCount = 0
             LastModified = [datetime]'2025-01-15'; Category = 1; CategoryName = 'Simple'
             Wave = 1; WaveName = 'Quick wins'; Score = 0; Reasons = ''
@@ -15,6 +19,10 @@ BeforeAll {
         [PSCustomObject]@{
             Url = 'https://intranet/sites/legacy'; Title = 'Legacy <workflows>'; WebApp = 'Intranet'
             ContentDb = 'WSS_Content'; Template = 'STS#0'; SizeGB = 12.25; SubWebCount = 8
+            IsLargeSite = $true; LargeListCount = 2; LargeListExamples = 'Documents (7000); Records (5100)'
+            LargeListViewCount = 1; LargeListViewExamples = 'Documents/All Documents (7000)'
+            CheckedOutFileCount = 3; CheckedOutFileExamples = 'Documents (3)'
+            FileVersionCount = 2; FileVersionExamples = '/sites/legacy/docs/spec.docx (80)'
             SiteLockState = 'NoAccess'; IsLockedSite = $true; IrmEnabledListCount = 3
             LastModified = [datetime]'2024-06-01'; Category = 4; CategoryName = 'Blocking'
             UsesFullTrustCode = $true
@@ -309,9 +317,25 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $html | Should -Match 'Sites with locked state'
         $html | Should -Match 'Sites with IRM-enabled lists'
         $html | Should -Match 'Sites with Workflow 2010'
+        $html | Should -Match 'Sites above large-size threshold'
+        $html | Should -Match 'Sites with large lists'
+        $html | Should -Match 'Sites with checked-out files'
+        $html | Should -Match 'Sites with high file-version counts'
         $html | Should -Not -Match 'href="#farm-solutions"'
         $html | Should -Not -Match 'href="#authentication"'
         $html | Should -Not -Match 'href="#content-types"'
+    }
+
+    It 'renders large-content columns in the main table' {
+        $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
+
+        $html | Should -Match 'Large site'
+        $html | Should -Match 'Large lists'
+        $html | Should -Match 'Large-list views'
+        $html | Should -Match 'Checked-out files'
+        $html | Should -Match 'High-version files'
+        $html | Should -Match 'Documents \(7000\); Records \(5100\)'
+        $html | Should -Match 'Documents/All Documents \(7000\)'
     }
 
     It 'renders encoded content-type detail and surfaces partial collection' {

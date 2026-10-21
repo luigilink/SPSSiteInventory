@@ -6,9 +6,11 @@
         .DESCRIPTION
         Inspects one site collection and returns the signals that drive the migration
         complexity score: 2010 vs 2013 workflows, InfoPath forms, IRM-enabled lists,
-        site lock state, sandbox solutions, custom master page, unique permissions,
-        custom event receivers, and whether the site activates a feature that comes from
-        a custom farm solution (correlated through the farm-solution map).
+        large-content migration risks (large lists/views, checked-out files, file
+        versions), site lock state, sandbox solutions, custom master page, unique
+        permissions, custom event receivers, and whether the site activates a feature
+        that comes from a custom farm solution (correlated through the farm-solution
+        map).
 
         EventReceivers counts only custom event receivers (those registered from a
         non-Microsoft assembly). Out-of-the-box receivers on native lists are ignored so
@@ -62,6 +64,11 @@
         a strong "not portable to SharePoint Online" indicator that the scoring config can
         treat as blocking.
 
+        .PARAMETER LargeContentThresholds
+        Optional thresholds for large-content parity signals:
+        LargeListItemCount, LargeListViewRowLimit, CheckedOutFileCount,
+        FileVersionCount, and MaxItemsForVersionScanPerLibrary.
+
         .EXAMPLE
         $map = Get-SPSFarmSolutionMap -CustomSolutionPrefix @('contoso')
         $customIds = $map | Where-Object IsCustom | ForEach-Object FeatureIds
@@ -84,7 +91,11 @@
 
         [Parameter()]
         [System.String[]]
-        $FullTrustFeatureId = @()
+        $FullTrustFeatureId = @(),
+
+        [Parameter()]
+        [System.Collections.IDictionary]
+        $LargeContentThresholds = @{}
     )
 
     $signals = @{
@@ -92,6 +103,15 @@
         Workflow2013Count        = 0
         InfoPathFormCount        = 0
         IrmEnabledListCount      = 0
+        IsLargeSite              = $false
+        LargeListCount           = 0
+        LargeListExamples        = ''
+        LargeListViewCount       = 0
+        LargeListViewExamples    = ''
+        CheckedOutFileCount      = 0
+        CheckedOutFileExamples   = ''
+        FileVersionCount         = 0
+        FileVersionExamples      = ''
         IsLockedSite             = $false
         SiteLockState            = 'Unknown'
         SandboxSolutions         = 0
@@ -107,6 +127,16 @@
     }
     $contentTypes = [System.Collections.Generic.List[object]]::new()
     $contentTypeIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $largeListExamples = [System.Collections.Generic.List[string]]::new()
+    $largeListViewExamples = [System.Collections.Generic.List[string]]::new()
+    $checkedOutFileExamples = [System.Collections.Generic.List[string]]::new()
+    $fileVersionExamples = [System.Collections.Generic.List[string]]::new()
+
+    $largeListItemThreshold = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'LargeListItemCount' -DefaultValue 5000 -MinimumValue 1)
+    $largeListViewRowLimitThreshold = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'LargeListViewRowLimit' -DefaultValue 5000 -MinimumValue 1)
+    $checkedOutFileThreshold = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'CheckedOutFileCount' -DefaultValue 1 -MinimumValue 1)
+    $fileVersionThreshold = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'FileVersionCount' -DefaultValue 50 -MinimumValue 1)
+    $maxItemsForVersionScan = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'MaxItemsForVersionScanPerLibrary' -DefaultValue 2000 -MinimumValue 1)
 
     try {
         $signals.SandboxSolutions = @($Site.Solutions).Count
@@ -282,6 +312,96 @@
                             $signals.CustomizationInventoryComplete = $false
                             Write-Warning -Message "Could not read IRM state on list '$listTitle' in web '$($web.Url)': $($_.Exception.Message)"
                         }
+
+                        $listItemCount = $null
+                        try {
+                            if ($null -eq $list.PSObject.Properties['ItemCount']) {
+                                throw "List item count is unavailable on '$listTitle'."
+                            }
+                            $listItemCount = [int]$list.ItemCount
+                            if ($listItemCount -ge $largeListItemThreshold) {
+                                $signals.LargeListCount++
+                                if ($largeListExamples.Count -lt 5) {
+                                    $largeListExamples.Add(('{0} ({1})' -f $listTitle, $listItemCount))
+                                }
+                            }
+                        }
+                        catch {
+                            $signals.CustomizationInventoryComplete = $false
+                            Write-Warning -Message "Could not read list item count on '$listTitle' in web '$($web.Url)': $($_.Exception.Message)"
+                        }
+
+                        try {
+                            $views = $list.Views
+                            if ($null -eq $views) {
+                                throw "List views are unavailable on '$listTitle'."
+                            }
+                            if ($null -ne $listItemCount -and $listItemCount -ge $largeListItemThreshold) {
+                                foreach ($view in $views) {
+                                    $rowLimit = 0
+                                    if ($null -ne $view.PSObject.Properties['RowLimit'] -and $null -ne $view.RowLimit) {
+                                        $rowLimit = [int]$view.RowLimit
+                                    }
+                                    if ($rowLimit -ge $largeListViewRowLimitThreshold) {
+                                        $signals.LargeListViewCount++
+                                        if ($largeListViewExamples.Count -lt 5) {
+                                            $viewTitle = if ($view.PSObject.Properties['Title']) { [string]$view.Title } else { 'Unnamed view' }
+                                            $largeListViewExamples.Add(('{0}/{1} ({2})' -f $listTitle, $viewTitle, $rowLimit))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        catch {
+                            $signals.CustomizationInventoryComplete = $false
+                            Write-Warning -Message "Could not read list views on '$listTitle' in web '$($web.Url)': $($_.Exception.Message)"
+                        }
+
+                        try {
+                            if ($null -ne $list.PSObject.Properties['CheckedOutFiles'] -and $null -ne $list.CheckedOutFiles) {
+                                $checkedOutFilesCount = @($list.CheckedOutFiles).Count
+                                $signals.CheckedOutFileCount += $checkedOutFilesCount
+                                if ($checkedOutFilesCount -ge $checkedOutFileThreshold -and $checkedOutFileExamples.Count -lt 5) {
+                                    $checkedOutFileExamples.Add(('{0} ({1})' -f $listTitle, $checkedOutFilesCount))
+                                }
+                            }
+                        }
+                        catch {
+                            $signals.CustomizationInventoryComplete = $false
+                            Write-Warning -Message "Could not read checked-out files on '$listTitle' in web '$($web.Url)': $($_.Exception.Message)"
+                        }
+
+                        try {
+                            $isDocumentLibrary = [string]$list.BaseTemplate -eq '101' -or
+                                ($null -ne $list.PSObject.Properties['BaseType'] -and [string]$list.BaseType -eq 'DocumentLibrary')
+                            $versioningEnabled = $null -ne $list.PSObject.Properties['EnableVersioning'] -and [bool]$list.EnableVersioning
+                            if ($isDocumentLibrary -and $versioningEnabled) {
+                                $scanCount = 0
+                                foreach ($item in $list.Items) {
+                                    $scanCount++
+                                    if ($scanCount -gt $maxItemsForVersionScan) {
+                                        $signals.CustomizationInventoryComplete = $false
+                                        Write-Warning -Message "File-version scan stopped on '$listTitle' in web '$($web.Url)' after $maxItemsForVersionScan item(s). Increase LargeContentThresholds.MaxItemsForVersionScanPerLibrary to scan more items."
+                                        break
+                                    }
+                                    if ($null -eq $item.PSObject.Properties['File'] -or $null -eq $item.File) {
+                                        continue
+                                    }
+                                    $fileVersionCount = @($item.File.Versions).Count
+                                    if ($fileVersionCount -ge $fileVersionThreshold) {
+                                        $signals.FileVersionCount++
+                                        if ($fileVersionExamples.Count -lt 5) {
+                                            $fileUrl = if ($item.File.PSObject.Properties['ServerRelativeUrl']) { [string]$item.File.ServerRelativeUrl } else { [string]$item.Name }
+                                            $fileVersionExamples.Add(('{0} ({1})' -f $fileUrl, $fileVersionCount))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        catch {
+                            $signals.CustomizationInventoryComplete = $false
+                            Write-Warning -Message "Could not scan file versions on '$listTitle' in web '$($web.Url)': $($_.Exception.Message)"
+                        }
                     }
                 }
                 catch {
@@ -352,5 +472,9 @@
 
     $signals.ContentTypeCount = $contentTypeIds.Count
     $signals.ContentTypes = $contentTypes.ToArray()
+    $signals.LargeListExamples = $largeListExamples -join '; '
+    $signals.LargeListViewExamples = $largeListViewExamples -join '; '
+    $signals.CheckedOutFileExamples = $checkedOutFileExamples -join '; '
+    $signals.FileVersionExamples = $fileVersionExamples -join '; '
     return $signals
 }

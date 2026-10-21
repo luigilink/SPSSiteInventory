@@ -83,6 +83,11 @@ public sealed class SPSSiteInventoryThrowAfterOne : IEnumerable
             WorkflowAssociations = @()
             EventReceivers = @()
             IrmEnabled = $false
+            ItemCount = 0
+            Views = @()
+            CheckedOutFiles = @()
+            EnableVersioning = $false
+            Items = @()
             BaseTemplate = 101
         }
         $web = [PSCustomObject]@{
@@ -286,6 +291,44 @@ Describe 'Get-SPSSiteCustomization content types' {
 
         $signals.IrmEnabledListCount | Should -Be 0
         $signals.CustomizationInventoryComplete | Should -BeTrue
+    }
+
+    It 'collects large-content signals with configurable thresholds' {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Lists[0].Title = 'Projects'
+        $web.Lists[0].ItemCount = 7200
+        $web.Lists[0].Views = @(
+            [PSCustomObject]@{ Title = 'All Documents'; RowLimit = 7000 },
+            [PSCustomObject]@{ Title = 'Compact'; RowLimit = 100 }
+        )
+        $web.Lists[0].CheckedOutFiles = @('file1.docx', 'file2.docx')
+        $web.Lists[0].EnableVersioning = $true
+        $web.Lists[0].Items = @(
+            [PSCustomObject]@{ File = [PSCustomObject]@{ ServerRelativeUrl = '/sites/team/Projects/spec.docx'; Versions = @(1..80) } },
+            [PSCustomObject]@{ File = [PSCustomObject]@{ ServerRelativeUrl = '/sites/team/Projects/notes.docx'; Versions = @(1..5) } }
+        )
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -LargeContentThresholds @{
+            LargeListItemCount = 5000
+            LargeListViewRowLimit = 5000
+            CheckedOutFileCount = 1
+            FileVersionCount = 50
+            MaxItemsForVersionScanPerLibrary = 2000
+        }
+
+        $signals.LargeListCount | Should -Be 1
+        $signals.LargeListExamples | Should -Match 'Projects \(7200\)'
+        $signals.LargeListViewCount | Should -Be 1
+        $signals.LargeListViewExamples | Should -Match 'Projects/All Documents \(7000\)'
+        $signals.CheckedOutFileCount | Should -Be 2
+        $signals.CheckedOutFileExamples | Should -Match 'Projects \(2\)'
+        $signals.FileVersionCount | Should -Be 1
+        $signals.FileVersionExamples | Should -Match '/sites/team/Projects/spec\.docx \(80\)'
     }
 
     It 'counts only active workflow associations when historical versions are flagged by metadata' {

@@ -22,6 +22,7 @@
         - `*-auth-*.json`
         - `*-workflows-*.json`
         - `*-irm-locks-*.json`
+        - `*-large-content-*.json`
         - `*-alerts-*.json`
         - `*-manifest-*.json`
 
@@ -106,6 +107,7 @@
     $authJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-auth-{1}.json' -f $BaseName, $timestamp)
     $workflowsJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-workflows-{1}.json' -f $BaseName, $timestamp)
     $irmLocksJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-irm-locks-{1}.json' -f $BaseName, $timestamp)
+    $largeContentJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-large-content-{1}.json' -f $BaseName, $timestamp)
     $alertsJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-alerts-{1}.json' -f $BaseName, $timestamp)
     $manifestJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-manifest-{1}.json' -f $BaseName, $timestamp)
 
@@ -150,6 +152,24 @@
                 SiteLockState = $record.SiteLockState
                 IsLockedSite = $record.IsLockedSite
                 IrmEnabledListCount = $record.IrmEnabledListCount
+            }
+        }
+    )
+    $largeContentRecords = @(
+        foreach ($record in $siteRecords) {
+            [PSCustomObject]@{
+                Url = $record.Url
+                WebApp = $record.WebApp
+                AssessmentStatus = $record.AssessmentStatus
+                IsLargeSite = $record.IsLargeSite
+                LargeListCount = $record.LargeListCount
+                LargeListExamples = $record.LargeListExamples
+                LargeListViewCount = $record.LargeListViewCount
+                LargeListViewExamples = $record.LargeListViewExamples
+                CheckedOutFileCount = $record.CheckedOutFileCount
+                CheckedOutFileExamples = $record.CheckedOutFileExamples
+                FileVersionCount = $record.FileVersionCount
+                FileVersionExamples = $record.FileVersionExamples
             }
         }
     )
@@ -238,12 +258,58 @@
                     Message = 'IRM-enabled lists require records-protection remediation.'
                 })
         }
+        if ($scope -eq 'SiteCollection' -and [bool]$record.IsLargeSite) {
+            $alerts.Add([PSCustomObject]@{
+                    AlertType = 'LargeSite'
+                    Severity = 'Medium'
+                    Url = $record.Url
+                    Value = $record.SizeGB
+                    Message = 'Site content size is above the configured large-site threshold.'
+                })
+        }
+        if ($scope -eq 'SiteCollection' -and [int]$record.LargeListCount -gt 0) {
+            $alerts.Add([PSCustomObject]@{
+                    AlertType = 'LargeLists'
+                    Severity = 'Medium'
+                    Url = $record.Url
+                    Value = [int]$record.LargeListCount
+                    Message = 'Large lists were detected and may require migration batching or cleanup.'
+                })
+        }
+        if ($scope -eq 'SiteCollection' -and [int]$record.LargeListViewCount -gt 0) {
+            $alerts.Add([PSCustomObject]@{
+                    AlertType = 'LargeListViews'
+                    Severity = 'Medium'
+                    Url = $record.Url
+                    Value = [int]$record.LargeListViewCount
+                    Message = 'Large-list views were detected and should be reviewed for migration readiness.'
+                })
+        }
+        if ($scope -eq 'SiteCollection' -and [int]$record.CheckedOutFileCount -gt 0) {
+            $alerts.Add([PSCustomObject]@{
+                    AlertType = 'CheckedOutFiles'
+                    Severity = 'Medium'
+                    Url = $record.Url
+                    Value = [int]$record.CheckedOutFileCount
+                    Message = 'Checked-out files were detected and should be checked in before migration.'
+                })
+        }
+        if ($scope -eq 'SiteCollection' -and [int]$record.FileVersionCount -gt 0) {
+            $alerts.Add([PSCustomObject]@{
+                    AlertType = 'FileVersions'
+                    Severity = 'Medium'
+                    Url = $record.Url
+                    Value = [int]$record.FileVersionCount
+                    Message = 'Files with high version counts were detected and may increase migration time.'
+                })
+        }
     }
 
     ConvertTo-Json -InputObject @($records) -Depth 6 | Set-Content -Path $sitesJsonPath -Encoding UTF8
     ConvertTo-Json -InputObject @($authRecords) -Depth 6 | Set-Content -Path $authJsonPath -Encoding UTF8
     ConvertTo-Json -InputObject @($workflowRecords) -Depth 6 | Set-Content -Path $workflowsJsonPath -Encoding UTF8
     ConvertTo-Json -InputObject @($irmLockRecords) -Depth 6 | Set-Content -Path $irmLocksJsonPath -Encoding UTF8
+    ConvertTo-Json -InputObject @($largeContentRecords) -Depth 6 | Set-Content -Path $largeContentJsonPath -Encoding UTF8
     ConvertTo-Json -InputObject @($alerts.ToArray()) -Depth 6 | Set-Content -Path $alertsJsonPath -Encoding UTF8
 
     $htmlParams = @{
@@ -310,6 +376,7 @@
             AuthJson = $authJsonPath
             WorkflowsJson = $workflowsJsonPath
             IrmLocksJson = $irmLocksJsonPath
+            LargeContentJson = $largeContentJsonPath
             AlertsJson = $alertsJsonPath
             ContentTypesCsv = $contentTypesCsvPath
             ContentTypesJson = $contentTypesJsonPath
@@ -326,6 +393,7 @@
         AuthJsonPath = $authJsonPath
         WorkflowsJsonPath = $workflowsJsonPath
         IrmLocksJsonPath = $irmLocksJsonPath
+        LargeContentJsonPath = $largeContentJsonPath
         AlertsJsonPath = $alertsJsonPath
         ManifestJsonPath = $manifestJsonPath
         ContentTypesCsvPath = $contentTypesCsvPath

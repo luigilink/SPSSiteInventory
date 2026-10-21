@@ -129,6 +129,10 @@
         [PSCustomObject]@{ Label = 'Sites with IRM-enabled lists'; Count = @($siteRecords | Where-Object { [int]$_.IrmEnabledListCount -gt 0 }).Count }
         [PSCustomObject]@{ Label = 'Sites with locked state'; Count = @($siteRecords | Where-Object { $_.IsLockedSite }).Count }
         [PSCustomObject]@{ Label = 'Sites with Workflow 2010'; Count = @($siteRecords | Where-Object { [int]$_.Workflow2010Count -gt 0 }).Count }
+        [PSCustomObject]@{ Label = 'Sites above large-size threshold'; Count = @($siteRecords | Where-Object { $_.IsLargeSite }).Count }
+        [PSCustomObject]@{ Label = 'Sites with large lists'; Count = @($siteRecords | Where-Object { [int]$_.LargeListCount -gt 0 }).Count }
+        [PSCustomObject]@{ Label = 'Sites with checked-out files'; Count = @($siteRecords | Where-Object { [int]$_.CheckedOutFileCount -gt 0 }).Count }
+        [PSCustomObject]@{ Label = 'Sites with high file-version counts'; Count = @($siteRecords | Where-Object { [int]$_.FileVersionCount -gt 0 }).Count }
     )
 
     # Per-wave aggregation for the migration wave plan. Waves are discovered from the
@@ -512,9 +516,18 @@ td.muted, .muted { color: var(--muted); }
         @{ Key = 'AssessmentWarnings'; Label = 'Assessment warnings'; Class = 'reasons'; Type = 'text' }
         @{ Key = 'AuthenticationModes'; Label = 'Authentication'; Class = ''; Type = 'text' }
         @{ Key = 'HasFbaZone'; Label = 'FBA configured'; Class = ''; Type = 'text' }
+        @{ Key = 'IsLargeSite'; Label = 'Large site'; Class = ''; Type = 'text' }
         @{ Key = 'SiteLockState'; Label = 'Site lock state'; Class = ''; Type = 'text' }
         @{ Key = 'IsLockedSite'; Label = 'Site locked'; Class = ''; Type = 'text' }
         @{ Key = 'IrmEnabledListCount'; Label = 'IRM-enabled lists'; Class = 'num'; Type = 'num' }
+        @{ Key = 'LargeListCount'; Label = 'Large lists'; Class = 'num'; Type = 'num' }
+        @{ Key = 'LargeListExamples'; Label = 'Large list examples'; Class = 'reasons'; Type = 'text' }
+        @{ Key = 'LargeListViewCount'; Label = 'Large-list views'; Class = 'num'; Type = 'num' }
+        @{ Key = 'LargeListViewExamples'; Label = 'Large-list view examples'; Class = 'reasons'; Type = 'text' }
+        @{ Key = 'CheckedOutFileCount'; Label = 'Checked-out files'; Class = 'num'; Type = 'num' }
+        @{ Key = 'CheckedOutFileExamples'; Label = 'Checked-out examples'; Class = 'reasons'; Type = 'text' }
+        @{ Key = 'FileVersionCount'; Label = 'High-version files'; Class = 'num'; Type = 'num' }
+        @{ Key = 'FileVersionExamples'; Label = 'High-version examples'; Class = 'reasons'; Type = 'text' }
         @{ Key = 'ContentTypeCount'; Label = 'Content types (unique web IDs)'; Class = 'num'; Type = 'num' }
         @{ Key = 'ListContentTypeBindingCount'; Label = 'List content-type bindings'; Class = 'num'; Type = 'num' }
         @{ Key = 'ContentTypeInventoryComplete'; Label = 'Content types complete'; Class = ''; Type = 'text' }
