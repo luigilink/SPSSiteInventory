@@ -298,6 +298,18 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $html | Should -Match '>3</td>'
     }
 
+    It 'renders navigation shortcuts and risk indicator cards' {
+        $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
+
+        $html | Should -Match 'href="#summary"'
+        $html | Should -Match 'href="#risk-indicators"'
+        $html | Should -Match 'href="#inventory-table"'
+        $html | Should -Match 'Risk indicators'
+        $html | Should -Match 'Locked sites'
+        $html | Should -Match 'IRM-enabled lists'
+        $html | Should -Match 'Workflow 2010'
+    }
+
     It 'renders encoded content-type detail and surfaces partial collection' {
         $site = [PSCustomObject]@{
             Url = 'https://intranet/sites/team'; Category = 1

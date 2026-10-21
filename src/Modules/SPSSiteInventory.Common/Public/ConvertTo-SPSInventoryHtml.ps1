@@ -122,6 +122,14 @@
         }
     }
     $totalSize = [math]::Round($totalSize, 2)
+    $riskCards = @(
+        [PSCustomObject]@{ Label = 'Full-trust code'; Count = @($siteRecords | Where-Object { $_.UsesFullTrustCode }).Count }
+        [PSCustomObject]@{ Label = 'FBA configured'; Count = @($siteRecords | Where-Object { $_.HasFbaZone }).Count }
+        [PSCustomObject]@{ Label = 'InfoPath forms'; Count = @($siteRecords | Where-Object { [int]$_.InfoPathFormCount -gt 0 }).Count }
+        [PSCustomObject]@{ Label = 'IRM-enabled lists'; Count = @($siteRecords | Where-Object { [int]$_.IrmEnabledListCount -gt 0 }).Count }
+        [PSCustomObject]@{ Label = 'Locked sites'; Count = @($siteRecords | Where-Object { $_.IsLockedSite }).Count }
+        [PSCustomObject]@{ Label = 'Workflow 2010'; Count = @($siteRecords | Where-Object { [int]$_.Workflow2010Count -gt 0 }).Count }
+    )
 
     # Per-wave aggregation for the migration wave plan. Waves are discovered from the
     # records (Wave / WaveName), so this stays self-contained. Records without a wave are
@@ -179,6 +187,23 @@ h2 { margin: 28px 0 12px; font-size: 18px; }
 .header { border-bottom: 3px solid var(--brand); padding-bottom: 12px; margin-bottom: 8px; }
 .meta { color: var(--muted); font-size: 13px; }
 .meta strong { color: var(--text); }
+.nav {
+    margin: 12px 0 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.nav a {
+    display: inline-block;
+    padding: 5px 12px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: #fff;
+    color: var(--brand);
+    text-decoration: none;
+    font-size: 13px;
+}
+.nav a:hover { background: var(--brand-soft); }
 .summary {
     border: 1px solid var(--border);
     border-left: 4px solid var(--brand);
@@ -205,6 +230,8 @@ h2 { margin: 28px 0 12px; font-size: 18px; }
 .card.c2 { border-top-color: var(--cat2); } .card.c2 .num { color: var(--cat2); }
 .card.c3 { border-top-color: var(--cat3); } .card.c3 .num { color: var(--cat3); }
 .card.c4 { border-top-color: var(--cat4); } .card.c4 .num { color: var(--cat4); }
+.card.risk { border-top-color: var(--cat4); }
+.card.risk .num { color: var(--cat4); }
 .filters { margin: 8px 0 12px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .filters button {
     font: inherit;
@@ -267,9 +294,18 @@ td.muted, .muted { color: var(--muted); }
     $envPart = if ($encEnv) { ('Environment <strong>{0}</strong> &middot; ' -f $encEnv) } else { '' }
     [void]$sb.AppendLine(('<div class="meta">{0}Generated on <strong>{1}</strong></div>' -f $envPart, $encGenerated))
     [void]$sb.AppendLine('</div>')
+    [void]$sb.AppendLine('<div class="nav">')
+    [void]$sb.AppendLine('<a href="#summary">Summary</a>')
+    [void]$sb.AppendLine('<a href="#risk-indicators">Risk indicators</a>')
+    [void]$sb.AppendLine('<a href="#wave-plan">Migration waves</a>')
+    [void]$sb.AppendLine('<a href="#inventory-table">Inventory table</a>')
+    [void]$sb.AppendLine('<a href="#farm-solutions">Farm solutions</a>')
+    [void]$sb.AppendLine('<a href="#authentication">Authentication</a>')
+    [void]$sb.AppendLine('<a href="#content-types">Content types</a>')
+    [void]$sb.AppendLine('</div>')
 
     # Summary box.
-    [void]$sb.AppendLine('<div class="summary">')
+    [void]$sb.AppendLine('<div class="summary" id="summary">')
     [void]$sb.AppendLine(('<div class="summary-total"><strong>{0}</strong> site collection(s) &middot; <strong>{1} GB</strong> total content &middot; <strong>{2}</strong> partial &middot; <strong>{3}</strong> failed</div>' -f $total, $totalSize.ToString($invariant), $partialCount, $failedCount))
     if ($enumerationFailureCount -gt 0) {
         [void]$sb.AppendLine(('<div class="summary-total"><strong>{0}</strong> web application enumeration failure(s)</div>' -f $enumerationFailureCount))
@@ -284,9 +320,18 @@ td.muted, .muted { color: var(--muted); }
     [void]$sb.AppendLine('</div>')
     [void]$sb.AppendLine('</div>')
 
+    [void]$sb.AppendLine('<h2 id="risk-indicators">Risk indicators</h2>')
+    [void]$sb.AppendLine('<div class="summary">')
+    [void]$sb.AppendLine('<div class="cards">')
+    foreach ($risk in $riskCards) {
+        [void]$sb.AppendLine(('<div class="card risk"><div class="num">{0}</div><div class="lbl">{1}</div></div>' -f $risk.Count, (ConvertTo-SPSHtmlText -Value $risk.Label)))
+    }
+    [void]$sb.AppendLine('</div>')
+    [void]$sb.AppendLine('</div>')
+
     # Migration wave plan.
     if ($waveKeys.Count -gt 0) {
-        [void]$sb.AppendLine('<h2>Migration wave plan</h2>')
+        [void]$sb.AppendLine('<h2 id="wave-plan">Migration wave plan</h2>')
         [void]$sb.AppendLine('<div class="table-scroll">')
         [void]$sb.AppendLine('<table class="waves">')
         [void]$sb.AppendLine('<thead><tr><th>Wave</th><th>Name</th><th class="num">Sites</th><th class="num">Content (GB)</th></tr></thead>')
@@ -309,7 +354,7 @@ td.muted, .muted { color: var(--muted); }
         $solFullTrust = @($solutions | Where-Object { $_.IsFullTrustCode }).Count
         $solWebApp = @($solutions | Where-Object { $_.ContainsWebApplicationResource }).Count
 
-        [void]$sb.AppendLine('<h2>Farm solutions (WSP)</h2>')
+        [void]$sb.AppendLine('<h2 id="farm-solutions">Farm solutions (WSP)</h2>')
         [void]$sb.AppendLine('<div class="summary">')
         [void]$sb.AppendLine(('<div class="summary-total"><strong>{0}</strong> farm solution(s) &middot; <strong>{1}</strong> custom &middot; <strong>{2}</strong> full-trust code</div>' -f $solTotal, $solCustom, $solFullTrust))
         [void]$sb.AppendLine('<div class="cards">')
@@ -372,7 +417,7 @@ td.muted, .muted { color: var(--muted); }
 
     $authenticationRecords = @($records | Where-Object { $_.AuthenticationZones })
     if ($authenticationRecords.Count -gt 0) {
-        [void]$sb.AppendLine('<h2>Web application authentication</h2>')
+        [void]$sb.AppendLine('<h2 id="authentication">Web application authentication</h2>')
         [void]$sb.AppendLine('<p>Configured providers across all zones, not actual user sign-in activity. FBA requires identity/authentication remediation for SharePoint Online. Categories follow your configured blocking rules.</p>')
         [void]$sb.AppendLine('<div class="table-scroll"><table class="authentication">')
         [void]$sb.AppendLine('<thead><tr><th>Web application</th><th>Zones and providers</th><th>FBA configured</th><th>Identity review</th><th class="num">Collections</th></tr></thead><tbody>')
@@ -392,7 +437,7 @@ td.muted, .muted { color: var(--muted); }
 
     if ($PSBoundParameters.ContainsKey('ContentTypes')) {
         $partialSites = @($siteRecords | Where-Object { $_.ContentTypeInventoryComplete -eq $false })
-        [void]$sb.AppendLine('<h2>Content types and list bindings</h2>')
+        [void]$sb.AppendLine('<h2 id="content-types">Content types and list bindings</h2>')
         [void]$sb.AppendLine(('<p><strong>{0}</strong> definition/binding row(s). Standard types are included; presence alone is not a migration blocker. List bindings are not item counts or distinct business designs.</p>' -f $ContentTypes.Count))
         if ($enumerationFailureCount -gt 0) {
             [void]$sb.AppendLine(('<p><strong>Coverage warning:</strong> {0} web application(s) had site collection enumeration failures; content-type results do not cover those scopes.</p>' -f $enumerationFailureCount))
@@ -468,7 +513,7 @@ td.muted, .muted { color: var(--muted); }
         @{ Key = 'Score'; Label = 'Score'; Class = 'num'; Type = 'num' }
     )
 
-    [void]$sb.AppendLine('<div class="table-scroll">')
+    [void]$sb.AppendLine('<div class="table-scroll" id="inventory-table">')
     [void]$sb.AppendLine('<table id="inv">')
     [void]$sb.AppendLine('<thead><tr>')
     foreach ($col in $columns) {

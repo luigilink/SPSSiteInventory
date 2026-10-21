@@ -22,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Site scans now report IRM-enabled lists (`IrmEnabledListCount`) and site lock
   state (`SiteLockState` / `IsLockedSite`) in CSV/JSON/HTML outputs. The example
   scoring configuration treats both as migration blockers. (#38)
+- Reporting now emits a modular JSON report pack (`-sites-`, `-auth-`,
+  `-workflows-`, `-irm-locks-`, `-alerts-`) with a `-manifest-` file while
+  preserving the existing CSV/JSON/HTML outputs. The HTML report now includes
+  navigation shortcuts and risk indicator cards for key migration blockers. (#51)
 - Zone-aware web application authentication inventory, including mixed Windows/FBA,
   membership/role provider names and explicit identity-review flags. The example
   configuration treats `HasFbaZone` as a SharePoint Online migration blocker.

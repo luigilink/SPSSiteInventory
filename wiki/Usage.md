@@ -26,14 +26,20 @@ the report's status fields before planning migration waves.
 
 ## Output files
 
-Each run writes the site inventory in three timestamped formats, plus a dedicated
-farm-solution report, to the output folder:
+Each run writes the site inventory in three timestamped formats, a modular JSON
+report pack, plus a dedicated farm-solution report, to the output folder:
 
 | File | Purpose |
 | --- | --- |
 | `*.csv` | Site inventory for review in Excel; one row per site collection. |
 | `*.json` | Site inventory for downstream automation (for example feeding migration wave planning). |
-| `*.html` | A shareable, self-contained report: category summary, migration wave plan, a **Farm solutions (WSP)** section and a sortable / filterable site table. Opens in any browser with no external resource. |
+| `*.html` | A shareable, self-contained dashboard report with summary/risk cards, migration wave plan, authentication and a sortable/filterable site table. |
+| `*-manifest-*.json` | Report-pack manifest with generation metadata, top-level counters and file references. |
+| `*-sites-*.json` | Site inventory dataset used by the dashboard/report-pack consumers. |
+| `*-auth-*.json` | Authentication-by-web-application dataset (zone/provider summary + collection counts). |
+| `*-workflows-*.json` | Workflow-focused dataset (`Workflow2010Count`, `Workflow2013Count`, status, category). |
+| `*-irm-locks-*.json` | Security/lock dataset (`IrmEnabledListCount`, `SiteLockState`, `IsLockedSite`). |
+| `*-alerts-*.json` | Normalized risk alerts extracted from site signals (partial/failed, FBA, full-trust, workflows, InfoPath, IRM, lock). |
 | `*-solutions-*.csv` | Farm-solution (WSP) inventory for Excel; one row per solution, with the feature scopes/ids flattened. |
 | `*-solutions-*.json` | Farm-solution (WSP) inventory for automation, with the feature scopes/ids kept as arrays. |
 | `*-contenttypes-*.csv` / `*-contenttypes-*.json` | Content-type definitions and list bindings, including standard types. One row per web definition or list binding, not per item. |

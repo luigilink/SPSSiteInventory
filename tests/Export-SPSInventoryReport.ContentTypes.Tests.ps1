@@ -7,8 +7,13 @@ Describe 'Export-SPSInventoryReport content types' {
     It 'writes aligned site CSV, JSON, HTML and content-type CSV/JSON' {
         $sites = @([PSCustomObject]@{
             Url = 'https://intranet/sites/team'; WebApp = 'Intranet'
+            InventoryScope = 'SiteCollection'
             HasFbaZone = $true; ContentTypeCount = 1
             ListContentTypeBindingCount = 1; ContentTypeInventoryComplete = $true
+            Workflow2010Count = 1; Workflow2013Count = 0; InfoPathFormCount = 0
+            IrmEnabledListCount = 2; SiteLockState = 'ReadOnly'; IsLockedSite = $true
+            UsesFullTrustCode = $true
+            AssessmentStatus = 'Complete'; AssessmentWarnings = ''
             Category = 4; CategoryName = 'Blocking'; Wave = 4; Score = 0
             Reasons = 'blocking: HasFbaZone'
         })
@@ -25,10 +30,23 @@ Describe 'Export-SPSInventoryReport content types' {
         @(Import-Csv $output.CsvPath) | Should -HaveCount 1
         @(Get-Content $output.JsonPath -Raw | ConvertFrom-Json) | Should -HaveCount 1
         (Import-Csv $output.CsvPath)[0].HasFbaZone | Should -Be 'True'
+        Test-Path $output.SitesJsonPath | Should -BeTrue
+        Test-Path $output.AuthJsonPath | Should -BeTrue
+        Test-Path $output.WorkflowsJsonPath | Should -BeTrue
+        Test-Path $output.IrmLocksJsonPath | Should -BeTrue
+        Test-Path $output.AlertsJsonPath | Should -BeTrue
+        Test-Path $output.ManifestJsonPath | Should -BeTrue
+        @(Get-Content $output.WorkflowsJsonPath -Raw | ConvertFrom-Json) | Should -HaveCount 1
+        @(Get-Content $output.IrmLocksJsonPath -Raw | ConvertFrom-Json) | Should -HaveCount 1
+        @(Get-Content $output.AlertsJsonPath -Raw | ConvertFrom-Json) | Should -Not -BeNullOrEmpty
         @(Import-Csv $output.ContentTypesCsvPath) | Should -HaveCount 1
         (Import-Csv $output.ContentTypesCsvPath)[0].ListTitle | Should -Be 'Legal, & Compliance'
         (Import-Csv $output.ContentTypesCsvPath)[0].ListUrl | Should -Be '/sites/team/legal?a=1&b=2'
         @(Get-Content $output.ContentTypesJsonPath -Raw | ConvertFrom-Json) | Should -HaveCount 1
+        $manifest = Get-Content $output.ManifestJsonPath -Raw | ConvertFrom-Json
+        $manifest.Files.SitesJson | Should -Be $output.SitesJsonPath
+        $manifest.Files.ContentTypesJson | Should -Be $output.ContentTypesJsonPath
+        $manifest.Summary.AlertCount | Should -BeGreaterThan 0
         (Get-Content $output.HtmlPath -Raw) | Should -Match 'Legal, &amp; Compliance'
         (Get-Content $output.HtmlPath -Raw) | Should -Match '/sites/team/legal\?a=1&amp;b=2'
         (Get-Content $output.HtmlPath -Raw) | Should -Match '(?s)<th>Hidden</th>.*<th>Read only</th>.*<th>Sealed</th>'
@@ -40,6 +58,8 @@ Describe 'Export-SPSInventoryReport content types' {
         (Get-Content $output.ContentTypesCsvPath -TotalCount 1) | Should -Match 'ContentTypeId'
         @(Import-Csv $output.ContentTypesCsvPath) | Should -HaveCount 0
         (Get-Content $output.ContentTypesJsonPath -Raw | ConvertFrom-Json) | Should -HaveCount 0
+        Test-Path $output.ManifestJsonPath | Should -BeTrue
+        (Get-Content $output.ManifestJsonPath -Raw | ConvertFrom-Json).Files.ContentTypesJson | Should -Be $output.ContentTypesJsonPath
         (Get-Content $output.HtmlPath -Raw) | Should -Match 'Content types and list bindings'
     }
 
@@ -50,6 +70,8 @@ Describe 'Export-SPSInventoryReport content types' {
 
         $output.ContentTypesCsvPath | Should -BeNullOrEmpty
         @(Get-ChildItem $TestDrive 'Legacy-contenttypes-*') | Should -HaveCount 0
+        Test-Path $output.ManifestJsonPath | Should -BeTrue
+        (Get-Content $output.ManifestJsonPath -Raw | ConvertFrom-Json).Files.ContentTypesJson | Should -BeNullOrEmpty
         (Get-Content $output.HtmlPath -Raw) | Should -Not -Match 'Content types and list bindings'
     }
 }
