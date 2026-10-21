@@ -236,6 +236,22 @@ Describe 'Get-SPSSiteCustomization content types' {
         $signals.Workflow2010Count | Should -Be 1
     }
 
+    It 'does not count a singleton workflow association flagged as historical by metadata' {
+        $historical = Get-TestWorkflowAssociation -Name 'WF for Statistics (Previous Version: 08/07/2016 14:50:34)' -HasIsCurrent $true -IsCurrent $false
+
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Lists[0].WorkflowAssociations = @($historical)
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site
+
+        $signals.Workflow2010Count | Should -Be 0
+    }
+
     It 'marks unreadable field metadata as partial rather than exporting zero fields' {
         $definition = Get-TestContentType -Id '0x0101' -Name 'Document'
         $definition | Add-Member -MemberType ScriptProperty -Name Fields -Value { throw 'Access denied' } -Force

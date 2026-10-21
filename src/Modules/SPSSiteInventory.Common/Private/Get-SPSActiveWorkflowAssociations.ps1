@@ -26,7 +26,7 @@
     )
 
     $associations = @($WorkflowAssociations | Where-Object { $null -ne $_ })
-    if ($associations.Count -le 1) {
+    if ($associations.Count -eq 0) {
         return $associations
     }
 
