@@ -64,7 +64,7 @@
     # Site-template parity rules (SMAT P0 scope)
     #
     # SPSSiteInventory maps each root-web template to:
-    # - Compatible: known template families with direct SPO equivalents
+    # - Compatible: known template families with supported SPO migration paths
     # - Unsupported: templates explicitly listed below
     # - Review: template values outside the supported map (manual validation needed)
     #
@@ -76,11 +76,9 @@
         UnsupportedTemplates = @(
             'APP#0'
             'SPSMSITEHOST#0'
-            'SPSPERS#0'
         )
         SupportedTemplatePrefixes = @(
             'STS#'
-            'BLOG#'
             'COMMUNITY#'
             'PROJECTSITE#'
             'SITEPAGEPUBLISHING#'
@@ -92,11 +90,14 @@
             'BDR#'
             'OFFILE#'
             'GROUP#'
+            'SPSPERS#'
             'SPSNEWS#'
             'SPSNHOME#'
         )
         # Optional: templates to force as "Review" even when they match a supported prefix.
-        ReviewTemplatePrefixes = @()
+        # BLOG templates are kept as review by default because migration usually
+        # requires remapping to modern SPO structures.
+        ReviewTemplatePrefixes = @('BLOG#')
         # Optional: allowed language LCIDs. Leave empty to accept any recognized culture.
         SupportedLanguageLcid = @()
     }

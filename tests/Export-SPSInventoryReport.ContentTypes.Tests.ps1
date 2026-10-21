@@ -9,10 +9,10 @@ Describe 'Export-SPSInventoryReport content types' {
             Url = 'https://intranet/sites/team'; WebApp = 'Intranet'
             InventoryScope = 'SiteCollection'
             HasFbaZone = $true; ContentTypeCount = 1
-            Template = 'SPSPERS#0'
+            Template = 'APP#0'
             IsUnsupportedSiteTemplate = $true
             TemplateCompatibility = 'Unsupported'
-            TemplateCompatibilityReason = 'Personal My Site templates are not migrated as site collections to SharePoint Online.'
+            TemplateCompatibilityReason = 'App web templates are not migration targets in SharePoint Online.'
             TemplateLanguageLcid = 1036
             TemplateLanguageTag = 'fr-FR'
             TemplateLanguageReviewRequired = $true

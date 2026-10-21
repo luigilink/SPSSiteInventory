@@ -163,11 +163,9 @@ TemplateParity = @{
     UnsupportedTemplates = @(
         'APP#0'
         'SPSMSITEHOST#0'
-        'SPSPERS#0'
     )
     SupportedTemplatePrefixes = @(
         'STS#'
-        'BLOG#'
         'COMMUNITY#'
         'PROJECTSITE#'
         'SITEPAGEPUBLISHING#'
@@ -179,10 +177,11 @@ TemplateParity = @{
         'BDR#'
         'OFFILE#'
         'GROUP#'
+        'SPSPERS#'
         'SPSNEWS#'
         'SPSNHOME#'
     )
-    ReviewTemplatePrefixes = @()
+    ReviewTemplatePrefixes = @('BLOG#')
     SupportedLanguageLcid = @()
 }
 ```
@@ -193,6 +192,13 @@ Detection order is explicit and deterministic:
 2. Template key starts with `ReviewTemplatePrefixes` => `TemplateCompatibility = Review`.
 3. Template key starts with `SupportedTemplatePrefixes` => `TemplateCompatibility = Compatible`.
 4. Anything else => `TemplateCompatibility = Review`.
+
+Default intent:
+
+- Personal sites (`SPSPERS#0`) are treated as compatible migration sources
+  (migrate to OneDrive), not as unsupported blockers.
+- Blog templates are flagged as `Review` by default because migrations usually
+  require remapping to modern SharePoint Online structures.
 
 Language behavior:
 

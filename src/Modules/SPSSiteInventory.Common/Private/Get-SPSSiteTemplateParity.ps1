@@ -20,7 +20,6 @@
 
     $supportedTemplatePrefixes = @(
         'STS#',
-        'BLOG#',
         'COMMUNITY#',
         'PROJECTSITE#',
         'SITEPAGEPUBLISHING#',
@@ -32,6 +31,7 @@
         'BDR#',
         'OFFILE#',
         'GROUP#',
+        'SPSPERS#',
         'SPSNEWS#',
         'SPSNHOME#'
     )
@@ -42,15 +42,20 @@
     $unsupportedTemplateReasons = @{
         'APP#0' = 'App web templates are not migration targets in SharePoint Online.'
         'SPSMSITEHOST#0' = 'My Site host templates are not migrated as site collections to SharePoint Online.'
-        'SPSPERS#0' = 'Personal My Site templates are not migrated as site collections to SharePoint Online.'
     }
     $unsupportedTemplates = @($unsupportedTemplateReasons.Keys)
     if ($TemplateParity.Contains('UnsupportedTemplates')) {
         $unsupportedTemplates = @($TemplateParity.UnsupportedTemplates)
     }
-    $reviewTemplatePrefixes = @()
+    $reviewTemplatePrefixes = @('BLOG#')
     if ($TemplateParity.Contains('ReviewTemplatePrefixes')) {
         $reviewTemplatePrefixes = @($TemplateParity.ReviewTemplatePrefixes)
+    }
+    $reviewTemplateReasons = @{
+        'BLOG#' = 'Blog templates require remapping for SharePoint Online and should be reviewed.'
+    }
+    $compatibleTemplateReasons = @{
+        'SPSPERS#0' = 'Personal site templates are supported migration sources and map to OneDrive in SharePoint Online.'
     }
     $supportedLanguageLcid = @()
     if ($TemplateParity.Contains('SupportedLanguageLcid')) {
@@ -77,17 +82,32 @@
                 $templateCompatibilityReason = "Template '$normalizedTemplate' is listed in UnsupportedTemplates."
             }
         }
-        elseif (@($reviewTemplatePrefixes | Where-Object { $normalizedTemplate.StartsWith(([string]$_).ToUpperInvariant()) }).Count -gt 0) {
-            $templateCompatibility = 'Review'
-            $templateCompatibilityReason = "Template '$normalizedTemplate' matches a review prefix and requires manual validation."
-        }
-        elseif (@($supportedTemplatePrefixes | Where-Object { $normalizedTemplate.StartsWith(([string]$_).ToUpperInvariant()) }).Count -gt 0) {
-            $templateCompatibility = 'Compatible'
-            $templateCompatibilityReason = "Template '$normalizedTemplate' matches a compatibility prefix."
-        }
         else {
-            $templateCompatibility = 'Review'
-            $templateCompatibilityReason = "Template '$normalizedTemplate' is not mapped; review SharePoint Online compatibility."
+            $matchingReviewPrefix = @($reviewTemplatePrefixes | Where-Object { $normalizedTemplate.StartsWith(([string]$_).ToUpperInvariant()) } | Select-Object -First 1)
+            $matchingSupportedPrefix = @($supportedTemplatePrefixes | Where-Object { $normalizedTemplate.StartsWith(([string]$_).ToUpperInvariant()) } | Select-Object -First 1)
+            if ($matchingReviewPrefix.Count -gt 0) {
+                $reviewPrefixKey = ([string]$matchingReviewPrefix[0]).ToUpperInvariant()
+                $templateCompatibility = 'Review'
+                if ($reviewTemplateReasons.ContainsKey($reviewPrefixKey)) {
+                    $templateCompatibilityReason = $reviewTemplateReasons[$reviewPrefixKey]
+                }
+                else {
+                    $templateCompatibilityReason = "Template '$normalizedTemplate' matches a review prefix and requires manual validation."
+                }
+            }
+            elseif ($matchingSupportedPrefix.Count -gt 0) {
+                $templateCompatibility = 'Compatible'
+                if ($compatibleTemplateReasons.ContainsKey($normalizedTemplate)) {
+                    $templateCompatibilityReason = $compatibleTemplateReasons[$normalizedTemplate]
+                }
+                else {
+                    $templateCompatibilityReason = "Template '$normalizedTemplate' matches a compatibility prefix."
+                }
+            }
+            else {
+                $templateCompatibility = 'Review'
+                $templateCompatibilityReason = "Template '$normalizedTemplate' is not mapped; review SharePoint Online compatibility."
+            }
         }
     }
 
