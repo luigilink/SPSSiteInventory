@@ -117,21 +117,26 @@
     }
 
     try {
-        $lockState = $null
-        $lockStateProperty = $Site.PSObject.Properties['LockState']
-        if ($null -ne $lockStateProperty -and $null -ne $lockStateProperty.Value) {
-            $lockState = [string]$lockStateProperty.Value
-        }
+        $readLockedProperty = $Site.PSObject.Properties['ReadLocked']
+        $writeLockedProperty = $Site.PSObject.Properties['WriteLocked']
+        $readOnlyProperty = $Site.PSObject.Properties['ReadOnly']
 
-        if ([string]::IsNullOrWhiteSpace($lockState)) {
-            $readOnlyProperty = $Site.PSObject.Properties['ReadOnly']
-            if ($null -ne $readOnlyProperty -and $null -ne $readOnlyProperty.Value) {
-                $lockState = if ([bool]$readOnlyProperty.Value) { 'ReadOnly' } else { 'Unlock' }
-            }
-        }
+        $hasReadLocked = $null -ne $readLockedProperty -and $null -ne $readLockedProperty.Value
+        $hasWriteLocked = $null -ne $writeLockedProperty -and $null -ne $writeLockedProperty.Value
+        $hasReadOnly = $null -ne $readOnlyProperty -and $null -ne $readOnlyProperty.Value
 
-        if ([string]::IsNullOrWhiteSpace($lockState)) {
-            $lockState = 'Unknown'
+        $lockState = 'Unknown'
+        if ($hasReadLocked -and [bool]$Site.ReadLocked) {
+            $lockState = 'NoAccess'
+        }
+        elseif ($hasWriteLocked -and [bool]$Site.WriteLocked) {
+            $lockState = 'NoAdditions'
+        }
+        elseif ($hasReadOnly -and [bool]$Site.ReadOnly) {
+            $lockState = 'ReadOnly'
+        }
+        elseif ($hasReadLocked -and $hasWriteLocked -and $hasReadOnly) {
+            $lockState = 'Unlock'
         }
 
         $signals.SiteLockState = $lockState

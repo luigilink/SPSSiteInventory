@@ -207,7 +207,9 @@ Describe 'Get-SPSSiteCustomization content types' {
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
             Solutions = @()
-            LockState = 'Unlock'
+            ReadLocked = $false
+            WriteLocked = $false
+            ReadOnly = $false
             AllWebs = @($web)
         }
 
@@ -218,12 +220,14 @@ Describe 'Get-SPSSiteCustomization content types' {
         $signals.IsLockedSite | Should -BeFalse
     }
 
-    It 'flags locked site collections from lock state metadata' {
+    It 'flags locked site collections as NoAccess when read access is locked' {
         $web = Get-TestWeb -Definitions @() -Bindings @()
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
             Solutions = @()
-            LockState = 'NoAccess'
+            ReadLocked = $true
+            WriteLocked = $true
+            ReadOnly = $true
             AllWebs = @($web)
         }
 
@@ -233,11 +237,30 @@ Describe 'Get-SPSSiteCustomization content types' {
         $signals.IsLockedSite | Should -BeTrue
     }
 
-    It 'falls back to the read-only flag when lock state metadata is unavailable' {
+    It 'flags locked site collections as NoAdditions when write access is locked' {
         $web = Get-TestWeb -Definitions @() -Bindings @()
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
             Solutions = @()
+            ReadLocked = $false
+            WriteLocked = $true
+            ReadOnly = $false
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site
+
+        $signals.SiteLockState | Should -Be 'NoAdditions'
+        $signals.IsLockedSite | Should -BeTrue
+    }
+
+    It 'flags locked site collections as ReadOnly when only read-only mode is set' {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Solutions = @()
+            ReadLocked = $false
+            WriteLocked = $false
             ReadOnly = $true
             AllWebs = @($web)
         }
@@ -253,7 +276,9 @@ Describe 'Get-SPSSiteCustomization content types' {
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
             Solutions = @()
-            LockState = 'Unlock'
+            ReadLocked = $false
+            WriteLocked = $false
+            ReadOnly = $false
             AllWebs = @($web)
         }
 
