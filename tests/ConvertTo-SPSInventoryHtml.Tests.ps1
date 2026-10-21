@@ -13,6 +13,7 @@ BeforeAll {
             TemplateLanguageLcid = 1033; TemplateLanguageTag = 'en-US'; TemplateLanguageName = 'English (United States)'
             TemplateLanguageReviewRequired = $false; TemplateLanguageReason = ''
             Workflow2010RunningInstanceCount = 0; Workflow2013RunningInstanceCount = 0
+            AppInstanceCount = 0; AppWebCount = 0; AppInstanceExamples = ''
             IsLargeSite = $false; LargeListCount = 0; LargeListExamples = ''
             LargeListViewCount = 0; LargeListViewExamples = ''
             CheckedOutFileCount = 0; CheckedOutFileExamples = ''
@@ -29,6 +30,7 @@ BeforeAll {
             TemplateLanguageLcid = 999999; TemplateLanguageTag = ''; TemplateLanguageName = ''
             TemplateLanguageReviewRequired = $true; TemplateLanguageReason = 'Template language LCID is not recognized.'
             Workflow2010RunningInstanceCount = 4; Workflow2013RunningInstanceCount = 2
+            AppInstanceCount = 3; AppWebCount = 1; AppInstanceExamples = 'Contoso App (https://intranet/sites/legacy)'
             IsLargeSite = $true; LargeListCount = 2; LargeListExamples = 'Documents (7000); Records (5100)'
             LargeListViewCount = 1; LargeListViewExamples = 'Documents/All Documents (7000)'
             CheckedOutFileCount = 3; CheckedOutFileExamples = 'Documents (3)'
@@ -130,6 +132,16 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $html | Should -Match 'Projects / blockers</td><td class="num">1</td><td class="num">12\.25</td>'
         # The site table exposes a Wave column.
         $html | Should -Match 'Wave <span class="arrow">'
+    }
+
+    It 'shows app signals in summary cards and table columns' {
+        $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
+
+        $html | Should -Match 'Sites with app instances'
+        $html | Should -Match 'Sites with app webs'
+        $html | Should -Match '>App instances <span class="arrow">'
+        $html | Should -Match '>App webs <span class="arrow">'
+        $html | Should -Match '>App instance examples <span class="arrow">'
     }
 
     It 'keeps wave-zero groups distinct for unmapped and failed records in either input order' {

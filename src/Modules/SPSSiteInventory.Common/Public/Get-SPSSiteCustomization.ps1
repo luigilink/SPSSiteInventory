@@ -5,12 +5,12 @@
 
         .DESCRIPTION
         Inspects one site collection and returns the signals that drive the migration
-        complexity score: 2010 vs 2013 workflows, InfoPath forms, IRM-enabled lists,
-        large-content migration risks (large lists/views, checked-out files, file
-        versions), site lock state, sandbox solutions, custom master page, unique
-        permissions, custom event receivers, and whether the site activates a feature
-        that comes from a custom farm solution (correlated through the farm-solution
-        map).
+        complexity score: 2010 vs 2013 workflows, app inventory and app-web signals,
+        InfoPath forms, IRM-enabled lists, large-content migration risks (large
+        lists/views, checked-out files, file versions), site lock state, sandbox
+        solutions, custom master page, unique permissions, custom event receivers, and
+        whether the site activates a feature that comes from a custom farm solution
+        (correlated through the farm-solution map).
 
         EventReceivers counts only custom event receivers (those registered from a
         non-Microsoft assembly). Out-of-the-box receivers on native lists are ignored so
@@ -107,6 +107,9 @@
         Workflow2010RunningInstanceCount = 0
         Workflow2013Count        = 0
         Workflow2013RunningInstanceCount = 0
+        AppInstanceCount         = 0
+        AppWebCount              = 0
+        AppInstanceExamples      = ''
         InfoPathFormCount        = 0
         IrmEnabledListCount      = 0
         IsLargeSite              = $false
@@ -137,6 +140,7 @@
     $largeListViewExamples = [System.Collections.Generic.List[string]]::new()
     $checkedOutFileExamples = [System.Collections.Generic.List[string]]::new()
     $fileVersionExamples = [System.Collections.Generic.List[string]]::new()
+    $appInstanceExamples = [System.Collections.Generic.List[string]]::new()
 
     $largeListItemThreshold = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'LargeListItemCount' -DefaultValue 5000 -MinimumValue 1)
     $largeListViewRowLimitThreshold = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'LargeListViewRowLimit' -DefaultValue 5000 -MinimumValue 1)
@@ -294,6 +298,66 @@
                 # SharePoint 2010 platform: classic workflow associations at web and list scope.
                 # Keep definition counts tied to active associations only, but include historical
                 # associations for running-instance totals because previous versions can still run.
+                try {
+                    $isAppWeb = $false
+                    if ($null -ne $web.PSObject.Properties['IsAppWeb'] -and $null -ne $web.IsAppWeb) {
+                        $isAppWeb = [bool]$web.IsAppWeb
+                    }
+                    elseif ($null -ne $web.PSObject.Properties['WebTemplate'] -and $web.WebTemplate) {
+                        $isAppWeb = ([string]$web.WebTemplate).Equals('APP', [System.StringComparison]::OrdinalIgnoreCase)
+                    }
+
+                    if ($isAppWeb) {
+                        $signals.AppWebCount++
+                    }
+                }
+                catch {
+                    $signals.CustomizationInventoryComplete = $false
+                    Write-Warning -Message "Could not read app-web state on '$($web.Url)': $($_.Exception.Message)"
+                }
+
+                try {
+                    $webAppInstances = @()
+                    if ($null -ne $web.PSObject.Properties['AppInstances'] -and $null -ne $web.AppInstances) {
+                        $webAppInstances = @($web.AppInstances)
+                    }
+                    elseif ($null -ne $web.PSObject.Methods['GetAppInstances']) {
+                        $webAppInstances = @($web.GetAppInstances())
+                    }
+
+                    foreach ($appInstance in $webAppInstances) {
+                        if ($null -eq $appInstance) {
+                            continue
+                        }
+
+                        $signals.AppInstanceCount++
+                        if ($appInstanceExamples.Count -ge 5) {
+                            continue
+                        }
+
+                        $appName = ''
+                        foreach ($propertyName in @('Title', 'DisplayName', 'AppPrincipalTitle', 'ProductTitle', 'Name')) {
+                            if ($null -ne $appInstance.PSObject.Properties[$propertyName] -and $appInstance.$propertyName) {
+                                $appName = [string]$appInstance.$propertyName
+                                break
+                            }
+                        }
+                        if ([string]::IsNullOrWhiteSpace($appName) -and
+                            $null -ne $appInstance.PSObject.Properties['AppId'] -and $appInstance.AppId) {
+                            $appName = [string]$appInstance.AppId
+                        }
+                        if ([string]::IsNullOrWhiteSpace($appName)) {
+                            $appName = 'Unknown app instance'
+                        }
+
+                        $appInstanceExamples.Add(('{0} ({1})' -f $appName, $web.Url))
+                    }
+                }
+                catch {
+                    $signals.CustomizationInventoryComplete = $false
+                    Write-Warning -Message "Could not read app instances on '$($web.Url)': $($_.Exception.Message)"
+                }
+
                 $allWebWorkflowAssociations = @($web.WorkflowAssociations)
                 $webWorkflowAssociations = @(Get-SPSActiveWorkflowAssociations -WorkflowAssociations $allWebWorkflowAssociations)
                 $signals.Workflow2010Count += $webWorkflowAssociations.Count
@@ -644,5 +708,6 @@
     $signals.LargeListViewExamples = $largeListViewExamples -join '; '
     $signals.CheckedOutFileExamples = $checkedOutFileExamples -join '; '
     $signals.FileVersionExamples = $fileVersionExamples -join '; '
+    $signals.AppInstanceExamples = $appInstanceExamples -join '; '
     return $signals
 }

@@ -21,6 +21,7 @@
         - `*-sites-*.json`
         - `*-auth-*.json`
         - `*-workflows-*.json`
+        - `*-apps-*.json`
         - `*-irm-locks-*.json`
         - `*-large-content-*.json`
         - `*-alerts-*.json`
@@ -106,6 +107,7 @@
     $sitesJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-sites-{1}.json' -f $BaseName, $timestamp)
     $authJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-auth-{1}.json' -f $BaseName, $timestamp)
     $workflowsJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-workflows-{1}.json' -f $BaseName, $timestamp)
+    $appsJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-apps-{1}.json' -f $BaseName, $timestamp)
     $irmLocksJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-irm-locks-{1}.json' -f $BaseName, $timestamp)
     $largeContentJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-large-content-{1}.json' -f $BaseName, $timestamp)
     $alertsJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-alerts-{1}.json' -f $BaseName, $timestamp)
@@ -159,6 +161,19 @@
                 SiteLockState = $record.SiteLockState
                 IsLockedSite = $record.IsLockedSite
                 IrmEnabledListCount = $record.IrmEnabledListCount
+            }
+        }
+    )
+    $appRecords = @(
+        foreach ($record in $siteRecords) {
+            [PSCustomObject]@{
+                Url = $record.Url
+                WebApp = $record.WebApp
+                AssessmentStatus = $record.AssessmentStatus
+                Category = $record.Category
+                AppInstanceCount = $record.AppInstanceCount
+                AppWebCount = $record.AppWebCount
+                AppInstanceExamples = $record.AppInstanceExamples
             }
         }
     )
@@ -236,6 +251,24 @@
                     Url = $record.Url
                     Value = [int]$record.Workflow2013RunningInstanceCount
                     Message = 'Active SharePoint 2013 workflow instances were detected.'
+                })
+        }
+        if ($scope -eq 'SiteCollection' -and [int]$record.AppInstanceCount -gt 0) {
+            $alerts.Add([PSCustomObject]@{
+                    AlertType = 'AppInstances'
+                    Severity = 'Medium'
+                    Url = $record.Url
+                    Value = [int]$record.AppInstanceCount
+                    Message = 'SharePoint add-ins were detected and require migration compatibility review.'
+                })
+        }
+        if ($scope -eq 'SiteCollection' -and [int]$record.AppWebCount -gt 0) {
+            $alerts.Add([PSCustomObject]@{
+                    AlertType = 'AppWebs'
+                    Severity = 'Medium'
+                    Url = $record.Url
+                    Value = [int]$record.AppWebCount
+                    Message = 'App webs were detected and should be assessed for SharePoint Online replacement paths.'
                 })
         }
         if ($scope -eq 'SiteCollection' -and [bool]$record.IsUnsupportedSiteTemplate) {
@@ -360,6 +393,7 @@
     ConvertTo-Json -InputObject @($records) -Depth 6 | Set-Content -Path $sitesJsonPath -Encoding UTF8
     ConvertTo-Json -InputObject @($authRecords) -Depth 6 | Set-Content -Path $authJsonPath -Encoding UTF8
     ConvertTo-Json -InputObject @($workflowRecords) -Depth 6 | Set-Content -Path $workflowsJsonPath -Encoding UTF8
+    ConvertTo-Json -InputObject @($appRecords) -Depth 6 | Set-Content -Path $appsJsonPath -Encoding UTF8
     ConvertTo-Json -InputObject @($irmLockRecords) -Depth 6 | Set-Content -Path $irmLocksJsonPath -Encoding UTF8
     ConvertTo-Json -InputObject @($largeContentRecords) -Depth 6 | Set-Content -Path $largeContentJsonPath -Encoding UTF8
     ConvertTo-Json -InputObject @($alerts.ToArray()) -Depth 6 | Set-Content -Path $alertsJsonPath -Encoding UTF8
@@ -427,6 +461,7 @@
             SitesJson = $sitesJsonPath
             AuthJson = $authJsonPath
             WorkflowsJson = $workflowsJsonPath
+            AppsJson = $appsJsonPath
             IrmLocksJson = $irmLocksJsonPath
             LargeContentJson = $largeContentJsonPath
             AlertsJson = $alertsJsonPath
@@ -444,6 +479,7 @@
         SitesJsonPath = $sitesJsonPath
         AuthJsonPath = $authJsonPath
         WorkflowsJsonPath = $workflowsJsonPath
+        AppsJsonPath = $appsJsonPath
         IrmLocksJsonPath = $irmLocksJsonPath
         LargeContentJsonPath = $largeContentJsonPath
         AlertsJsonPath = $alertsJsonPath
