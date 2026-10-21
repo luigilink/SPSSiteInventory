@@ -417,8 +417,8 @@
 
                         $isDocumentLibrary = [string]$list.BaseTemplate -eq '101' -or
                             ($null -ne $list.PSObject.Properties['BaseType'] -and [string]$list.BaseType -eq 'DocumentLibrary')
+                        $libraryCheckedOutKeys = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
                         try {
-                            $libraryCheckedOutKeys = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
                             if ($null -ne $list.PSObject.Properties['CheckedOutFiles'] -and $null -ne $list.CheckedOutFiles) {
                                 foreach ($checkedOutFile in @($list.CheckedOutFiles)) {
                                     $fileKey = & $getFileIdentity $checkedOutFile $null
@@ -475,20 +475,21 @@
                                 }
                             }
 
+                        }
+                        catch {
+                            $signals.CustomizationInventoryComplete = $false
+                            Write-Warning -Message "Could not read checked-out files on '$listTitle' in web '$($web.Url)': $($_.Exception.Message)"
+                        }
+                        finally {
                             $checkedOutFilesCount = $libraryCheckedOutKeys.Count
                             $signals.CheckedOutFileCount += $checkedOutFilesCount
                             if ($checkedOutFilesCount -ge $checkedOutFileThreshold -and $checkedOutFileExamples.Count -lt 5) {
                                 $checkedOutFileExamples.Add(('{0} ({1})' -f $listTitle, $checkedOutFilesCount))
                             }
                         }
-                        catch {
-                            $signals.CustomizationInventoryComplete = $false
-                            Write-Warning -Message "Could not read checked-out files on '$listTitle' in web '$($web.Url)': $($_.Exception.Message)"
-                        }
 
                         try {
-                            $versioningEnabled = $null -ne $list.PSObject.Properties['EnableVersioning'] -and [bool]$list.EnableVersioning
-                            if ($isDocumentLibrary -and $versioningEnabled) {
+                            if ($isDocumentLibrary) {
                                 $scanCount = 0
                                 $hasUnscannedItems = $false
                                 if ($null -ne $list.PSObject.Methods['GetItems']) {

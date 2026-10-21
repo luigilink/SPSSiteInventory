@@ -438,6 +438,103 @@ Describe 'Get-SPSSiteCustomization content types' {
         ($warnings -join '; ') | Should -Match 'File-version scan stopped'
     }
 
+    It 'keeps collected checkout keys when checkout paging fails mid-stream' {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Lists[0].Title = 'Contracts'
+        $web.Lists[0].CheckedOutFiles = @('/sites/team/Contracts/seed.docx')
+        $web.Lists[0].EnableVersioning = $false
+        $web.Lists[0] | Add-Member -MemberType NoteProperty -Name CheckoutBatchIndex -Value 0 -Force
+        $web.Lists[0] | Add-Member -MemberType ScriptMethod -Name GetItems -Value {
+            param ($Query)
+            $queryText = ''
+            if ($null -ne $Query.PSObject.Properties['Query'] -and $Query.Query) {
+                $queryText = [string]$Query.Query
+            }
+            if ($queryText -match 'CheckoutUser') {
+                if ($this.CheckoutBatchIndex -eq 0) {
+                    $this.CheckoutBatchIndex = 1
+                    return [PSCustomObject]@{
+                        Items = @(
+                            [PSCustomObject]@{
+                                Name = 'active.docx'
+                                File = [PSCustomObject]@{
+                                    ServerRelativeUrl = '/sites/team/Contracts/active.docx'
+                                    Versions = @()
+                                }
+                            }
+                        )
+                        ListItemCollectionPosition = 'next'
+                    }
+                }
+                throw 'Checkout paging failure'
+            }
+            return [PSCustomObject]@{
+                Items = @()
+                ListItemCollectionPosition = $null
+            }
+        } -Force
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -LargeContentThresholds @{
+            CheckedOutFileCount = 1
+        } -WarningVariable warnings -WarningAction SilentlyContinue
+
+        $signals.CheckedOutFileCount | Should -Be 2
+        $signals.CheckedOutFileExamples | Should -Match 'Contracts \(2\)'
+        $signals.CustomizationInventoryComplete | Should -BeFalse
+        ($warnings -join '; ') | Should -Match 'Could not read checked-out files'
+    }
+
+    It 'counts retained file versions even when versioning is currently disabled' {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Lists[0].Title = 'Policies'
+        $web.Lists[0].EnableVersioning = $false
+        $web.Lists[0].CheckedOutFiles = @()
+        $web.Lists[0] | Add-Member -MemberType ScriptMethod -Name GetItems -Value {
+            param ($Query)
+            $queryText = ''
+            if ($null -ne $Query.PSObject.Properties['Query'] -and $Query.Query) {
+                $queryText = [string]$Query.Query
+            }
+            if ($queryText -match 'CheckoutUser') {
+                return [PSCustomObject]@{
+                    Items = @()
+                    ListItemCollectionPosition = $null
+                }
+            }
+            return [PSCustomObject]@{
+                Items = @(
+                    [PSCustomObject]@{
+                        Name = 'policy.docx'
+                        File = [PSCustomObject]@{
+                            ServerRelativeUrl = '/sites/team/Policies/policy.docx'
+                            Versions = @(1..75)
+                        }
+                    }
+                )
+                ListItemCollectionPosition = $null
+            }
+        } -Force
+        $web.Lists[0] | Add-Member -MemberType ScriptProperty -Name Items -Value { throw 'Version scan must use paged GetItems retrieval.' } -Force
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -LargeContentThresholds @{
+            FileVersionCount = 50
+            MaxItemsForVersionScanPerLibrary = 2000
+        }
+
+        $signals.FileVersionCount | Should -Be 1
+        $signals.FileVersionExamples | Should -Match '/sites/team/Policies/policy\.docx \(75\)'
+    }
+
     It 'counts only active workflow associations when historical versions are flagged by metadata' {
         $webWorkflow = Get-TestWorkflowAssociation -Name 'WF for Statistics' -HasIsCurrent $true -IsCurrent $true
         $oldListWorkflow = Get-TestWorkflowAssociation -Name 'WF pour les Statistiques (version précédente: 08/07/2016 14:50:34)' -HasIsCurrent $true -IsCurrent $false
