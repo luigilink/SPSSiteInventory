@@ -298,6 +298,22 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $html | Should -Match '>3</td>'
     }
 
+    It 'renders navigation shortcuts and risk indicator cards' {
+        $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
+
+        $html | Should -Match 'href="#summary"'
+        $html | Should -Match 'href="#risk-indicators"'
+        $html | Should -Match 'href="#wave-plan"'
+        $html | Should -Match 'href="#inventory-table"'
+        $html | Should -Match 'Risk indicators'
+        $html | Should -Match 'Sites with locked state'
+        $html | Should -Match 'Sites with IRM-enabled lists'
+        $html | Should -Match 'Sites with Workflow 2010'
+        $html | Should -Not -Match 'href="#farm-solutions"'
+        $html | Should -Not -Match 'href="#authentication"'
+        $html | Should -Not -Match 'href="#content-types"'
+    }
+
     It 'renders encoded content-type detail and surfaces partial collection' {
         $site = [PSCustomObject]@{
             Url = 'https://intranet/sites/team'; Category = 1
@@ -331,5 +347,6 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $html = ConvertTo-SPSInventoryHtml -InputObject @() -ContentTypes @()
 
         $html | Should -Match '0</strong> definition/binding row'
+        $html | Should -Not -Match 'href="#wave-plan"'
     }
 }
