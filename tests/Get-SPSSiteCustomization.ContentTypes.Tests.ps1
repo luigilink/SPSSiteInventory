@@ -206,6 +206,28 @@ Describe 'Get-SPSSiteCustomization content types' {
         $signals.Workflow2013RunningInstanceCount | Should -Be 3
     }
 
+    It 'keeps active-association definitions but includes historical associations in running totals' {
+        $webCurrent = Get-TestWorkflowAssociation -Name 'Web current' -HasIsCurrent $true -IsCurrent $true -RunningInstances 1
+        $webPrevious = Get-TestWorkflowAssociation -Name 'Web previous' -HasIsCurrent $true -IsCurrent $false -RunningInstances 3
+        $listCurrent = Get-TestWorkflowAssociation -Name 'List current' -HasIsCurrent $true -IsCurrent $true -RunningInstances 2
+        $listPrevious = Get-TestWorkflowAssociation -Name 'List previous' -HasIsCurrent $true -IsCurrent $false -RunningInstances 4
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.WorkflowAssociations = @($webCurrent, $webPrevious)
+        $web.Lists[0].WorkflowAssociations = @($listCurrent, $listPrevious)
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Solutions = @()
+            AllWebs = @($web)
+        }
+        Mock Get-SPSWorkflowSubscriptionCount -ModuleName SPSSiteInventory.Common { 0 }
+        Mock Get-SPSWorkflowRunningInstanceCount -ModuleName SPSSiteInventory.Common { 0 }
+
+        $signals = Get-SPSSiteCustomization -Site $site
+
+        $signals.Workflow2010Count | Should -Be 2
+        $signals.Workflow2010RunningInstanceCount | Should -Be 10
+    }
+
     It 'keeps running workflow counts at zero when Workflow Manager APIs are unavailable' {
         $web = Get-TestWeb -Definitions @() -Bindings @()
         $site = [PSCustomObject]@{

@@ -292,11 +292,12 @@
                 }
 
                 # SharePoint 2010 platform: classic workflow associations at web and list scope.
-                # SharePoint can keep historical "previous version" associations; only active
-                # associations should count toward migration complexity.
-                $webWorkflowAssociations = @(Get-SPSActiveWorkflowAssociations -WorkflowAssociations @($web.WorkflowAssociations))
+                # Keep definition counts tied to active associations only, but include historical
+                # associations for running-instance totals because previous versions can still run.
+                $allWebWorkflowAssociations = @($web.WorkflowAssociations)
+                $webWorkflowAssociations = @(Get-SPSActiveWorkflowAssociations -WorkflowAssociations $allWebWorkflowAssociations)
                 $signals.Workflow2010Count += $webWorkflowAssociations.Count
-                $signals.Workflow2010RunningInstanceCount += Get-SPSWorkflowAssociationRunningCount -WorkflowAssociations $webWorkflowAssociations
+                $signals.Workflow2010RunningInstanceCount += Get-SPSWorkflowAssociationRunningCount -WorkflowAssociations $allWebWorkflowAssociations
 
                 try {
                     $webLists = $web.Lists
@@ -321,9 +322,10 @@
                             Write-Warning -Message "Content-type bindings could not be fully read on list '$($list.Title)' in '$($web.Url)': $($_.Exception.Message)"
                         }
 
-                        $listWorkflowAssociations = @(Get-SPSActiveWorkflowAssociations -WorkflowAssociations @($list.WorkflowAssociations))
+                        $allListWorkflowAssociations = @($list.WorkflowAssociations)
+                        $listWorkflowAssociations = @(Get-SPSActiveWorkflowAssociations -WorkflowAssociations $allListWorkflowAssociations)
                         $signals.Workflow2010Count += $listWorkflowAssociations.Count
-                        $signals.Workflow2010RunningInstanceCount += Get-SPSWorkflowAssociationRunningCount -WorkflowAssociations $listWorkflowAssociations
+                        $signals.Workflow2010RunningInstanceCount += Get-SPSWorkflowAssociationRunningCount -WorkflowAssociations $allListWorkflowAssociations
 
                         # Count only custom event receivers. Out-of-the-box lists carry many
                         # native receivers from Microsoft assemblies that are not a migration
