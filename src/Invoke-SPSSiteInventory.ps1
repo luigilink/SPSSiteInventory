@@ -75,6 +75,14 @@ try {
     } $inventory $customFeatureId $fullTrustFeatureId $settings.Scoring
     $scored = @($assessment.Inventory)
     $contentTypes = @($assessment.ContentTypes)
+    if (@($scored | Where-Object { $_.IsLockedSite }).Count -gt 0 -and
+        @($settings.Scoring.BlockingSignals) -notcontains 'IsLockedSite') {
+        Add-SPSInventoryEvent -Message 'Locked site collections were detected, but IsLockedSite is not in Scoring.BlockingSignals. Add it to classify lock states as migration blockers.' -Level Warning
+    }
+    if (@($scored | Where-Object { [int]$_.IrmEnabledListCount -gt 0 }).Count -gt 0 -and
+        @($settings.Scoring.BlockingSignals) -notcontains 'IrmEnabledListCount') {
+        Add-SPSInventoryEvent -Message 'IRM-enabled lists were detected, but IrmEnabledListCount is not in Scoring.BlockingSignals. Add it to classify IRM-protected lists as migration blockers.' -Level Warning
+    }
 
     $waves = if ($settings.ContainsKey('MigrationWaves')) {
         @($settings.MigrationWaves)

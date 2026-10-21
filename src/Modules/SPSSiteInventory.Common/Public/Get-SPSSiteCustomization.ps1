@@ -5,10 +5,10 @@
 
         .DESCRIPTION
         Inspects one site collection and returns the signals that drive the migration
-        complexity score: 2010 vs 2013 workflows, InfoPath forms, sandbox solutions,
-        custom master page, unique permissions, custom event receivers, and whether the
-        site activates a feature that comes from a custom farm solution (correlated through
-        the farm-solution map).
+        complexity score: 2010 vs 2013 workflows, InfoPath forms, IRM-enabled lists,
+        site lock state, sandbox solutions, custom master page, unique permissions,
+        custom event receivers, and whether the site activates a feature that comes from
+        a custom farm solution (correlated through the farm-solution map).
 
         EventReceivers counts only custom event receivers (those registered from a
         non-Microsoft assembly). Out-of-the-box receivers on native lists are ignored so
@@ -27,6 +27,10 @@
         (InfoPath form libraries, and lists whose forms were customized with InfoPath).
         InfoPath Forms Services is retired and has no equivalent in SharePoint Online, so
         those forms must be rebuilt (Power Apps) - often a migration blocker.
+
+        IrmEnabledListCount counts lists and libraries where IRM is enabled. IsLockedSite
+        and SiteLockState surface site lock status (ReadOnly / NoAdditions / NoAccess),
+        which can block or delay migration.
 
         The returned hashtable is designed to be passed straight to
         Measure-SPSSiteComplexity. CustomizationInventoryComplete is false when a signal
@@ -87,6 +91,9 @@
         Workflow2010Count        = 0
         Workflow2013Count        = 0
         InfoPathFormCount        = 0
+        IrmEnabledListCount      = 0
+        IsLockedSite             = $false
+        SiteLockState            = 'Unknown'
         SandboxSolutions         = 0
         CustomMasterPage         = $false
         UniquePermissionsCount   = 0
@@ -107,6 +114,40 @@
     catch {
         $signals.CustomizationInventoryComplete = $false
         Write-Warning -Message "Could not read sandbox solutions for site collection '$($Site.Url)': $($_.Exception.Message)"
+    }
+
+    try {
+        $readLockedProperty = $Site.PSObject.Properties['ReadLocked']
+        $writeLockedProperty = $Site.PSObject.Properties['WriteLocked']
+        $readOnlyProperty = $Site.PSObject.Properties['ReadOnly']
+
+        $hasReadLocked = $null -ne $readLockedProperty -and $null -ne $readLockedProperty.Value
+        $hasWriteLocked = $null -ne $writeLockedProperty -and $null -ne $writeLockedProperty.Value
+        $hasReadOnly = $null -ne $readOnlyProperty -and $null -ne $readOnlyProperty.Value
+
+        $lockState = 'Unknown'
+        if ($hasReadLocked -and [bool]$Site.ReadLocked) {
+            $lockState = 'NoAccess'
+        }
+        elseif ($hasWriteLocked -and [bool]$Site.WriteLocked) {
+            $lockState = 'NoAdditions'
+        }
+        elseif ($hasReadOnly -and [bool]$Site.ReadOnly) {
+            $lockState = 'ReadOnly'
+        }
+        elseif ($hasReadLocked -and $hasWriteLocked -and $hasReadOnly) {
+            $lockState = 'Unlock'
+        }
+
+        $signals.SiteLockState = $lockState
+        $signals.IsLockedSite = -not (
+            $lockState.Equals('Unlock', [System.StringComparison]::OrdinalIgnoreCase) -or
+            $lockState.Equals('Unknown', [System.StringComparison]::OrdinalIgnoreCase))
+    }
+    catch {
+        $signals.CustomizationInventoryComplete = $false
+        $signals.SiteLockState = 'Unknown'
+        Write-Warning -Message "Could not read lock state for site collection '$($Site.Url)': $($_.Exception.Message)"
     }
 
     $customFeatureSet = [System.Collections.Generic.HashSet[string]]::new(
@@ -212,6 +253,34 @@
                         catch {
                             $signals.CustomizationInventoryComplete = $false
                             Write-Warning -Message "Could not read InfoPath state on list '$listTitle' in web '$($web.Url)': $($_.Exception.Message)"
+                        }
+
+                        try {
+                            $irmEnabled = $false
+                            $irmEnabledProperty = $list.PSObject.Properties['IrmEnabled']
+                            if ($null -ne $irmEnabledProperty -and $null -ne $list.IrmEnabled) {
+                                $irmEnabled = [bool]$list.IrmEnabled
+                            }
+                            elseif ($null -ne $list.PSObject.Properties['InformationRightsManagementSettings'] -and
+                                $null -ne $list.InformationRightsManagementSettings) {
+                                $irmSettings = $list.InformationRightsManagementSettings
+                                if ($null -ne $irmSettings.PSObject.Properties['IrmEnabled'] -and
+                                    $null -ne $irmSettings.IrmEnabled) {
+                                    $irmEnabled = [bool]$irmSettings.IrmEnabled
+                                }
+                                elseif ($null -ne $irmSettings.PSObject.Properties['Enable'] -and
+                                    $null -ne $irmSettings.Enable) {
+                                    $irmEnabled = [bool]$irmSettings.Enable
+                                }
+                            }
+
+                            if ($irmEnabled) {
+                                $signals.IrmEnabledListCount++
+                            }
+                        }
+                        catch {
+                            $signals.CustomizationInventoryComplete = $false
+                            Write-Warning -Message "Could not read IRM state on list '$listTitle' in web '$($web.Url)': $($_.Exception.Message)"
                         }
                     }
                 }

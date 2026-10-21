@@ -118,6 +118,9 @@
                     Workflow2010Count = $signals['Workflow2010Count']
                     Workflow2013Count = $signals['Workflow2013Count']
                     InfoPathFormCount = $signals['InfoPathFormCount']
+                    IrmEnabledListCount = $signals['IrmEnabledListCount']
+                    IsLockedSite = $signals['IsLockedSite']
+                    SiteLockState = $signals['SiteLockState']
                     UsesFullTrustCode = $signals['UsesFullTrustCode']
                     ContentTypeCount = $signals['ContentTypeCount']
                     ListContentTypeBindingCount = $signals['ListContentTypeBindingCount']
@@ -157,6 +160,9 @@
                     Workflow2010Count = $null
                     Workflow2013Count = $null
                     InfoPathFormCount = $null
+                    IrmEnabledListCount = $null
+                    IsLockedSite = $null
+                    SiteLockState = $null
                     UsesFullTrustCode = $null
                     ContentTypeCount = $null
                     ListContentTypeBindingCount = $null

@@ -46,6 +46,7 @@ Scoring = @{
         Workflow2010Count        = 3.0
         Workflow2013Count        = 1.5
         InfoPathFormCount        = 3.0
+        IrmEnabledListCount      = 2.5
         SandboxSolutions         = 3.0
         CustomMasterPage         = 2.0
         EventReceivers           = 1.5
@@ -60,6 +61,8 @@ Scoring = @{
         'UsesCustomFarmFeature'
         'UsesFullTrustCode'
         'InfoPathFormCount'
+        'IsLockedSite'
+        'IrmEnabledListCount'
         'HasFbaZone'
     )
 }
@@ -86,6 +89,10 @@ Workflows are split by platform because their migration cost differs:
 Forms Services is **retired and unavailable in SharePoint Online**, so it is weighted
 heavily and listed in `BlockingSignals` in the example configuration.
 
+`IrmEnabledListCount` counts lists/libraries where IRM is enabled. IRM typically requires
+records-protection and compliance remediation during migration, so the example
+configuration keeps it as both weighted and blocking.
+
 `EventReceivers` counts only **custom** event receivers (those registered from a
 non-Microsoft assembly). Out-of-the-box receivers on native lists are ignored, so a stock
 site is not promoted just because SharePoint's own lists carry many built-in receivers.
@@ -105,14 +112,17 @@ non-portable as-is:
 - `UsesFullTrustCode` — the site activates a feature from a custom **full-trust** solution
   (a WSP deploying a global assembly to the GAC), correlated through the farm-solution map.
 - `InfoPathFormCount` — the site uses InfoPath forms.
+- `IsLockedSite` — the site collection lock state is not `Unlock` (for example
+  `ReadOnly`, `NoAdditions`, `NoAccess`).
+- `IrmEnabledListCount` — at least one list/library has IRM enabled.
 - `HasFbaZone` — at least one zone of the site's web application is configured for
   forms-based authentication. This requires an identity/authentication redesign for
   SharePoint Online, not an on-premises farm repair. The signal does not prove that
   FBA is actively used by the site or its users.
 
-Existing settings files are not rewritten. Add `HasFbaZone` to your existing
-`Scoring.BlockingSignals` to apply the new FBA override; otherwise FBA is still
-reported and the orchestrator warns that the override is not configured.
+Existing settings files are not rewritten. Add `HasFbaZone`, `IsLockedSite` and
+`IrmEnabledListCount` to your existing `Scoring.BlockingSignals` to apply these
+blocker overrides.
 
 Content types are inventoried for review, including standard definitions and list
 bindings. They do not contribute to the default score. Names, groups and content-type

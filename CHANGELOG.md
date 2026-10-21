@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and French previous-version names when metadata is unavailable), so migration
   complexity is based on active workflows and does not misclassify qualifiers such
   as `SLA: 48`. (#31)
+- Site scans now report IRM-enabled lists (`IrmEnabledListCount`) and site lock
+  state (`SiteLockState` / `IsLockedSite`) in CSV/JSON/HTML outputs. The example
+  scoring configuration treats both as migration blockers. (#38)
 - Zone-aware web application authentication inventory, including mixed Windows/FBA,
   membership/role provider names and explicit identity-review flags. The example
   configuration treats `HasFbaZone` as a SharePoint Online migration blocker.

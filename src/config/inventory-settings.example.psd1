@@ -62,6 +62,9 @@
             # InfoPath forms (retired, no SharePoint Online equivalent) must be rebuilt in
             # Power Apps. Weighted heavily and listed as a blocking signal below.
             InfoPathFormCount        = 3.0
+            # IRM-enabled lists and libraries require records-protection remediation
+            # before migration.
+            IrmEnabledListCount      = 2.5
             SandboxSolutions         = 3.0
             CustomMasterPage         = 2.0
             EventReceivers           = 1.5
@@ -86,6 +89,11 @@
             # FBA on any zone requires identity/authentication remediation for SPO.
             # This is a configured capability, not a measurement of active users.
             'HasFbaZone'
+            # Site lock states (ReadOnly / NoAdditions / NoAccess) indicate migration
+            # blockers until the lock is removed or changed.
+            'IsLockedSite'
+            # IRM protection on lists/libraries requires migration remediation.
+            'IrmEnabledListCount'
         )
     }
 

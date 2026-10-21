@@ -458,6 +458,9 @@ td.muted, .muted { color: var(--muted); }
         @{ Key = 'AssessmentWarnings'; Label = 'Assessment warnings'; Class = 'reasons'; Type = 'text' }
         @{ Key = 'AuthenticationModes'; Label = 'Authentication'; Class = ''; Type = 'text' }
         @{ Key = 'HasFbaZone'; Label = 'FBA configured'; Class = ''; Type = 'text' }
+        @{ Key = 'SiteLockState'; Label = 'Site lock state'; Class = ''; Type = 'text' }
+        @{ Key = 'IsLockedSite'; Label = 'Site locked'; Class = ''; Type = 'text' }
+        @{ Key = 'IrmEnabledListCount'; Label = 'IRM-enabled lists'; Class = 'num'; Type = 'num' }
         @{ Key = 'ContentTypeCount'; Label = 'Content types (unique web IDs)'; Class = 'num'; Type = 'num' }
         @{ Key = 'ListContentTypeBindingCount'; Label = 'List content-type bindings'; Class = 'num'; Type = 'num' }
         @{ Key = 'ContentTypeInventoryComplete'; Label = 'Content types complete'; Class = ''; Type = 'text' }
