@@ -12,6 +12,11 @@ Describe 'Export-SPSInventoryReport content types' {
             ListContentTypeBindingCount = 1; ContentTypeInventoryComplete = $true
             Workflow2010Count = 1; Workflow2013Count = 0; InfoPathFormCount = 0
             IrmEnabledListCount = 2; SiteLockState = 'ReadOnly'; IsLockedSite = $true
+            IsLargeSite = $true
+            LargeListCount = 1; LargeListExamples = 'Documents (7000)'
+            LargeListViewCount = 1; LargeListViewExamples = 'Documents/All Items (7000)'
+            CheckedOutFileCount = 3; CheckedOutFileExamples = 'Documents (3)'
+            FileVersionCount = 2; FileVersionExamples = '/sites/team/Documents/a.docx (80)'
             UsesFullTrustCode = $true
             AssessmentStatus = 'Complete'; AssessmentWarnings = ''
             Category = 4; CategoryName = 'Blocking'; Wave = 4; Score = 0
@@ -34,10 +39,12 @@ Describe 'Export-SPSInventoryReport content types' {
         Test-Path $output.AuthJsonPath | Should -BeTrue
         Test-Path $output.WorkflowsJsonPath | Should -BeTrue
         Test-Path $output.IrmLocksJsonPath | Should -BeTrue
+        Test-Path $output.LargeContentJsonPath | Should -BeTrue
         Test-Path $output.AlertsJsonPath | Should -BeTrue
         Test-Path $output.ManifestJsonPath | Should -BeTrue
         @(Get-Content $output.WorkflowsJsonPath -Raw | ConvertFrom-Json) | Should -HaveCount 1
         @(Get-Content $output.IrmLocksJsonPath -Raw | ConvertFrom-Json) | Should -HaveCount 1
+        @(Get-Content $output.LargeContentJsonPath -Raw | ConvertFrom-Json) | Should -HaveCount 1
         @(Get-Content $output.AlertsJsonPath -Raw | ConvertFrom-Json) | Should -Not -BeNullOrEmpty
         @(Import-Csv $output.ContentTypesCsvPath) | Should -HaveCount 1
         (Import-Csv $output.ContentTypesCsvPath)[0].ListTitle | Should -Be 'Legal, & Compliance'
@@ -45,6 +52,7 @@ Describe 'Export-SPSInventoryReport content types' {
         @(Get-Content $output.ContentTypesJsonPath -Raw | ConvertFrom-Json) | Should -HaveCount 1
         $manifest = Get-Content $output.ManifestJsonPath -Raw | ConvertFrom-Json
         $manifest.Files.SitesJson | Should -Be $output.SitesJsonPath
+        $manifest.Files.LargeContentJson | Should -Be $output.LargeContentJsonPath
         $manifest.Files.ContentTypesJson | Should -Be $output.ContentTypesJsonPath
         $manifest.Summary.AlertCount | Should -BeGreaterThan 0
         (Get-Content $output.HtmlPath -Raw) | Should -Match 'Legal, &amp; Compliance'
@@ -94,6 +102,11 @@ Describe 'Export-SPSInventoryReport content types' {
                 AssessmentStatus = 'Failed'
                 AssessmentWarnings = 'Assessment failed: Access denied'
                 Category = $null
+                IsLargeSite = $true
+                LargeListCount = 1
+                LargeListViewCount = 1
+                CheckedOutFileCount = 2
+                FileVersionCount = 1
             }
         )
 
@@ -103,5 +116,10 @@ Describe 'Export-SPSInventoryReport content types' {
         @($alerts | Where-Object { $_.AlertType -eq 'WebApplicationEnumerationFailed' -and $_.Url -eq 'https://intranet' }).Count | Should -Be 1
         @($alerts | Where-Object { $_.AlertType -eq 'AssessmentFailed' -and $_.Url -eq 'https://intranet/sites/failed-fba' }).Count | Should -Be 1
         @($alerts | Where-Object { $_.AlertType -eq 'FbaConfigured' -and $_.Url -eq 'https://intranet/sites/failed-fba' }).Count | Should -Be 1
+        @($alerts | Where-Object { $_.AlertType -eq 'LargeSite' -and $_.Url -eq 'https://intranet/sites/failed-fba' }).Count | Should -Be 1
+        @($alerts | Where-Object { $_.AlertType -eq 'LargeLists' -and $_.Url -eq 'https://intranet/sites/failed-fba' }).Count | Should -Be 1
+        @($alerts | Where-Object { $_.AlertType -eq 'LargeListViews' -and $_.Url -eq 'https://intranet/sites/failed-fba' }).Count | Should -Be 1
+        @($alerts | Where-Object { $_.AlertType -eq 'CheckedOutFiles' -and $_.Url -eq 'https://intranet/sites/failed-fba' }).Count | Should -Be 1
+        @($alerts | Where-Object { $_.AlertType -eq 'FileVersions' -and $_.Url -eq 'https://intranet/sites/failed-fba' }).Count | Should -Be 1
     }
 }

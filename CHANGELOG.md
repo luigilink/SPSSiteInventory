@@ -26,6 +26,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `-workflows-`, `-irm-locks-`, `-alerts-`) with a `-manifest-` file while
   preserving the existing CSV/JSON/HTML outputs. The HTML report now includes
   navigation shortcuts and risk indicator cards for key migration blockers. (#51)
+- Added SMAT-parity large-content signals with configurable thresholds:
+  large sites, large lists, large-list views, checked-out files, and files with
+  high version counts. CSV/JSON/HTML outputs now surface these fields and
+  examples; report-pack adds `-large-content-*.json`; alerts include dedicated
+  large-content entries. (#36)
 - Zone-aware web application authentication inventory, including mixed Windows/FBA,
   membership/role provider names and explicit identity-review flags. The example
   configuration treats `HasFbaZone` as a SharePoint Online migration blocker.

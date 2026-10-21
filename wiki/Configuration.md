@@ -15,6 +15,7 @@ and adjust it. No client-specific value ships in the repository.
 | `KnownMicrosoftSolutionPrefix` | string[] | Optional extra name prefixes to treat as Microsoft / out-of-the-box during auto-detection (e.g. a known vendor package). |
 | `OutputFolder` | string | Folder where the CSV/JSON reports are written. |
 | `LogRetentionDays` | int | Days of run logs kept under the `Logs` folder. |
+| `LargeContentThresholds` | hashtable | Thresholds for large-content parity signals (large site/list/view, checked-out files, file versions). Optional; defaults apply when omitted. |
 | `Scoring` | hashtable | The scoring engine configuration (see below). **Mandatory.** |
 | `MigrationWaves` | hashtable[] | The category-to-wave mapping (see below). Optional; a one-wave-per-category default applies when omitted. |
 
@@ -47,6 +48,11 @@ Scoring = @{
         Workflow2013Count        = 1.5
         InfoPathFormCount        = 3.0
         IrmEnabledListCount      = 2.5
+        IsLargeSite              = 1.5
+        LargeListCount           = 0.5
+        LargeListViewCount       = 0.5
+        CheckedOutFileCount      = 0.05
+        FileVersionCount         = 0.02
         SandboxSolutions         = 3.0
         CustomMasterPage         = 2.0
         EventReceivers           = 1.5
@@ -93,6 +99,16 @@ heavily and listed in `BlockingSignals` in the example configuration.
 records-protection and compliance remediation during migration, so the example
 configuration keeps it as both weighted and blocking.
 
+Large-content parity signals are threshold-driven:
+
+- `IsLargeSite` — site storage is at or above `LargeContentThresholds.LargeSiteSizeGB`.
+- `LargeListCount` — lists at or above `LargeContentThresholds.LargeListItemCount`.
+- `LargeListViewCount` — views whose row limit is at or above
+  `LargeContentThresholds.LargeListViewRowLimit` on large lists.
+- `CheckedOutFileCount` — checked-out files detected in document libraries.
+- `FileVersionCount` — files whose version count is at or above
+  `LargeContentThresholds.FileVersionCount`.
+
 `EventReceivers` counts only **custom** event receivers (those registered from a
 non-Microsoft assembly). Out-of-the-box receivers on native lists are ignored, so a stock
 site is not promoted just because SharePoint's own lists carry many built-in receivers.
@@ -127,6 +143,28 @@ blocker overrides.
 Content types are inventoried for review, including standard definitions and list
 bindings. They do not contribute to the default score. Names, groups and content-type
 ID prefixes alone do not reliably identify custom or non-portable definitions.
+
+## LargeContentThresholds section
+
+```powershell
+LargeContentThresholds = @{
+    LargeSiteSizeGB = 100
+    LargeListItemCount = 5000
+    LargeListViewRowLimit = 5000
+    CheckedOutFileCount = 1
+    FileVersionCount = 50
+    MaxItemsForVersionScanPerLibrary = 2000
+}
+```
+
+- `LargeSiteSizeGB` — marks `IsLargeSite` when `SizeGB` reaches this value.
+- `LargeListItemCount` — minimum list size for `LargeListCount`.
+- `LargeListViewRowLimit` — minimum view row limit for `LargeListViewCount`.
+- `CheckedOutFileCount` — minimum checked-out files in a library before it is surfaced
+  in examples (site-wide checked-out files are always counted).
+- `FileVersionCount` — minimum file-version count for `FileVersionCount`.
+- `MaxItemsForVersionScanPerLibrary` — cap for per-library file-version scanning.
+  When the cap is reached, assessment stays usable but is marked partial with a warning.
 
 ## MigrationWaves section
 

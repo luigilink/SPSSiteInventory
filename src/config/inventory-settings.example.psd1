@@ -39,6 +39,28 @@
     LogRetentionDays = 90
 
     # -------------------------------------------------------------------------------
+    # Large-content risk thresholds
+    #
+    # These thresholds drive large-content signals collected per site:
+    # - IsLargeSite (site size >= LargeSiteSizeGB)
+    # - LargeListCount / LargeListViewCount
+    # - CheckedOutFileCount
+    # - FileVersionCount
+    #
+    # File-version counting scans document-library items. To keep runtime predictable,
+    # MaxItemsForVersionScanPerLibrary caps per-library scanning; when hit, the scan is
+    # marked partial and a warning is emitted.
+    # -------------------------------------------------------------------------------
+    LargeContentThresholds = @{
+        LargeSiteSizeGB = 100
+        LargeListItemCount = 5000
+        LargeListViewRowLimit = 5000
+        CheckedOutFileCount = 1
+        FileVersionCount = 50
+        MaxItemsForVersionScanPerLibrary = 2000
+    }
+
+    # -------------------------------------------------------------------------------
     # Scoring engine (consumed by Measure-SPSSiteComplexity)
     #
     # Category mapping:
@@ -65,6 +87,12 @@
             # IRM-enabled lists and libraries require records-protection remediation
             # before migration.
             IrmEnabledListCount      = 2.5
+            # Large-content risk signals (SMAT parity scope).
+            IsLargeSite              = 1.5
+            LargeListCount           = 0.5
+            LargeListViewCount       = 0.5
+            CheckedOutFileCount      = 0.05
+            FileVersionCount         = 0.02
             SandboxSolutions         = 3.0
             CustomMasterPage         = 2.0
             EventReceivers           = 1.5

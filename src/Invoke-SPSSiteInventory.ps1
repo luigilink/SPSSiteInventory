@@ -69,10 +69,16 @@ try {
     }
 
     Add-SPSInventoryEvent -Message ("Discovered {0} site collection(s); collecting customization signals." -f @($inventory).Count) -Level Information
+    $largeContentThresholds = if ($settings.ContainsKey('LargeContentThresholds')) {
+        $settings.LargeContentThresholds
+    }
+    else {
+        @{}
+    }
     $assessment = & $commonModule {
-        param ($Inventory, $CustomFeatureId, $FullTrustFeatureId, $Scoring)
-        Invoke-SPSiteAssessment -Inventory $Inventory -CustomFeatureId $CustomFeatureId -FullTrustFeatureId $FullTrustFeatureId -Scoring $Scoring
-    } $inventory $customFeatureId $fullTrustFeatureId $settings.Scoring
+        param ($Inventory, $CustomFeatureId, $FullTrustFeatureId, $Scoring, $LargeContentThresholds)
+        Invoke-SPSiteAssessment -Inventory $Inventory -CustomFeatureId $CustomFeatureId -FullTrustFeatureId $FullTrustFeatureId -Scoring $Scoring -LargeContentThresholds $LargeContentThresholds
+    } $inventory $customFeatureId $fullTrustFeatureId $settings.Scoring $largeContentThresholds
     $scored = @($assessment.Inventory)
     $contentTypes = @($assessment.ContentTypes)
     if (@($scored | Where-Object { $_.IsLockedSite }).Count -gt 0 -and
@@ -101,7 +107,7 @@ try {
     $output = Export-SPSInventoryReport -InputObject @($scored) -OutputFolder $settings.OutputFolder -BaseName ('SPSSiteInventory-' + $settings.EnvName) -EnvName $settings.EnvName -SolutionMap @($solutionMap) -ContentTypes $contentTypes -SolutionJsonPath $solutionOutput.JsonPath
 
     Add-SPSInventoryEvent -Message "Inventory complete. CSV: $($output.CsvPath) | JSON: $($output.JsonPath) | HTML: $($output.HtmlPath)" -Level Information
-    Add-SPSInventoryEvent -Message "Report pack. Sites: $($output.SitesJsonPath) | Auth: $($output.AuthJsonPath) | Workflows: $($output.WorkflowsJsonPath) | IRM/Locks: $($output.IrmLocksJsonPath) | Alerts: $($output.AlertsJsonPath) | Manifest: $($output.ManifestJsonPath)" -Level Information
+    Add-SPSInventoryEvent -Message "Report pack. Sites: $($output.SitesJsonPath) | Auth: $($output.AuthJsonPath) | Workflows: $($output.WorkflowsJsonPath) | IRM/Locks: $($output.IrmLocksJsonPath) | Large content: $($output.LargeContentJsonPath) | Alerts: $($output.AlertsJsonPath) | Manifest: $($output.ManifestJsonPath)" -Level Information
     Add-SPSInventoryEvent -Message "Farm-solution report. CSV: $($solutionOutput.CsvPath) | JSON: $($solutionOutput.JsonPath)" -Level Information
     Add-SPSInventoryEvent -Message "Content-type report. CSV: $($output.ContentTypesCsvPath) | JSON: $($output.ContentTypesJsonPath)" -Level Information
 }

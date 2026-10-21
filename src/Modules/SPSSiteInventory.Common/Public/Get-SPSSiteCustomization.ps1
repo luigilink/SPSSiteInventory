@@ -6,9 +6,11 @@
         .DESCRIPTION
         Inspects one site collection and returns the signals that drive the migration
         complexity score: 2010 vs 2013 workflows, InfoPath forms, IRM-enabled lists,
-        site lock state, sandbox solutions, custom master page, unique permissions,
-        custom event receivers, and whether the site activates a feature that comes from
-        a custom farm solution (correlated through the farm-solution map).
+        large-content migration risks (large lists/views, checked-out files, file
+        versions), site lock state, sandbox solutions, custom master page, unique
+        permissions, custom event receivers, and whether the site activates a feature
+        that comes from a custom farm solution (correlated through the farm-solution
+        map).
 
         EventReceivers counts only custom event receivers (those registered from a
         non-Microsoft assembly). Out-of-the-box receivers on native lists are ignored so
@@ -62,6 +64,11 @@
         a strong "not portable to SharePoint Online" indicator that the scoring config can
         treat as blocking.
 
+        .PARAMETER LargeContentThresholds
+        Optional thresholds for large-content parity signals:
+        LargeListItemCount, LargeListViewRowLimit, CheckedOutFileCount,
+        FileVersionCount, and MaxItemsForVersionScanPerLibrary.
+
         .EXAMPLE
         $map = Get-SPSFarmSolutionMap -CustomSolutionPrefix @('contoso')
         $customIds = $map | Where-Object IsCustom | ForEach-Object FeatureIds
@@ -84,7 +91,11 @@
 
         [Parameter()]
         [System.String[]]
-        $FullTrustFeatureId = @()
+        $FullTrustFeatureId = @(),
+
+        [Parameter()]
+        [System.Collections.IDictionary]
+        $LargeContentThresholds = @{}
     )
 
     $signals = @{
@@ -92,6 +103,15 @@
         Workflow2013Count        = 0
         InfoPathFormCount        = 0
         IrmEnabledListCount      = 0
+        IsLargeSite              = $false
+        LargeListCount           = 0
+        LargeListExamples        = ''
+        LargeListViewCount       = 0
+        LargeListViewExamples    = ''
+        CheckedOutFileCount      = 0
+        CheckedOutFileExamples   = ''
+        FileVersionCount         = 0
+        FileVersionExamples      = ''
         IsLockedSite             = $false
         SiteLockState            = 'Unknown'
         SandboxSolutions         = 0
@@ -107,6 +127,74 @@
     }
     $contentTypes = [System.Collections.Generic.List[object]]::new()
     $contentTypeIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $largeListExamples = [System.Collections.Generic.List[string]]::new()
+    $largeListViewExamples = [System.Collections.Generic.List[string]]::new()
+    $checkedOutFileExamples = [System.Collections.Generic.List[string]]::new()
+    $fileVersionExamples = [System.Collections.Generic.List[string]]::new()
+
+    $largeListItemThreshold = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'LargeListItemCount' -DefaultValue 5000 -MinimumValue 1)
+    $largeListViewRowLimitThreshold = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'LargeListViewRowLimit' -DefaultValue 5000 -MinimumValue 1)
+    $checkedOutFileThreshold = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'CheckedOutFileCount' -DefaultValue 1 -MinimumValue 1)
+    $fileVersionThreshold = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'FileVersionCount' -DefaultValue 50 -MinimumValue 1)
+    $maxItemsForVersionScan = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'MaxItemsForVersionScanPerLibrary' -DefaultValue 2000 -MinimumValue 1)
+    $setQueryProperty = {
+        param([object]$QueryObject, [string]$PropertyName, [object]$Value)
+        if ($null -ne $QueryObject.PSObject.Properties[$PropertyName]) {
+            $QueryObject.$PropertyName = $Value
+        }
+        else {
+            $QueryObject | Add-Member -MemberType NoteProperty -Name $PropertyName -Value $Value -Force
+        }
+    }
+    $newPagedQuery = {
+        param([uint32]$RowLimit, [string]$QueryText = '')
+        $spQueryType = [Type]::GetType('Microsoft.SharePoint.SPQuery, Microsoft.SharePoint', $false)
+        $queryObject = if ($null -ne $spQueryType) { New-Object -TypeName Microsoft.SharePoint.SPQuery } else { [PSCustomObject]@{} }
+        & $setQueryProperty $queryObject 'RowLimit' $RowLimit
+        & $setQueryProperty $queryObject 'ViewAttributes' "Scope='RecursiveAll'"
+        if ($QueryText) {
+            & $setQueryProperty $queryObject 'Query' $QueryText
+        }
+        & $setQueryProperty $queryObject 'ListItemCollectionPosition' $null
+        return $queryObject
+    }
+    $getBatchItems = {
+        param([object]$Batch)
+        if ($null -eq $Batch) { return @() }
+        if ($null -ne $Batch.PSObject.Properties['Items']) {
+            return @($Batch.Items)
+        }
+        if ($Batch -is [System.Collections.IEnumerable] -and -not ($Batch -is [string])) {
+            return @($Batch)
+        }
+        return @()
+    }
+    $getBatchPosition = {
+        param([object]$Batch)
+        if ($null -eq $Batch) { return $null }
+        if ($null -ne $Batch.PSObject.Properties['ListItemCollectionPosition']) {
+            return $Batch.ListItemCollectionPosition
+        }
+        return $null
+    }
+    $getFileIdentity = {
+        param([object]$FileObject, [object]$FallbackObject)
+        if ($FileObject -is [string] -and -not [string]::IsNullOrWhiteSpace($FileObject)) {
+            return [string]$FileObject
+        }
+        if ($null -ne $FileObject) {
+            if ($null -ne $FileObject.PSObject.Properties['ServerRelativeUrl'] -and $FileObject.ServerRelativeUrl) { return [string]$FileObject.ServerRelativeUrl }
+            if ($null -ne $FileObject.PSObject.Properties['Url'] -and $FileObject.Url) { return [string]$FileObject.Url }
+            if ($null -ne $FileObject.PSObject.Properties['UniqueId'] -and $FileObject.UniqueId) { return [string]$FileObject.UniqueId }
+            if ($null -ne $FileObject.PSObject.Properties['Name'] -and $FileObject.Name) { return [string]$FileObject.Name }
+        }
+        if ($null -ne $FallbackObject) {
+            if ($null -ne $FallbackObject.PSObject.Properties['Url'] -and $FallbackObject.Url) { return [string]$FallbackObject.Url }
+            if ($null -ne $FallbackObject.PSObject.Properties['ServerRelativeUrl'] -and $FallbackObject.ServerRelativeUrl) { return [string]$FallbackObject.ServerRelativeUrl }
+            if ($null -ne $FallbackObject.PSObject.Properties['Name'] -and $FallbackObject.Name) { return [string]$FallbackObject.Name }
+        }
+        return $null
+    }
 
     try {
         $signals.SandboxSolutions = @($Site.Solutions).Count
@@ -282,6 +370,189 @@
                             $signals.CustomizationInventoryComplete = $false
                             Write-Warning -Message "Could not read IRM state on list '$listTitle' in web '$($web.Url)': $($_.Exception.Message)"
                         }
+
+                        $listItemCount = $null
+                        try {
+                            if ($null -eq $list.PSObject.Properties['ItemCount']) {
+                                throw "List item count is unavailable on '$listTitle'."
+                            }
+                            $listItemCount = [int]$list.ItemCount
+                            if ($listItemCount -ge $largeListItemThreshold) {
+                                $signals.LargeListCount++
+                                if ($largeListExamples.Count -lt 5) {
+                                    $largeListExamples.Add(('{0} ({1})' -f $listTitle, $listItemCount))
+                                }
+                            }
+                        }
+                        catch {
+                            $signals.CustomizationInventoryComplete = $false
+                            Write-Warning -Message "Could not read list item count on '$listTitle' in web '$($web.Url)': $($_.Exception.Message)"
+                        }
+
+                        try {
+                            $views = $list.Views
+                            if ($null -eq $views) {
+                                throw "List views are unavailable on '$listTitle'."
+                            }
+                            if ($null -ne $listItemCount -and $listItemCount -ge $largeListItemThreshold) {
+                                foreach ($view in $views) {
+                                    $rowLimit = 0
+                                    if ($null -ne $view.PSObject.Properties['RowLimit'] -and $null -ne $view.RowLimit) {
+                                        $rowLimit = [int]$view.RowLimit
+                                    }
+                                    if ($rowLimit -ge $largeListViewRowLimitThreshold) {
+                                        $signals.LargeListViewCount++
+                                        if ($largeListViewExamples.Count -lt 5) {
+                                            $viewTitle = if ($view.PSObject.Properties['Title']) { [string]$view.Title } else { 'Unnamed view' }
+                                            $largeListViewExamples.Add(('{0}/{1} ({2})' -f $listTitle, $viewTitle, $rowLimit))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        catch {
+                            $signals.CustomizationInventoryComplete = $false
+                            Write-Warning -Message "Could not read list views on '$listTitle' in web '$($web.Url)': $($_.Exception.Message)"
+                        }
+
+                        $isDocumentLibrary = [string]$list.BaseTemplate -eq '101' -or
+                            ($null -ne $list.PSObject.Properties['BaseType'] -and [string]$list.BaseType -eq 'DocumentLibrary')
+                        $libraryCheckedOutKeys = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+                        try {
+                            if ($null -ne $list.PSObject.Properties['CheckedOutFiles'] -and $null -ne $list.CheckedOutFiles) {
+                                foreach ($checkedOutFile in @($list.CheckedOutFiles)) {
+                                    $fileKey = & $getFileIdentity $checkedOutFile $null
+                                    if (-not [string]::IsNullOrWhiteSpace($fileKey)) {
+                                        [void]$libraryCheckedOutKeys.Add($fileKey)
+                                    }
+                                }
+                            }
+
+                            if ($isDocumentLibrary -and $null -ne $list.PSObject.Methods['GetItems']) {
+                                $checkoutQuery = & $newPagedQuery -RowLimit 200 -QueryText '<Where><IsNotNull><FieldRef Name="CheckoutUser" /></IsNotNull></Where>'
+                                $checkoutPosition = $null
+                                do {
+                                    & $setQueryProperty $checkoutQuery 'ListItemCollectionPosition' $checkoutPosition
+                                    $checkoutBatch = $list.GetItems($checkoutQuery)
+                                    foreach ($checkedOutItem in (& $getBatchItems $checkoutBatch)) {
+                                        $itemFile = if ($null -ne $checkedOutItem.PSObject.Properties['File']) { $checkedOutItem.File } else { $null }
+                                        $fileKey = & $getFileIdentity $itemFile $checkedOutItem
+                                        if (-not [string]::IsNullOrWhiteSpace($fileKey)) {
+                                            [void]$libraryCheckedOutKeys.Add($fileKey)
+                                        }
+                                    }
+                                    $checkoutPosition = & $getBatchPosition $checkoutBatch
+                                } while ($null -ne $checkoutPosition)
+                            }
+                            elseif ($isDocumentLibrary -and $null -ne $list.PSObject.Properties['Items'] -and $null -ne $list.Items) {
+                                foreach ($checkedOutItem in @($list.Items)) {
+                                    $itemFile = if ($null -ne $checkedOutItem.PSObject.Properties['File']) { $checkedOutItem.File } else { $null }
+                                    if ($null -eq $itemFile) { continue }
+                                    $isCheckedOut = $false
+                                    if ($null -ne $itemFile.PSObject.Properties['CheckOutType'] -and
+                                        $null -ne $itemFile.CheckOutType -and
+                                        [string]$itemFile.CheckOutType -ne '' -and
+                                        [string]$itemFile.CheckOutType -ne 'None' -and
+                                        [string]$itemFile.CheckOutType -ne '0') {
+                                        $isCheckedOut = $true
+                                    }
+                                    elseif ($null -ne $itemFile.PSObject.Properties['CheckoutUser'] -and $null -ne $itemFile.CheckoutUser) {
+                                        $isCheckedOut = $true
+                                    }
+                                    elseif ($null -ne $itemFile.PSObject.Properties['CheckOutUser'] -and $null -ne $itemFile.CheckOutUser) {
+                                        $isCheckedOut = $true
+                                    }
+                                    elseif ($null -ne $checkedOutItem.PSObject.Properties['CheckoutUser'] -and $null -ne $checkedOutItem.CheckoutUser) {
+                                        $isCheckedOut = $true
+                                    }
+
+                                    if ($isCheckedOut) {
+                                        $fileKey = & $getFileIdentity $itemFile $checkedOutItem
+                                        if (-not [string]::IsNullOrWhiteSpace($fileKey)) {
+                                            [void]$libraryCheckedOutKeys.Add($fileKey)
+                                        }
+                                    }
+                                }
+                            }
+
+                        }
+                        catch {
+                            $signals.CustomizationInventoryComplete = $false
+                            Write-Warning -Message "Could not read checked-out files on '$listTitle' in web '$($web.Url)': $($_.Exception.Message)"
+                        }
+                        finally {
+                            $checkedOutFilesCount = $libraryCheckedOutKeys.Count
+                            $signals.CheckedOutFileCount += $checkedOutFilesCount
+                            if ($checkedOutFilesCount -ge $checkedOutFileThreshold -and $checkedOutFileExamples.Count -lt 5) {
+                                $checkedOutFileExamples.Add(('{0} ({1})' -f $listTitle, $checkedOutFilesCount))
+                            }
+                        }
+
+                        try {
+                            if ($isDocumentLibrary) {
+                                $scanCount = 0
+                                $hasUnscannedItems = $false
+                                if ($null -ne $list.PSObject.Methods['GetItems']) {
+                                    $versionQuery = & $newPagedQuery -RowLimit 200
+                                    $versionPosition = $null
+                                    do {
+                                        & $setQueryProperty $versionQuery 'ListItemCollectionPosition' $versionPosition
+                                        $versionBatch = $list.GetItems($versionQuery)
+                                        foreach ($item in (& $getBatchItems $versionBatch)) {
+                                            if ($scanCount -ge $maxItemsForVersionScan) {
+                                                $hasUnscannedItems = $true
+                                                break
+                                            }
+                                            $scanCount++
+                                            if ($null -eq $item.PSObject.Properties['File'] -or $null -eq $item.File) {
+                                                continue
+                                            }
+                                            $fileVersionCount = @($item.File.Versions).Count
+                                            if ($fileVersionCount -ge $fileVersionThreshold) {
+                                                $signals.FileVersionCount++
+                                                if ($fileVersionExamples.Count -lt 5) {
+                                                    $fileUrl = & $getFileIdentity $item.File $item
+                                                    $fileVersionExamples.Add(('{0} ({1})' -f $fileUrl, $fileVersionCount))
+                                                }
+                                            }
+                                        }
+                                        $versionPosition = & $getBatchPosition $versionBatch
+                                        if ($scanCount -ge $maxItemsForVersionScan -and $null -ne $versionPosition) {
+                                            $hasUnscannedItems = $true
+                                        }
+                                    } while ($null -ne $versionPosition -and $scanCount -lt $maxItemsForVersionScan)
+                                }
+                                else {
+                                    foreach ($item in @($list.Items)) {
+                                        if ($scanCount -ge $maxItemsForVersionScan) {
+                                            $hasUnscannedItems = $true
+                                            break
+                                        }
+                                        $scanCount++
+                                        if ($null -eq $item.PSObject.Properties['File'] -or $null -eq $item.File) {
+                                            continue
+                                        }
+                                        $fileVersionCount = @($item.File.Versions).Count
+                                        if ($fileVersionCount -ge $fileVersionThreshold) {
+                                            $signals.FileVersionCount++
+                                            if ($fileVersionExamples.Count -lt 5) {
+                                                $fileUrl = & $getFileIdentity $item.File $item
+                                                $fileVersionExamples.Add(('{0} ({1})' -f $fileUrl, $fileVersionCount))
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if ($hasUnscannedItems) {
+                                    $signals.CustomizationInventoryComplete = $false
+                                    Write-Warning -Message "File-version scan stopped on '$listTitle' in web '$($web.Url)' after $maxItemsForVersionScan item(s). Increase LargeContentThresholds.MaxItemsForVersionScanPerLibrary to scan more items."
+                                }
+                            }
+                        }
+                        catch {
+                            $signals.CustomizationInventoryComplete = $false
+                            Write-Warning -Message "Could not scan file versions on '$listTitle' in web '$($web.Url)': $($_.Exception.Message)"
+                        }
                     }
                 }
                 catch {
@@ -352,5 +623,9 @@
 
     $signals.ContentTypeCount = $contentTypeIds.Count
     $signals.ContentTypes = $contentTypes.ToArray()
+    $signals.LargeListExamples = $largeListExamples -join '; '
+    $signals.LargeListViewExamples = $largeListViewExamples -join '; '
+    $signals.CheckedOutFileExamples = $checkedOutFileExamples -join '; '
+    $signals.FileVersionExamples = $fileVersionExamples -join '; '
     return $signals
 }
