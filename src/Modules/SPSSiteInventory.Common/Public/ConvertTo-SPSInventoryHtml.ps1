@@ -125,6 +125,9 @@
     $riskCards = @(
         [PSCustomObject]@{ Label = 'Sites with full-trust code'; Count = @($siteRecords | Where-Object { $_.UsesFullTrustCode }).Count }
         [PSCustomObject]@{ Label = 'Sites with FBA configured'; Count = @($siteRecords | Where-Object { $_.HasFbaZone }).Count }
+        [PSCustomObject]@{ Label = 'Sites with unsupported templates'; Count = @($siteRecords | Where-Object { $_.IsUnsupportedSiteTemplate }).Count }
+        [PSCustomObject]@{ Label = 'Sites with template compatibility review'; Count = @($siteRecords | Where-Object { -not [bool]$_.IsUnsupportedSiteTemplate -and [string]$_.TemplateCompatibility -eq 'Review' }).Count }
+        [PSCustomObject]@{ Label = 'Sites with template-language review'; Count = @($siteRecords | Where-Object { $_.TemplateLanguageReviewRequired }).Count }
         [PSCustomObject]@{ Label = 'Sites with InfoPath forms'; Count = @($siteRecords | Where-Object { [int]$_.InfoPathFormCount -gt 0 }).Count }
         [PSCustomObject]@{ Label = 'Sites with IRM-enabled lists'; Count = @($siteRecords | Where-Object { [int]$_.IrmEnabledListCount -gt 0 }).Count }
         [PSCustomObject]@{ Label = 'Sites with locked state'; Count = @($siteRecords | Where-Object { $_.IsLockedSite }).Count }
@@ -509,6 +512,13 @@ td.muted, .muted { color: var(--muted); }
         @{ Key = 'WebApp'; Label = 'Web application'; Class = ''; Type = 'text' }
         @{ Key = 'ContentDb'; Label = 'Content DB'; Class = ''; Type = 'text' }
         @{ Key = 'Template'; Label = 'Template'; Class = ''; Type = 'text' }
+        @{ Key = 'TemplateCompatibility'; Label = 'Template compatibility'; Class = ''; Type = 'text' }
+        @{ Key = 'IsUnsupportedSiteTemplate'; Label = 'Unsupported template'; Class = ''; Type = 'text' }
+        @{ Key = 'TemplateCompatibilityReason'; Label = 'Template compatibility reason'; Class = 'reasons'; Type = 'text' }
+        @{ Key = 'TemplateLanguageLcid'; Label = 'Template language LCID'; Class = 'num'; Type = 'num' }
+        @{ Key = 'TemplateLanguageTag'; Label = 'Template language'; Class = ''; Type = 'text' }
+        @{ Key = 'TemplateLanguageReviewRequired'; Label = 'Template language review'; Class = ''; Type = 'text' }
+        @{ Key = 'TemplateLanguageReason'; Label = 'Template language reason'; Class = 'reasons'; Type = 'text' }
         @{ Key = 'SizeGB'; Label = 'Size (GB)'; Class = 'num'; Type = 'num' }
         @{ Key = 'SubWebCount'; Label = 'Sub-webs'; Class = 'num'; Type = 'num' }
         @{ Key = 'LastModified'; Label = 'Last modified'; Class = ''; Type = 'text' }

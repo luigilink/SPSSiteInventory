@@ -35,6 +35,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Workflow2010RunningInstanceCount` and `Workflow2013RunningInstanceCount`,
   including CSV/JSON/HTML/report-pack fields and dedicated alerts, with
   best-effort behavior when Workflow Manager instance APIs are unavailable. (#37)
+- Added SMAT P0 site-template parity depth signals:
+  explicit template compatibility mapping (`Compatible` / `Unsupported` /
+  `Review`), unsupported-template blocker flag (`IsUnsupportedSiteTemplate`),
+  and template-language review metadata (`TemplateLanguage*`). These fields are
+  now propagated to CSV/JSON/HTML/report-pack and alert outputs, with
+  configurable rules under `TemplateParity`. (#39)
 - Zone-aware web application authentication inventory, including mixed Windows/FBA,
   membership/role provider names and explicit identity-review flags. The example
   configuration treats `HasFbaZone` as a SharePoint Online migration blocker.

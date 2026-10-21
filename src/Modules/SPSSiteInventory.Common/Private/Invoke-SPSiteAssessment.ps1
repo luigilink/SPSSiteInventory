@@ -78,6 +78,8 @@
                 }
                 $signals['SizeGB'] = $item.SizeGB
                 $signals['HasFbaZone'] = $item.HasFbaZone
+                $signals['IsUnsupportedSiteTemplate'] = $item.IsUnsupportedSiteTemplate
+                $signals['TemplateLanguageReviewRequired'] = $item.TemplateLanguageReviewRequired
                 $signals['IsLargeSite'] = $false
                 if ($null -ne $item.SizeGB) {
                     try {
@@ -122,6 +124,14 @@
                     AuthenticationReviewRequired = $item.AuthenticationReviewRequired
                     ContentDb = $item.ContentDb
                     Template = $item.Template
+                    IsUnsupportedSiteTemplate = $item.IsUnsupportedSiteTemplate
+                    TemplateCompatibility = $item.TemplateCompatibility
+                    TemplateCompatibilityReason = $item.TemplateCompatibilityReason
+                    TemplateLanguageLcid = $item.TemplateLanguageLcid
+                    TemplateLanguageTag = $item.TemplateLanguageTag
+                    TemplateLanguageName = $item.TemplateLanguageName
+                    TemplateLanguageReviewRequired = $item.TemplateLanguageReviewRequired
+                    TemplateLanguageReason = $item.TemplateLanguageReason
                     SizeGB = $item.SizeGB
                     SubWebCount = $item.SubWebCount
                     LastModified = $item.LastModified
@@ -175,6 +185,14 @@
                     AuthenticationReviewRequired = $item.AuthenticationReviewRequired
                     ContentDb = $item.ContentDb
                     Template = $item.Template
+                    IsUnsupportedSiteTemplate = $item.IsUnsupportedSiteTemplate
+                    TemplateCompatibility = $item.TemplateCompatibility
+                    TemplateCompatibilityReason = $item.TemplateCompatibilityReason
+                    TemplateLanguageLcid = $item.TemplateLanguageLcid
+                    TemplateLanguageTag = $item.TemplateLanguageTag
+                    TemplateLanguageName = $item.TemplateLanguageName
+                    TemplateLanguageReviewRequired = $item.TemplateLanguageReviewRequired
+                    TemplateLanguageReason = $item.TemplateLanguageReason
                     SizeGB = $item.SizeGB
                     SubWebCount = $item.SubWebCount
                     LastModified = $item.LastModified

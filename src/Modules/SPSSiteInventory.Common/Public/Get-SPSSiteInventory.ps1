@@ -6,8 +6,9 @@
         .DESCRIPTION
         Walks the requested web applications (or all content web applications when none
         is specified) and returns one record per site collection with the fields that
-        drive the migration plan: URL, title, content database, root-web template, size,
-        sub-web count and last activity date. Progress is displayed as sites are visited.
+        drive the migration plan: URL, title, content database, root-web template, template
+        compatibility/language signals, size, sub-web count and last activity date.
+        Progress is displayed as sites are visited.
         Individual metadata failures are returned as partial records with warning details.
 
         This collector returns volumetry, identity and authentication configuration
@@ -36,7 +37,11 @@
     (
         [Parameter()]
         [System.String[]]
-        $WebApplicationUrl = @()
+        $WebApplicationUrl = @(),
+
+        [Parameter()]
+        [System.Collections.IDictionary]
+        $TemplateParity = @{}
     )
 
     $webApps = if ($WebApplicationUrl.Count -gt 0) {
@@ -67,6 +72,14 @@
                 AuthenticationReviewRequired = $authentication.AuthenticationReviewRequired
                 ContentDb = ''
                 Template = ''
+                IsUnsupportedSiteTemplate = $null
+                TemplateCompatibility = 'NotCollected'
+                TemplateCompatibilityReason = 'Site collection enumeration failed before template collection.'
+                TemplateLanguageLcid = $null
+                TemplateLanguageTag = ''
+                TemplateLanguageName = ''
+                TemplateLanguageReviewRequired = $null
+                TemplateLanguageReason = ''
                 SizeGB = $null
                 SubWebCount = $null
                 LastModified = $null
@@ -143,6 +156,14 @@
                     AuthenticationReviewRequired = $authentication.AuthenticationReviewRequired
                     ContentDb = ''
                     Template = ''
+                    IsUnsupportedSiteTemplate = $false
+                    TemplateCompatibility = 'Review'
+                    TemplateCompatibilityReason = 'Template value is missing.'
+                    TemplateLanguageLcid = $null
+                    TemplateLanguageTag = ''
+                    TemplateLanguageName = ''
+                    TemplateLanguageReviewRequired = $true
+                    TemplateLanguageReason = 'Template language could not be collected.'
                     SizeGB = $null
                     SubWebCount = $null
                     LastModified = $null
@@ -159,9 +180,29 @@
                         $record.Title = $rootWeb.Title
                         $record.Template = '{0}#{1}' -f $rootWeb.WebTemplate, $rootWeb.Configuration
                         $record.LastModified = $rootWeb.LastItemModifiedDate
+                        try {
+                            $record.TemplateLanguageLcid = [int]$rootWeb.Language
+                        }
+                        catch {
+                            $warnings.Add("Template language LCID could not be read: $($_.Exception.Message)")
+                        }
                     }
                     catch {
                         $warnings.Add("Root web metadata could not be fully read: $($_.Exception.Message)")
+                    }
+
+                    try {
+                        $parity = Get-SPSSiteTemplateParity -Template $record.Template -LanguageLcid $record.TemplateLanguageLcid -TemplateParity $TemplateParity
+                        $record.IsUnsupportedSiteTemplate = [bool]$parity.IsUnsupportedSiteTemplate
+                        $record.TemplateCompatibility = $parity.TemplateCompatibility
+                        $record.TemplateCompatibilityReason = $parity.TemplateCompatibilityReason
+                        $record.TemplateLanguageTag = $parity.TemplateLanguageTag
+                        $record.TemplateLanguageName = $parity.TemplateLanguageName
+                        $record.TemplateLanguageReviewRequired = [bool]$parity.TemplateLanguageReviewRequired
+                        $record.TemplateLanguageReason = $parity.TemplateLanguageReason
+                    }
+                    catch {
+                        $warnings.Add("Template compatibility mapping failed: $($_.Exception.Message)")
                     }
 
                     try {

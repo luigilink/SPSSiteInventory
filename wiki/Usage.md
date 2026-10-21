@@ -37,10 +37,10 @@ report pack, plus a dedicated farm-solution report, to the output folder:
 | `*-manifest-*.json` | Report-pack manifest with generation metadata, top-level counters and file references. |
 | `*-sites-*.json` | Site inventory dataset used by the dashboard/report-pack consumers. |
 | `*-auth-*.json` | Authentication-by-web-application dataset (zone/provider summary + collection counts). |
-| `*-workflows-*.json` | Workflow-focused dataset (`Workflow2010Count`, `Workflow2013Count`, running-instance counts, status, category). |
+| `*-workflows-*.json` | Workflow/template-focused dataset (`Workflow2010Count`, `Workflow2013Count`, running-instance counts, template-compatibility and template-language review fields, status, category). |
 | `*-irm-locks-*.json` | Security/lock dataset (`IrmEnabledListCount`, `SiteLockState`, `IsLockedSite`). |
 | `*-large-content-*.json` | Large-content risk dataset (`IsLargeSite`, large lists/views, checked-out files, high file-version counts, plus examples). |
-| `*-alerts-*.json` | Normalized risk alerts extracted from site signals (partial/failed, FBA, full-trust, workflows, InfoPath, IRM, lock, large content). |
+| `*-alerts-*.json` | Normalized risk alerts extracted from site signals (partial/failed, FBA, template compatibility/language review, full-trust, workflows, InfoPath, IRM, lock, large content). |
 | `*-solutions-*.csv` | Farm-solution (WSP) inventory for Excel; one row per solution, with the feature scopes/ids flattened. |
 | `*-solutions-*.json` | Farm-solution (WSP) inventory for automation, with the feature scopes/ids kept as arrays. |
 | `*-contenttypes-*.csv` / `*-contenttypes-*.json` | Content-type definitions and list bindings, including standard types. One row per web definition or list binding, not per item. |
@@ -67,6 +67,10 @@ CSV/JSON rows describe site collections and any web-application enumeration fail
 | `AuthenticationReviewRequired` | A federated/custom or unidentified provider requires identity review |
 | `ContentDb` | Content database name |
 | `Template` | Root web template (e.g. `STS#3`, `SITEPAGEPUBLISHING#0`) |
+| `TemplateCompatibility` / `TemplateCompatibilityReason` | Baseline SPO template mapping result: `Compatible`, `Unsupported`, or `Review`, with the rule that triggered it |
+| `IsUnsupportedSiteTemplate` | Template is explicitly mapped as unsupported for direct SPO migration |
+| `TemplateLanguageLcid` / `TemplateLanguageTag` / `TemplateLanguageName` | Root-web language metadata used for template-language parity checks |
+| `TemplateLanguageReviewRequired` / `TemplateLanguageReason` | Language metadata is missing/unrecognized or outside configured allow-list and needs review |
 | `SizeGB` | Storage used, in GB |
 | `SubWebCount` | Number of sub-webs |
 | `LastModified` | Last item modified date (dormancy signal) |

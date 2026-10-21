@@ -10,6 +10,8 @@ BeforeAll {
             Workflow2013Count        = 1.5
             Workflow2010RunningInstanceCount = 1.0
             Workflow2013RunningInstanceCount = 0.5
+            IsUnsupportedSiteTemplate = 5.0
+            TemplateLanguageReviewRequired = 0.5
             InfoPathFormCount        = 3.0
             IsLargeSite              = 1.5
             LargeListCount           = 0.5
@@ -33,6 +35,7 @@ BeforeAll {
             'IrmEnabledListCount'
             'IsLockedSite'
             'HasFbaZone'
+            'IsUnsupportedSiteTemplate'
         )
     }
 }
@@ -70,6 +73,22 @@ Describe 'Measure-SPSSiteComplexity' {
         $running2010.Score | Should -BeGreaterThan $running2013.Score
         ($running2010.Reasons -join '; ') | Should -Match 'Workflow2010RunningInstanceCount'
         ($running2013.Reasons -join '; ') | Should -Match 'Workflow2013RunningInstanceCount'
+    }
+
+    It 'forces Blocking (category 4) when a site uses an unsupported template' {
+        $result = Measure-SPSSiteComplexity -Signals @{ IsUnsupportedSiteTemplate = $true } -Scoring $script:Scoring
+
+        $result.Category | Should -Be 4
+        $result.CategoryName | Should -Be 'Blocking'
+        ($result.Reasons -join '; ') | Should -Match 'blocking: IsUnsupportedSiteTemplate'
+    }
+
+    It 'scores template-language review as a non-blocking readiness signal' {
+        $result = Measure-SPSSiteComplexity -Signals @{ TemplateLanguageReviewRequired = $true } -Scoring $script:Scoring
+
+        $result.Category | Should -Be 1
+        $result.Score | Should -Be 0.5
+        ($result.Reasons -join '; ') | Should -Match 'TemplateLanguageReviewRequired'
     }
 
     It 'promotes a heavily customized site to Complex (category 3)' {

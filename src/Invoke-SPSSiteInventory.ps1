@@ -62,10 +62,20 @@ try {
     $fullTrustFeatureId = @($solutionMap | Where-Object { $_.IsFullTrustCode } | ForEach-Object { $_.FeatureIds } | Sort-Object -Unique)
 
     Add-SPSInventoryEvent -Message 'Enumerating site collections.' -Level Information
-    $inventory = @(Get-SPSSiteInventory -WebApplicationUrl $settings.WebApplicationUrl)
+    $templateParity = if ($settings.ContainsKey('TemplateParity')) {
+        $settings.TemplateParity
+    }
+    else {
+        @{}
+    }
+    $inventory = @(Get-SPSSiteInventory -WebApplicationUrl $settings.WebApplicationUrl -TemplateParity $templateParity)
     if (@($inventory | Where-Object { $_.HasFbaZone }).Count -gt 0 -and
         @($settings.Scoring.BlockingSignals) -notcontains 'HasFbaZone') {
         Add-SPSInventoryEvent -Message 'FBA is configured, but HasFbaZone is not in Scoring.BlockingSignals. Add it to your settings to classify FBA as a SharePoint Online migration blocker.' -Level Warning
+    }
+    if (@($inventory | Where-Object { $_.InventoryScope -ne 'WebApplication' -and $_.IsUnsupportedSiteTemplate }).Count -gt 0 -and
+        @($settings.Scoring.BlockingSignals) -notcontains 'IsUnsupportedSiteTemplate') {
+        Add-SPSInventoryEvent -Message 'Unsupported site templates were detected, but IsUnsupportedSiteTemplate is not in Scoring.BlockingSignals. Add it to classify unsupported templates as migration blockers.' -Level Warning
     }
 
     Add-SPSInventoryEvent -Message ("Discovered {0} site collection(s); collecting customization signals." -f @($inventory).Count) -Level Information
@@ -88,6 +98,9 @@ try {
     if (@($scored | Where-Object { [int]$_.IrmEnabledListCount -gt 0 }).Count -gt 0 -and
         @($settings.Scoring.BlockingSignals) -notcontains 'IrmEnabledListCount') {
         Add-SPSInventoryEvent -Message 'IRM-enabled lists were detected, but IrmEnabledListCount is not in Scoring.BlockingSignals. Add it to classify IRM-protected lists as migration blockers.' -Level Warning
+    }
+    if (@($scored | Where-Object { $_.TemplateLanguageReviewRequired }).Count -gt 0) {
+        Add-SPSInventoryEvent -Message 'Some site template languages require review. Check TemplateLanguage* fields in the report before planning migration waves.' -Level Warning
     }
 
     $waves = if ($settings.ContainsKey('MigrationWaves')) {

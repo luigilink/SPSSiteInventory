@@ -61,6 +61,47 @@
     }
 
     # -------------------------------------------------------------------------------
+    # Site-template parity rules (SMAT P0 scope)
+    #
+    # SPSSiteInventory maps each root-web template to:
+    # - Compatible: known template families with direct SPO equivalents
+    # - Unsupported: templates explicitly listed below
+    # - Review: template values outside the supported map (manual validation needed)
+    #
+    # Language parity is best-effort:
+    # - if SupportedLanguageLcid is empty, any recognized .NET culture is accepted;
+    # - if populated, LCIDs outside the list are flagged for review.
+    # -------------------------------------------------------------------------------
+    TemplateParity = @{
+        UnsupportedTemplates = @(
+            'APP#0'
+            'SPSMSITEHOST#0'
+            'SPSPERS#0'
+        )
+        SupportedTemplatePrefixes = @(
+            'STS#'
+            'BLOG#'
+            'COMMUNITY#'
+            'PROJECTSITE#'
+            'SITEPAGEPUBLISHING#'
+            'CMSPUBLISHING#'
+            'BLANKINTERNET#'
+            'SRCHCEN#'
+            'WIKI#'
+            'ENTERWIKI#'
+            'BDR#'
+            'OFFILE#'
+            'GROUP#'
+            'SPSNEWS#'
+            'SPSNHOME#'
+        )
+        # Optional: templates to force as "Review" even when they match a supported prefix.
+        ReviewTemplatePrefixes = @()
+        # Optional: allowed language LCIDs. Leave empty to accept any recognized culture.
+        SupportedLanguageLcid = @()
+    }
+
+    # -------------------------------------------------------------------------------
     # Scoring engine (consumed by Measure-SPSSiteComplexity)
     #
     # Category mapping:
@@ -85,6 +126,10 @@
             # effort in addition to workflow definition migration.
             Workflow2010RunningInstanceCount = 1.0
             Workflow2013RunningInstanceCount = 0.5
+            # Unsupported site templates cannot be migrated directly to SPO.
+            IsUnsupportedSiteTemplate = 5.0
+            # Language mismatches or unknown language metadata require readiness review.
+            TemplateLanguageReviewRequired = 0.5
             # InfoPath forms (retired, no SharePoint Online equivalent) must be rebuilt in
             # Power Apps. Weighted heavily and listed as a blocking signal below.
             InfoPathFormCount        = 3.0
@@ -126,6 +171,8 @@
             'IsLockedSite'
             # IRM protection on lists/libraries requires migration remediation.
             'IrmEnabledListCount'
+            # Unsupported templates are not migration targets as-is.
+            'IsUnsupportedSiteTemplate'
         )
     }
 
