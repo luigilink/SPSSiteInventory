@@ -95,6 +95,20 @@ public sealed class SPSSiteInventoryThrowAfterOne : IEnumerable
         $web | Add-Member -MemberType ScriptMethod -Name Dispose -Value { }
         return $web
     }
+
+    function Get-TestWorkflowAssociation {
+        param (
+            [string]$Name,
+            [bool]$HasIsCurrent = $false,
+            [bool]$IsCurrent = $true
+        )
+
+        $association = [PSCustomObject]@{ Name = $Name }
+        if ($HasIsCurrent) {
+            $association | Add-Member -MemberType NoteProperty -Name IsCurrent -Value $IsCurrent
+        }
+        return $association
+    }
 }
 
 Describe 'Get-SPSSiteCustomization content types' {
@@ -184,6 +198,109 @@ Describe 'Get-SPSSiteCustomization content types' {
         $warningText | Should -Match 'Access denied while advancing the web enumerator'
         $warningText | Should -Match "InfoPath state on list 'Documents' in web 'https://intranet.contoso.com/sites/team'"
         $warningText | Should -Match 'InfoPath properties access denied'
+    }
+
+    It 'counts only active workflow associations when historical versions are flagged by metadata' {
+        $webWorkflow = Get-TestWorkflowAssociation -Name 'WF for Statistics' -HasIsCurrent $true -IsCurrent $true
+        $oldListWorkflow = Get-TestWorkflowAssociation -Name 'WF pour les Statistiques (version précédente: 08/07/2016 14:50:34)' -HasIsCurrent $true -IsCurrent $false
+        $activeListWorkflow = Get-TestWorkflowAssociation -Name 'WF pour les Statistiques' -HasIsCurrent $true -IsCurrent $true
+
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.WorkflowAssociations = @($webWorkflow)
+        $web.Lists[0].WorkflowAssociations = @($oldListWorkflow, $activeListWorkflow)
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site
+
+        $signals.Workflow2010Count | Should -Be 2
+    }
+
+    It 'uses name fallback when metadata is unavailable to skip previous-version duplicates' {
+        $historical = Get-TestWorkflowAssociation -Name 'WF for Statistics (Previous Version: 08/07/2016 14:50:34)'
+        $active = Get-TestWorkflowAssociation -Name 'WF for Statistics'
+
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Lists[0].WorkflowAssociations = @($historical, $active)
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site
+
+        $signals.Workflow2010Count | Should -Be 1
+    }
+
+    It 'uses name fallback for previous-version names with AM or PM timestamps' {
+        $historical = Get-TestWorkflowAssociation -Name 'WF for Statistics (Previous Version: 08/07/2016 02:50:34 PM)'
+        $active = Get-TestWorkflowAssociation -Name 'WF for Statistics'
+
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Lists[0].WorkflowAssociations = @($historical, $active)
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site
+
+        $signals.Workflow2010Count | Should -Be 1
+    }
+
+    It 'uses name fallback for French previous-version markers' {
+        $historical = Get-TestWorkflowAssociation -Name 'WF pour les Statistiques (version précédente : 08/07/2016 14:50:34)'
+        $active = Get-TestWorkflowAssociation -Name 'WF pour les Statistiques'
+
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Lists[0].WorkflowAssociations = @($historical, $active)
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site
+
+        $signals.Workflow2010Count | Should -Be 1
+    }
+
+    It 'does not treat non version qualifiers as historical associations' {
+        $qualified = Get-TestWorkflowAssociation -Name 'WF for Statistics (SLA: 48)'
+        $active = Get-TestWorkflowAssociation -Name 'WF for Statistics'
+
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Lists[0].WorkflowAssociations = @($qualified, $active)
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site
+
+        $signals.Workflow2010Count | Should -Be 2
+    }
+
+    It 'does not count a singleton workflow association flagged as historical by metadata' {
+        $historical = Get-TestWorkflowAssociation -Name 'WF for Statistics (Previous Version: 08/07/2016 14:50:34)' -HasIsCurrent $true -IsCurrent $false
+
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Lists[0].WorkflowAssociations = @($historical)
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site
+
+        $signals.Workflow2010Count | Should -Be 0
     }
 
     It 'marks unreadable field metadata as partial rather than exporting zero fields' {

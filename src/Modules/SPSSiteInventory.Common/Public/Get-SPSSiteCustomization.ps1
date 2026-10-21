@@ -157,7 +157,9 @@
                 }
 
                 # SharePoint 2010 platform: classic workflow associations at web and list scope.
-                $signals.Workflow2010Count += @($web.WorkflowAssociations).Count
+                # SharePoint can keep historical "previous version" associations; only active
+                # associations should count toward migration complexity.
+                $signals.Workflow2010Count += @(Get-SPSActiveWorkflowAssociations -WorkflowAssociations @($web.WorkflowAssociations)).Count
 
                 try {
                     $webLists = $web.Lists
@@ -182,7 +184,7 @@
                             Write-Warning -Message "Content-type bindings could not be fully read on list '$($list.Title)' in '$($web.Url)': $($_.Exception.Message)"
                         }
 
-                        $signals.Workflow2010Count += @($list.WorkflowAssociations).Count
+                        $signals.Workflow2010Count += @(Get-SPSActiveWorkflowAssociations -WorkflowAssociations @($list.WorkflowAssociations)).Count
 
                         # Count only custom event receivers. Out-of-the-box lists carry many
                         # native receivers from Microsoft assemblies that are not a migration
