@@ -317,14 +317,7 @@
                 }
 
                 try {
-                    $webAppInstances = @()
-                    if ($null -ne $web.PSObject.Properties['AppInstances'] -and $null -ne $web.AppInstances) {
-                        $webAppInstances = @($web.AppInstances)
-                    }
-                    elseif ($null -ne $web.PSObject.Methods['GetAppInstances']) {
-                        $webAppInstances = @($web.GetAppInstances())
-                    }
-
+                    $webAppInstances = @(Get-SPAppInstance -Web $web -ErrorAction Stop)
                     foreach ($appInstance in $webAppInstances) {
                         if ($null -eq $appInstance) {
                             continue
