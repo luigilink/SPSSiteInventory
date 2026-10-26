@@ -141,9 +141,11 @@ Publishing and customized-page signals describe classic publishing dependencies:
 - `PublishingWebCount` — webs where the SharePoint Server Publishing feature is active.
 - `PublishingPageCount` — items in the Pages libraries of those webs.
 - `PublishingPageLayoutCount` — distinct page layouts used by the pages that were
-  scanned. At most `LargeContentThresholds.MaxItemsForPublishingPageScanPerLibrary` pages
-  are read per Pages library, so the value is a lower bound when that cap is reached
-  (the assessment is then marked partial with a warning).
+  scanned. A layout is identified by its normalized path, so two layouts that share a
+  file name in different Master Page Gallery folders count separately. At most
+  `LargeContentThresholds.MaxItemsForPublishingPageScanPerLibrary` pages are read per
+  Pages library, so the value is a lower bound when that cap is reached (the
+  assessment is then marked partial with a warning).
 - `CustomizedPageCount` — customized (unghosted) pages at the root of each web, for
   example a `default.aspx` edited with SharePoint Designer. Migration reverts them to
   their default state and owners must reapply the customization. Files last modified

@@ -5,9 +5,12 @@
 
         .DESCRIPTION
         Walks a site-collection or web feature collection and compares each activated
-        feature's DefinitionId with the requested feature ID (case-insensitive). A null
-        collection means no feature is activated. Enumeration failures are not caught so
-        the caller can report the read as partial instead of assuming the feature is off.
+        feature's DefinitionId with the requested feature ID (case-insensitive). A readable
+        empty collection means the feature is off. A null collection is rejected because
+        PowerShell turns an exception thrown by a property getter into $null, so treating
+        it as "no features" would report an unreadable collection as a negative signal.
+        Enumeration failures are not caught either, so the caller can report the read as
+        partial.
 
         Private because it is an implementation detail of Get-SPSSiteCustomization.
 
@@ -33,6 +36,10 @@
         [System.String]
         $FeatureId
     )
+
+    if ($null -eq $Feature) {
+        throw 'The feature collection is unavailable.'
+    }
 
     foreach ($candidate in $Feature) {
         if ($null -ne $candidate -and

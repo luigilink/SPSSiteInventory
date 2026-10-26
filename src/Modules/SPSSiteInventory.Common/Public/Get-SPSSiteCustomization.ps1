@@ -164,7 +164,7 @@
     $fileVersionExamples = [System.Collections.Generic.List[string]]::new()
     $appInstanceExamples = [System.Collections.Generic.List[string]]::new()
     $customizedPageExamples = [System.Collections.Generic.List[string]]::new()
-    $publishingLayoutCounts = [System.Collections.Generic.Dictionary[string, int]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $publishingLayouts = [System.Collections.Generic.Dictionary[string, object]]::new([System.StringComparer]::OrdinalIgnoreCase)
 
     $largeListItemThreshold = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'LargeListItemCount' -DefaultValue 5000 -MinimumValue 1)
     $largeListViewRowLimitThreshold = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'LargeListViewRowLimit' -DefaultValue 5000 -MinimumValue 1)
@@ -234,20 +234,6 @@
             if ($null -ne $FallbackObject.PSObject.Properties['Name'] -and $FallbackObject.Name) { return [string]$FallbackObject.Name }
         }
         return $null
-    }
-    $getPageLayoutName = {
-        param([object]$PageItem)
-        # The Page Layout column stores "url, description"; the file name is the stable key.
-        $layoutValue = [string]$PageItem['PublishingPageLayout']
-        if ([string]::IsNullOrWhiteSpace($layoutValue)) {
-            return $null
-        }
-        $layoutUrl = ($layoutValue -split ',\s', 2)[0].Trim()
-        $layoutName = ($layoutUrl -split '/')[-1]
-        if ([string]::IsNullOrWhiteSpace($layoutName)) {
-            return $layoutUrl
-        }
-        return $layoutName
     }
 
     try {
@@ -413,14 +399,30 @@
                 }
 
                 try {
-                    foreach ($rootFile in $web.Files) {
-                        if (-not (Test-SPSCustomizedPageFile -File $rootFile)) {
-                            continue
-                        }
+                    # A getter failure surfaces as $null, so an unreadable collection must not look empty.
+                    $rootFiles = $web.Files
+                    if ($null -eq $rootFiles) {
+                        throw "The root file collection is unavailable on '$($web.Url)'."
+                    }
+                    foreach ($rootFile in $rootFiles) {
+                        try {
+                            if (-not (Test-SPSCustomizedPageFile -File $rootFile)) {
+                                continue
+                            }
 
-                        $signals.CustomizedPageCount++
-                        if ($customizedPageExamples.Count -lt 5) {
-                            $customizedPageExamples.Add([string](& $getFileIdentity $rootFile $null))
+                            $signals.CustomizedPageCount++
+                            $pageIdentity = [string](& $getFileIdentity $rootFile $null)
+                            if (-not [string]::IsNullOrWhiteSpace($pageIdentity) -and $customizedPageExamples.Count -lt 5) {
+                                $customizedPageExamples.Add($pageIdentity)
+                            }
+                        }
+                        catch {
+                            $signals.CustomizationInventoryComplete = $false
+                            $fileLabel = [string](& $getFileIdentity $rootFile $null)
+                            if ([string]::IsNullOrWhiteSpace($fileLabel)) {
+                                $fileLabel = 'an unidentified file'
+                            }
+                            Write-Warning -Message "Could not read the customized page status of '$fileLabel' at the root of '$($web.Url)': $($_.Exception.Message)"
                         }
                     }
                 }
@@ -704,10 +706,30 @@
                             Write-Warning -Message "Could not scan file versions on '$listTitle' in web '$($web.Url)': $($_.Exception.Message)"
                         }
 
-                        if ($isPublishingWeb -and [int]$list.BaseTemplate -eq $pagesLibraryTemplateId) {
+                        $isPagesLibrary = $false
+                        if ($isPublishingWeb) {
                             try {
-                                if ($null -ne $listItemCount) {
-                                    $signals.PublishingPageCount += $listItemCount
+                                $baseTemplate = $list.BaseTemplate
+                                if ($null -eq $baseTemplate) {
+                                    throw "The list template is unavailable on '$listTitle'."
+                                }
+                                $isPagesLibrary = [int]$baseTemplate -eq $pagesLibraryTemplateId
+                            }
+                            catch {
+                                $signals.CustomizationInventoryComplete = $false
+                                Write-Warning -Message "Could not read the list template on '$listTitle' in web '$($web.Url)': $($_.Exception.Message)"
+                            }
+                        }
+
+                        if ($isPagesLibrary) {
+                            try {
+                                $pagesItemCount = $list.ItemCount
+                                if ($null -eq $pagesItemCount) {
+                                    $signals.CustomizationInventoryComplete = $false
+                                    Write-Warning -Message "The item count is unavailable on Pages library '$listTitle' in web '$($web.Url)'; PublishingPageCount may be understated."
+                                }
+                                else {
+                                    $signals.PublishingPageCount += [int]$pagesItemCount
                                 }
 
                                 # Files only (FSObjType 0) and just the layout column keep the scan light.
@@ -715,6 +737,7 @@
                                 & $setQueryProperty $pageQuery 'ViewFields' '<FieldRef Name="PublishingPageLayout" />'
                                 & $setQueryProperty $pageQuery 'ViewFieldsOnly' $true
                                 $pageScanCount = 0
+                                $pagesWithLayout = 0
                                 $hasUnscannedPages = $false
                                 $pagePosition = $null
                                 do {
@@ -726,15 +749,16 @@
                                             break
                                         }
                                         $pageScanCount++
-                                        $layoutName = & $getPageLayoutName $pageItem
-                                        if ($null -eq $layoutName) {
+                                        $layoutIdentity = ConvertTo-SPSPageLayoutIdentity -LayoutValue $pageItem['PublishingPageLayout']
+                                        if ($null -eq $layoutIdentity) {
                                             continue
                                         }
-                                        if ($publishingLayoutCounts.ContainsKey($layoutName)) {
-                                            $publishingLayoutCounts[$layoutName]++
+                                        $pagesWithLayout++
+                                        if ($publishingLayouts.ContainsKey($layoutIdentity.Key)) {
+                                            $publishingLayouts[$layoutIdentity.Key].PageCount++
                                         }
                                         else {
-                                            $publishingLayoutCounts[$layoutName] = 1
+                                            $publishingLayouts[$layoutIdentity.Key] = [PSCustomObject]@{ Name = $layoutIdentity.Name; PageCount = 1 }
                                         }
                                     }
                                     $pagePosition = & $getBatchPosition $pageBatch
@@ -746,6 +770,11 @@
                                 if ($hasUnscannedPages) {
                                     $signals.CustomizationInventoryComplete = $false
                                     Write-Warning -Message "Publishing page layout scan stopped on '$listTitle' in web '$($web.Url)' after $maxPublishingPageScan item(s). Increase LargeContentThresholds.MaxItemsForPublishingPageScanPerLibrary to scan more pages."
+                                }
+                                # A failed field read comes back as $null, so a library where no page reports a layout is suspect.
+                                if ($pageScanCount -gt 0 -and $pagesWithLayout -eq 0) {
+                                    $signals.CustomizationInventoryComplete = $false
+                                    Write-Warning -Message "No page layout could be read from the $pageScanCount page(s) scanned on '$listTitle' in web '$($web.Url)'; PublishingPageLayoutCount may be understated."
                                 }
                             }
                             catch {
@@ -834,12 +863,12 @@
     $signals.FileVersionExamples = $fileVersionExamples -join '; '
     $signals.AppInstanceExamples = $appInstanceExamples -join '; '
     $signals.CustomizedPageExamples = $customizedPageExamples -join '; '
-    $signals.PublishingPageLayoutCount = $publishingLayoutCounts.Count
+    $signals.PublishingPageLayoutCount = $publishingLayouts.Count
     $signals.PublishingPageLayoutExamples = @(
-        $publishingLayoutCounts.GetEnumerator() |
-            Sort-Object -Property @{ Expression = { $_.Value }; Descending = $true }, @{ Expression = { $_.Key } } |
+        $publishingLayouts.Values |
+            Sort-Object -Property @{ Expression = { $_.PageCount }; Descending = $true }, @{ Expression = { $_.Name } } |
             Select-Object -First 5 |
-            ForEach-Object { '{0} ({1})' -f $_.Key, $_.Value }
+            ForEach-Object { '{0} ({1})' -f $_.Name, $_.PageCount }
     ) -join '; '
     return $signals
 }

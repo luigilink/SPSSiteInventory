@@ -88,7 +88,7 @@ CSV/JSON rows describe site collections and any web-application enumeration fail
 | `PublishingInfrastructureEnabled` | The SharePoint Server Publishing Infrastructure site collection feature is active |
 | `PublishingWebCount` | Number of webs where the SharePoint Server Publishing feature is active |
 | `PublishingPageCount` | Items in the Pages libraries of publishing webs |
-| `PublishingPageLayoutCount` / `PublishingPageLayoutExamples` | Distinct page layouts used by the scanned pages (lower bound when the scan cap is reached) and up to five examples with page counts |
+| `PublishingPageLayoutCount` / `PublishingPageLayoutExamples` | Distinct page layouts, identified by path, used by the scanned pages (lower bound when the scan cap is reached) and up to five examples, shown as the path below the Master Page Gallery with their page counts |
 | `CustomizedPageCount` / `CustomizedPageExamples` | Customized (unghosted) pages at the root of each web, ignoring System Account edits, and up to five server-relative URLs. List view and form pages are not scanned |
 | `InfoPathFormCount` | InfoPath-driven lists/libraries (retired, no SPO equivalent) |
 | `IrmEnabledListCount` | Number of lists/libraries with IRM enabled |

@@ -102,6 +102,8 @@ public sealed class SPSSiteInventoryThrowAfterOne : IEnumerable
             WorkflowAssociations = @()
             HasUniqueRoleAssignments = $false
             CustomMasterUrl = ''
+            Features = @()
+            Files = @()
         }
         $web | Add-Member -MemberType ScriptMethod -Name Dispose -Value { }
         return $web
@@ -175,6 +177,7 @@ Describe 'Get-SPSSiteCustomization content types' {
         $binding = Get-TestContentType -Id '0x010100AAAA' -Name 'Document & Notes'
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             AllWebs = @(Get-TestWeb -Definitions @($definition) -Bindings @($binding))
         }
@@ -201,6 +204,7 @@ Describe 'Get-SPSSiteCustomization content types' {
         $web.Lists[0].ContentTypes = @($badBinding)
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             AllWebs = @($web)
         }
@@ -218,6 +222,7 @@ Describe 'Get-SPSSiteCustomization content types' {
         $web = Get-TestWeb -Definitions @() -Bindings @()
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             AllWebs = @($web)
         }
@@ -240,6 +245,7 @@ Describe 'Get-SPSSiteCustomization content types' {
         $web.Lists[0].WorkflowAssociations = @($listWorkflow)
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             AllWebs = @($web)
         }
@@ -264,6 +270,7 @@ Describe 'Get-SPSSiteCustomization content types' {
         $web.Lists[0].WorkflowAssociations = @($listCurrent, $listPrevious)
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             AllWebs = @($web)
         }
@@ -299,6 +306,7 @@ Describe 'Get-SPSSiteCustomization content types' {
 
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             AllWebs = @($appWeb, $regularWeb)
         }
@@ -319,6 +327,7 @@ Describe 'Get-SPSSiteCustomization content types' {
         }
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             AllWebs = @($web)
         }
@@ -341,11 +350,11 @@ Describe 'Get-SPSSiteCustomization content types' {
             Get-TestPageBatch -Layouts @('/_catalogs/masterpage/ArticleLeft.aspx, Article Page')
         )
         $publishingWeb = Get-TestWeb -Definitions @() -Bindings @()
-        $publishingWeb | Add-Member -MemberType NoteProperty -Name Features -Value @($publishing)
+        $publishingWeb.Features = @($publishing)
         $publishingWeb.Lists = @($publishingWeb.Lists[0], $pages)
         $plainWeb = Get-TestWeb -Definitions @() -Bindings @()
         $plainWeb.Url = 'https://intranet.contoso.com/sites/team/plain'
-        $plainWeb | Add-Member -MemberType NoteProperty -Name Features -Value @()
+        $plainWeb.Features = @()
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
             Solutions = @()
@@ -371,7 +380,7 @@ Describe 'Get-SPSSiteCustomization content types' {
         $pages = Get-TestPagesList -ItemCount 99
         $pages | Add-Member -MemberType ScriptMethod -Name GetItems -Value { throw 'Pages must not be read without the publishing feature.' } -Force
         $web = Get-TestWeb -Definitions @() -Bindings @()
-        $web | Add-Member -MemberType NoteProperty -Name Features -Value @((Get-TestFeature -Id '00000000-0000-0000-0000-000000000001'))
+        $web.Features = @((Get-TestFeature -Id '00000000-0000-0000-0000-000000000001'))
         $web.Lists = @($web.Lists[0], $pages)
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
@@ -396,10 +405,11 @@ Describe 'Get-SPSSiteCustomization content types' {
             Get-TestPageBatch -Layouts @('', '/_catalogs/masterpage/BlankWebPartPage.aspx, Blank')
         )
         $web = Get-TestWeb -Definitions @() -Bindings @()
-        $web | Add-Member -MemberType NoteProperty -Name Features -Value @((Get-TestFeature -Id '94C94CA6-B32F-4DA9-A9E3-1F3D343D7ECB'))
+        $web.Features = @((Get-TestFeature -Id '94C94CA6-B32F-4DA9-A9E3-1F3D343D7ECB'))
         $web.Lists = @($pages)
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             AllWebs = @($web)
         }
@@ -416,10 +426,11 @@ Describe 'Get-SPSSiteCustomization content types' {
             Get-TestPageBatch -Layouts @('/_catalogs/masterpage/C.aspx, C')
         )
         $web = Get-TestWeb -Definitions @() -Bindings @()
-        $web | Add-Member -MemberType NoteProperty -Name Features -Value @((Get-TestFeature -Id '94c94ca6-b32f-4da9-a9e3-1f3d343d7ecb'))
+        $web.Features = @((Get-TestFeature -Id '94c94ca6-b32f-4da9-a9e3-1f3d343d7ecb'))
         $web.Lists = @($pages)
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             AllWebs = @($web)
         }
@@ -439,10 +450,11 @@ Describe 'Get-SPSSiteCustomization content types' {
             Get-TestPageBatch -Layouts @('/_catalogs/masterpage/A.aspx, A', '/_catalogs/masterpage/B.aspx, B')
         )
         $web = Get-TestWeb -Definitions @() -Bindings @()
-        $web | Add-Member -MemberType NoteProperty -Name Features -Value @((Get-TestFeature -Id '94c94ca6-b32f-4da9-a9e3-1f3d343d7ecb'))
+        $web.Features = @((Get-TestFeature -Id '94c94ca6-b32f-4da9-a9e3-1f3d343d7ecb'))
         $web.Lists = @($pages)
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             AllWebs = @($web)
         }
@@ -460,10 +472,11 @@ Describe 'Get-SPSSiteCustomization content types' {
             Get-TestPageBatch -Layouts @('/_catalogs/masterpage/A.aspx, A', '/_catalogs/masterpage/B.aspx, B')
         )
         $web = Get-TestWeb -Definitions @() -Bindings @()
-        $web | Add-Member -MemberType NoteProperty -Name Features -Value @((Get-TestFeature -Id '94c94ca6-b32f-4da9-a9e3-1f3d343d7ecb'))
+        $web.Features = @((Get-TestFeature -Id '94c94ca6-b32f-4da9-a9e3-1f3d343d7ecb'))
         $web.Lists = @($pages)
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             AllWebs = @($web)
         }
@@ -478,10 +491,11 @@ Describe 'Get-SPSSiteCustomization content types' {
         $pages = Get-TestPagesList -ItemCount 7
         $pages | Add-Member -MemberType ScriptMethod -Name GetItems -Value { throw 'Pages access denied' } -Force
         $web = Get-TestWeb -Definitions @() -Bindings @()
-        $web | Add-Member -MemberType NoteProperty -Name Features -Value @((Get-TestFeature -Id '94c94ca6-b32f-4da9-a9e3-1f3d343d7ecb'))
+        $web.Features = @((Get-TestFeature -Id '94c94ca6-b32f-4da9-a9e3-1f3d343d7ecb'))
         $web.Lists = @($pages)
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             AllWebs = @($web)
         }
@@ -498,7 +512,7 @@ Describe 'Get-SPSSiteCustomization content types' {
 
     It 'marks unreadable publishing feature state as partial' {
         $web = Get-TestWeb -Definitions @() -Bindings @()
-        $web | Add-Member -MemberType NoteProperty -Name Features -Value ([SPSSiteInventoryThrowAfterOne]::new((Get-TestFeature -Id '00000000-0000-0000-0000-000000000001')))
+        $web.Features = ([SPSSiteInventoryThrowAfterOne]::new((Get-TestFeature -Id '00000000-0000-0000-0000-000000000001')))
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
             Solutions = @()
@@ -521,7 +535,7 @@ Describe 'Get-SPSSiteCustomization content types' {
         $user = [PSCustomObject]@{ LoginName = 'i:0#.w|contoso\jdoe' }
         $system = [PSCustomObject]@{ LoginName = 'SHAREPOINT\system' }
         $rootWeb = Get-TestWeb -Definitions @() -Bindings @()
-        $rootWeb | Add-Member -MemberType NoteProperty -Name Files -Value @(
+        $rootWeb.Files = @(
             [PSCustomObject]@{ ServerRelativeUrl = '/sites/team/default.aspx'; CustomizedPageStatus = 2; ModifiedBy = $user }
             [PSCustomObject]@{ ServerRelativeUrl = '/sites/team/system.aspx'; CustomizedPageStatus = 2; ModifiedBy = $system }
             [PSCustomObject]@{ ServerRelativeUrl = '/sites/team/ghosted.aspx'; CustomizedPageStatus = 1; ModifiedBy = $user }
@@ -529,11 +543,12 @@ Describe 'Get-SPSSiteCustomization content types' {
         )
         $subWeb = Get-TestWeb -Definitions @() -Bindings @()
         $subWeb.Url = 'https://intranet.contoso.com/sites/team/sub'
-        $subWeb | Add-Member -MemberType NoteProperty -Name Files -Value @(
+        $subWeb.Files = @(
             [PSCustomObject]@{ ServerRelativeUrl = '/sites/team/sub/default.aspx'; CustomizedPageStatus = 'Customized'; ModifiedBy = $user }
         )
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             AllWebs = @($rootWeb, $subWeb)
         }
@@ -547,11 +562,12 @@ Describe 'Get-SPSSiteCustomization content types' {
 
     It 'reports zero customized pages when no root file is customized' {
         $web = Get-TestWeb -Definitions @() -Bindings @()
-        $web | Add-Member -MemberType NoteProperty -Name Files -Value @(
+        $web.Files = @(
             [PSCustomObject]@{ ServerRelativeUrl = '/sites/team/default.aspx'; CustomizedPageStatus = 1 }
         )
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             AllWebs = @($web)
         }
@@ -565,11 +581,12 @@ Describe 'Get-SPSSiteCustomization content types' {
 
     It 'limits customized page examples to five while counting every page' {
         $web = Get-TestWeb -Definitions @() -Bindings @()
-        $web | Add-Member -MemberType NoteProperty -Name Files -Value @(
+        $web.Files = @(
             1..7 | ForEach-Object { [PSCustomObject]@{ ServerRelativeUrl = "/sites/team/page$_.aspx"; CustomizedPageStatus = 2 } }
         )
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             AllWebs = @($web)
         }
@@ -582,10 +599,11 @@ Describe 'Get-SPSSiteCustomization content types' {
 
     It 'keeps customized pages already read when the root file enumeration fails' {
         $web = Get-TestWeb -Definitions @() -Bindings @()
-        $web | Add-Member -MemberType NoteProperty -Name Files -Value ([SPSSiteInventoryThrowAfterOne]::new(
+        $web.Files = ([SPSSiteInventoryThrowAfterOne]::new(
                 [PSCustomObject]@{ ServerRelativeUrl = '/sites/team/default.aspx'; CustomizedPageStatus = 2 }))
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             AllWebs = @($web)
         }
@@ -598,10 +616,176 @@ Describe 'Get-SPSSiteCustomization content types' {
         ($warnings -join ';') | Should -Match 'Access denied while advancing the web enumerator'
     }
 
+    It 'marks null feature collections as partial instead of reporting publishing as off' {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Features = $null
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = $null
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -WarningVariable warnings -WarningAction SilentlyContinue
+        $warningText = $warnings -join ';'
+
+        $signals.CustomizationInventoryComplete | Should -BeFalse
+        $warningText | Should -Match "publishing infrastructure feature for site collection 'https://intranet.contoso.com/sites/team': The feature collection is unavailable"
+        $warningText | Should -Match "publishing feature on 'https://intranet.contoso.com/sites/team': The feature collection is unavailable"
+    }
+
+    It 'marks a null root file collection as partial instead of reporting zero customized pages' {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Files = $null
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -WarningVariable warnings -WarningAction SilentlyContinue
+
+        $signals.CustomizedPageCount | Should -Be 0
+        $signals.CustomizationInventoryComplete | Should -BeFalse
+        ($warnings -join ';') | Should -Match "root file collection is unavailable on 'https://intranet.contoso.com/sites/team'"
+    }
+
+    It 'marks a page with an unreadable customization status as partial and keeps the other pages' {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Files = @(
+            [PSCustomObject]@{ ServerRelativeUrl = '/sites/team/broken.aspx'; CustomizedPageStatus = $null }
+            [PSCustomObject]@{ ServerRelativeUrl = '/sites/team/default.aspx'; CustomizedPageStatus = 2 }
+        )
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -WarningVariable warnings -WarningAction SilentlyContinue
+
+        $signals.CustomizedPageCount | Should -Be 1
+        $signals.CustomizedPageExamples | Should -Be '/sites/team/default.aspx'
+        $signals.CustomizationInventoryComplete | Should -BeFalse
+        ($warnings -join ';') | Should -Match "customized page status of '/sites/team/broken.aspx' at the root of 'https://intranet.contoso.com/sites/team'"
+    }
+
+    It 'marks a Pages library without a readable item count as partial while still scanning layouts' {
+        $pages = Get-TestPagesList -ItemCount 2 -Batches @(
+            Get-TestPageBatch -Layouts @('/_catalogs/masterpage/A.aspx, A')
+        )
+        $pages.ItemCount = $null
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Features = @((Get-TestFeature -Id '94c94ca6-b32f-4da9-a9e3-1f3d343d7ecb'))
+        $web.Lists = @($pages)
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -WarningVariable warnings -WarningAction SilentlyContinue
+
+        $signals.PublishingPageCount | Should -Be 0
+        $signals.PublishingPageLayoutCount | Should -Be 1
+        $signals.CustomizationInventoryComplete | Should -BeFalse
+        ($warnings -join ';') | Should -Match "item count is unavailable on Pages library 'Pages'"
+    }
+
+    It 'marks an unreadable list template on a publishing web as partial' {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Features = @((Get-TestFeature -Id '94c94ca6-b32f-4da9-a9e3-1f3d343d7ecb'))
+        $web.Lists[0].BaseTemplate = $null
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -WarningVariable warnings -WarningAction SilentlyContinue
+
+        $signals.CustomizationInventoryComplete | Should -BeFalse
+        ($warnings -join ';') | Should -Match "Could not read the list template on 'Documents'"
+    }
+
+    It 'keeps page layouts distinct when two layouts share a file name in different folders' {
+        $pages = Get-TestPagesList -ItemCount 3 -Batches @(
+            Get-TestPageBatch -Layouts @(
+                '/_catalogs/masterpage/BrandA/Article.aspx, Brand A'
+                '/_catalogs/masterpage/BrandB/Article.aspx, Brand B'
+                '/_catalogs/masterpage/BrandA/Article.aspx, Brand A'
+            )
+        )
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Features = @((Get-TestFeature -Id '94c94ca6-b32f-4da9-a9e3-1f3d343d7ecb'))
+        $web.Lists = @($pages)
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site
+
+        $signals.PublishingPageLayoutCount | Should -Be 2
+        $signals.PublishingPageLayoutExamples | Should -Be 'BrandA/Article.aspx (2); BrandB/Article.aspx (1)'
+    }
+
+    It 'merges absolute and server-relative references to the same page layout' {
+        $pages = Get-TestPagesList -ItemCount 3 -Batches @(
+            Get-TestPageBatch -Layouts @(
+                '/sites/team/_catalogs/masterpage/ArticleLeft.aspx, Left'
+                'http://intranet.contoso.com/sites/team/_catalogs/masterpage/ArticleLeft.aspx, Left'
+                '/sites/team/_catalogs/masterpage/ARTICLELEFT.aspx, Left'
+            )
+        )
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Features = @((Get-TestFeature -Id '94c94ca6-b32f-4da9-a9e3-1f3d343d7ecb'))
+        $web.Lists = @($pages)
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site
+
+        $signals.PublishingPageLayoutCount | Should -Be 1
+        $signals.PublishingPageLayoutExamples | Should -Be 'ArticleLeft.aspx (3)'
+    }
+
+    It 'marks the scan as partial when no scanned page reports a layout' {
+        $pages = Get-TestPagesList -ItemCount 2 -Batches @(
+            Get-TestPageBatch -Layouts @('', '')
+        )
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Features = @((Get-TestFeature -Id '94c94ca6-b32f-4da9-a9e3-1f3d343d7ecb'))
+        $web.Lists = @($pages)
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -WarningVariable warnings -WarningAction SilentlyContinue
+
+        $signals.PublishingPageLayoutCount | Should -Be 0
+        $signals.CustomizationInventoryComplete | Should -BeFalse
+        ($warnings -join ';') | Should -Match 'No page layout could be read from the 2 page\(s\) scanned on .Pages.'
+    }
+
     It 'keeps running workflow counts at zero when Workflow Manager APIs are unavailable' {
         $web = Get-TestWeb -Definitions @() -Bindings @()
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             AllWebs = @($web)
         }
@@ -646,6 +830,7 @@ Describe 'Get-SPSSiteCustomization content types' {
         $web.Lists[0].IrmEnabled = $true
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             ReadLocked = $false
             WriteLocked = $false
@@ -664,6 +849,7 @@ Describe 'Get-SPSSiteCustomization content types' {
         $web = Get-TestWeb -Definitions @() -Bindings @()
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             ReadLocked = $true
             WriteLocked = $true
@@ -681,6 +867,7 @@ Describe 'Get-SPSSiteCustomization content types' {
         $web = Get-TestWeb -Definitions @() -Bindings @()
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             ReadLocked = $false
             WriteLocked = $true
@@ -698,6 +885,7 @@ Describe 'Get-SPSSiteCustomization content types' {
         $web = Get-TestWeb -Definitions @() -Bindings @()
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             ReadLocked = $false
             WriteLocked = $false
@@ -715,6 +903,7 @@ Describe 'Get-SPSSiteCustomization content types' {
         $web = Get-TestWeb -Definitions @() -Bindings @()
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             ReadLocked = $false
             WriteLocked = $false
@@ -744,6 +933,7 @@ Describe 'Get-SPSSiteCustomization content types' {
         )
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             AllWebs = @($web)
         }
@@ -790,6 +980,7 @@ Describe 'Get-SPSSiteCustomization content types' {
         )
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             AllWebs = @($web)
         }
@@ -858,6 +1049,7 @@ Describe 'Get-SPSSiteCustomization content types' {
         $web.Lists[0] | Add-Member -MemberType ScriptProperty -Name Items -Value { throw 'Version scan must use paged GetItems retrieval.' } -Force
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             AllWebs = @($web)
         }
@@ -910,6 +1102,7 @@ Describe 'Get-SPSSiteCustomization content types' {
         } -Force
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             AllWebs = @($web)
         }
@@ -957,6 +1150,7 @@ Describe 'Get-SPSSiteCustomization content types' {
         $web.Lists[0] | Add-Member -MemberType ScriptProperty -Name Items -Value { throw 'Version scan must use paged GetItems retrieval.' } -Force
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             AllWebs = @($web)
         }
@@ -980,6 +1174,7 @@ Describe 'Get-SPSSiteCustomization content types' {
         $web.Lists[0].WorkflowAssociations = @($oldListWorkflow, $activeListWorkflow)
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             AllWebs = @($web)
         }
@@ -997,6 +1192,7 @@ Describe 'Get-SPSSiteCustomization content types' {
         $web.Lists[0].WorkflowAssociations = @($historical, $active)
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             AllWebs = @($web)
         }
@@ -1014,6 +1210,7 @@ Describe 'Get-SPSSiteCustomization content types' {
         $web.Lists[0].WorkflowAssociations = @($historical, $active)
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             AllWebs = @($web)
         }
@@ -1031,6 +1228,7 @@ Describe 'Get-SPSSiteCustomization content types' {
         $web.Lists[0].WorkflowAssociations = @($historical, $active)
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             AllWebs = @($web)
         }
@@ -1048,6 +1246,7 @@ Describe 'Get-SPSSiteCustomization content types' {
         $web.Lists[0].WorkflowAssociations = @($qualified, $active)
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             AllWebs = @($web)
         }
@@ -1064,6 +1263,7 @@ Describe 'Get-SPSSiteCustomization content types' {
         $web.Lists[0].WorkflowAssociations = @($historical)
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             AllWebs = @($web)
         }
@@ -1079,6 +1279,7 @@ Describe 'Get-SPSSiteCustomization content types' {
         $binding = Get-TestContentType -Id '0x010100AAAA' -Name 'Document'
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             AllWebs = @(Get-TestWeb -Definitions @($definition) -Bindings @($binding))
         }
@@ -1098,6 +1299,7 @@ Describe 'Get-SPSSiteCustomization content types' {
         $definition.Fields[0] | Add-Member -MemberType ScriptProperty -Name TypeAsString -Value { throw 'Access denied' } -Force
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             AllWebs = @(Get-TestWeb -Definitions @($definition) -Bindings @())
         }
@@ -1115,6 +1317,7 @@ Describe 'Get-SPSSiteCustomization content types' {
         $definition.Fields = $null
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             AllWebs = @(Get-TestWeb -Definitions @($definition) -Bindings @())
         }
@@ -1131,6 +1334,7 @@ Describe 'Get-SPSSiteCustomization content types' {
         $web.ContentTypes = $null
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             AllWebs = @($web)
         }
@@ -1149,6 +1353,7 @@ Describe 'Get-SPSSiteCustomization content types' {
         $web.Lists[0] | Add-Member -MemberType ScriptProperty -Name ContentTypes -Value { throw 'Access denied' } -Force
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             AllWebs = @($web)
         }
@@ -1167,6 +1372,7 @@ Describe 'Get-SPSSiteCustomization content types' {
         $web.Lists = $null
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             AllWebs = @($web)
         }
@@ -1182,6 +1388,7 @@ Describe 'Get-SPSSiteCustomization content types' {
     It 'marks an unavailable web collection as partial without throwing' {
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             AllWebs = $null
         }
@@ -1195,6 +1402,7 @@ Describe 'Get-SPSSiteCustomization content types' {
     It 'catches a throwing web collection getter and returns partial signals' {
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             AllWebs = @()
         }
@@ -1211,6 +1419,7 @@ Describe 'Get-SPSSiteCustomization content types' {
         $web = Get-TestWeb -Definitions @($definition) -Bindings @()
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             AllWebs = [SPSSiteInventoryThrowAfterOne]::new($web)
         }
@@ -1230,6 +1439,7 @@ Describe 'Get-SPSSiteCustomization content types' {
         $web | Add-Member -MemberType ScriptProperty -Name Lists -Value { throw 'Access denied' } -Force
         $site = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
             Solutions = @()
             AllWebs = @($web)
         }

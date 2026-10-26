@@ -62,8 +62,9 @@ Describe 'Test-SPSCustomizedPageFile' {
         Test-Page -File ([PSCustomObject]@{ CustomizedPageStatus = 2 }) | Should -BeTrue
     }
 
-    It 'returns false for a null file or a file without a status' {
-        Test-Page -File $null | Should -BeFalse
-        Test-Page -File ([PSCustomObject]@{ Name = 'default.aspx' }) | Should -BeFalse
+    It 'rejects a null file, a missing status or a null status instead of reporting not customized' {
+        { Test-Page -File $null } | Should -Throw '*could not be read*'
+        { Test-Page -File ([PSCustomObject]@{ Name = 'default.aspx' }) } | Should -Throw '*could not be read*'
+        { Test-Page -File ([PSCustomObject]@{ CustomizedPageStatus = $null }) } | Should -Throw '*could not be read*'
     }
 }

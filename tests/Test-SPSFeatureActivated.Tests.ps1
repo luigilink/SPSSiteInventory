@@ -37,8 +37,11 @@ Describe 'Test-SPSFeatureActivated' {
         $result | Should -BeFalse
     }
 
-    It 'returns false for an empty or null collection' {
+    It 'returns false for a readable empty collection' {
         (& $script:Module { param ($Id) Test-SPSFeatureActivated -Feature @() -FeatureId $Id } $script:PublishingWeb) | Should -BeFalse
-        (& $script:Module { param ($Id) Test-SPSFeatureActivated -Feature $null -FeatureId $Id } $script:PublishingWeb) | Should -BeFalse
+    }
+
+    It 'rejects a null collection instead of reporting the feature as off' {
+        { & $script:Module { param ($Id) Test-SPSFeatureActivated -Feature $null -FeatureId $Id } $script:PublishingWeb } | Should -Throw '*feature collection is unavailable*'
     }
 }

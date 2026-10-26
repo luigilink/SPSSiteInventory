@@ -11,6 +11,10 @@
         (SHAREPOINT\system) are ignored. When ModifiedBy cannot be read the file stays in
         scope, because the customization itself is still real.
 
+        A missing or null status is rejected rather than treated as not customized:
+        PowerShell turns an exception thrown by a property getter into $null, which would
+        hide an unreadable file behind a negative signal.
+
         Private because it is an implementation detail of Get-SPSSiteCustomization.
 
         .PARAMETER File
@@ -29,11 +33,14 @@
         $File
     )
 
-    if ($null -eq $File -or $null -eq $File.PSObject.Properties['CustomizedPageStatus']) {
-        return $false
+    $status = $null
+    if ($null -ne $File -and $null -ne $File.PSObject.Properties['CustomizedPageStatus']) {
+        $status = $File.CustomizedPageStatus
+    }
+    if ($null -eq $status) {
+        throw 'The customized page status could not be read.'
     }
 
-    $status = $File.CustomizedPageStatus
     $isCustomized = if ($status -is [System.String]) {
         ($status -split '\s*,\s*') -contains 'Customized'
     }
