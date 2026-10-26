@@ -198,9 +198,11 @@
             }
         }
     )
+    # Includes web application failure rows: they retain the policy values read for that application.
     $permissionRecords = @(
-        foreach ($record in $siteRecords) {
+        foreach ($record in $records) {
             [PSCustomObject]@{
+                InventoryScope = $record.InventoryScope
                 Url = $record.Url
                 WebApp = $record.WebApp
                 WebAppUrl = $record.WebAppUrl

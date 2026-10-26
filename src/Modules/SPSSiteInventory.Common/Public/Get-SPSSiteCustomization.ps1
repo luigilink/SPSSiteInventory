@@ -870,8 +870,10 @@
                         }
 
                         try {
-                            # CanReceiveEmail only says the list type supports e-mail; the alias says it is enabled.
-                            if (-not [string]::IsNullOrWhiteSpace([string]$list.EmailAlias)) {
+                            # The alias says e-mail is enabled (CanReceiveEmail only says the type supports it).
+                            # A null alias is valid, so read it strictly to tell it from a failed read.
+                            $emailAlias = Get-SPSPropertyValue -InputObject $list -Name 'EmailAlias'
+                            if (-not [string]::IsNullOrWhiteSpace([string]$emailAlias)) {
                                 $signals.EmailEnabledListCount++
                                 if ($emailEnabledListExamples.Count -lt 5) {
                                     $emailEnabledListExamples.Add(('{0} ({1})' -f $listTitle, $list.RootFolder.ServerRelativeUrl))

@@ -221,6 +221,31 @@ public sealed class SPSSiteInventoryThrowAfterOne : IEnumerable
         }
     }
 
+    # A real .NET type: PowerShell also swallows exceptions from script properties, so only a
+    # compiled getter reproduces a failed SharePoint property read.
+    if (-not ('SPSTestThrowingMailList' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+public class SPSTestThrowingMailList
+{
+    public string Title { get; set; }
+    public object RootFolder { get; set; }
+    public object ContentTypes { get; set; }
+    public object WorkflowAssociations { get; set; }
+    public object EventReceivers { get; set; }
+    public object IrmEnabled { get; set; }
+    public object ItemCount { get; set; }
+    public object Views { get; set; }
+    public object CheckedOutFiles { get; set; }
+    public object EnableVersioning { get; set; }
+    public object Items { get; set; }
+    public object BaseTemplate { get; set; }
+    public bool CanReceiveEmail { get; set; }
+    public string EmailAlias { get { throw new InvalidOperationException("alias store unavailable"); } }
+}
+'@
+    }
+
     function Get-TestPageBatch {
         param ([string[]]$Layouts, $Position = $null)
         [PSCustomObject]@{
@@ -973,6 +998,39 @@ Describe 'Get-SPSSiteCustomization content types' {
         $signals.EmailEnabledListCount | Should -Be 2
         $signals.EmailEnabledListExamples | Should -Be 'Invoices (/sites/team/Invoices); Requests (/sites/team/Requests)'
         $signals.CustomizationInventoryComplete | Should -BeTrue
+    }
+
+    It 'marks an unreadable incoming e-mail setting as partial instead of reporting the list as disabled' {
+        $mailList = [SPSTestThrowingMailList]::new()
+        $mailList.Title = 'Mailbox'
+        $mailList.RootFolder = [PSCustomObject]@{ ServerRelativeUrl = '/sites/team/Mailbox'; Properties = @{} }
+        $mailList.ContentTypes = @()
+        $mailList.WorkflowAssociations = @()
+        $mailList.EventReceivers = @()
+        $mailList.IrmEnabled = $false
+        $mailList.ItemCount = 0
+        $mailList.Views = @()
+        $mailList.CheckedOutFiles = @()
+        $mailList.EnableVersioning = $false
+        $mailList.Items = @()
+        $mailList.BaseTemplate = 100
+        $mailList.CanReceiveEmail = $true
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Lists = @($mailList, (Get-TestMailList -Title 'Requests' -EmailAlias 'requests'))
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -WarningVariable warnings -WarningAction SilentlyContinue
+
+        $signals.EmailEnabledListCount | Should -Be 1
+        $signals.EmailEnabledListExamples | Should -Be 'Requests (/sites/team/Requests)'
+        $signals.CustomizationInventoryComplete | Should -BeFalse
+        ($warnings -join ';') | Should -Match "Could not read the incoming e-mail setting on list 'Mailbox'"
+        ($warnings -join ';') | Should -Match 'alias store unavailable'
     }
 
     It 'does not scan HTML files unless asked to' {

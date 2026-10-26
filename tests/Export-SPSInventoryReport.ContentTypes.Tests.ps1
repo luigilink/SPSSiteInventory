@@ -269,6 +269,36 @@ Describe 'Export-SPSInventoryReport content types' {
         Get-AlertCount -Alerts $alerts -Type 'PermissiveBrowserFileHandling' -Url 'https://other' | Should -Be 0
     }
 
+    It 'keeps the policy values of a web application failure row in the permissions dataset' {
+        $records = @(
+            [PSCustomObject]@{
+                InventoryScope = 'SiteCollection'; Url = 'https://intranet/sites/a'; WebApp = 'Intranet'; WebAppUrl = 'https://intranet'
+                AssessmentStatus = 'Complete'; Category = 1
+                BrowserFileHandling = 'Permissive'; WebAppPolicyCount = 3; WebAppPolicyExamples = 'CONTOSO\farm: Full Control'
+            },
+            [PSCustomObject]@{
+                InventoryScope = 'WebApplication'; Url = 'https://other'; WebApp = 'Other'; WebAppUrl = 'https://other'
+                AssessmentStatus = 'Failed'; Category = $null
+                BrowserFileHandling = 'Strict'; WebAppPolicyCount = 1; WebAppPolicyExamples = 'CONTOSO\crawl: Full Read'
+            }
+        )
+
+        $output = Export-SPSInventoryReport -InputObject $records -OutputFolder $TestDrive -BaseName 'FailureRow'
+        $rows = Get-Content $output.PermissionsJsonPath -Raw | ConvertFrom-Json
+        $failureRow = $null
+        $rowCount = 0
+        foreach ($row in $rows) {
+            $rowCount++
+            if ($row.InventoryScope -eq 'WebApplication') { $failureRow = $row }
+        }
+
+        $rowCount | Should -Be 2
+        $failureRow.WebAppUrl | Should -Be 'https://other'
+        $failureRow.BrowserFileHandling | Should -Be 'Strict'
+        $failureRow.WebAppPolicyCount | Should -Be 1
+        $failureRow.WebAppPolicyExamples | Should -Be 'CONTOSO\crawl: Full Read'
+    }
+
     It 'does not write permission or policy alerts when the signals are empty, Strict or absent' {
         $records = @(
             [PSCustomObject]@{
