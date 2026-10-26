@@ -38,6 +38,7 @@
     )
 
     $contentTypes = [System.Collections.Generic.List[object]]::new()
+    $managedMetadataLists = [System.Collections.Generic.List[object]]::new()
     $scored = [System.Collections.Generic.List[object]]::new()
     $siteTotal = $Inventory.Count
     $siteIndex = 0
@@ -99,6 +100,9 @@
                 }
                 foreach ($contentType in $signals.ContentTypes) {
                     $contentTypes.Add($contentType)
+                }
+                foreach ($managedMetadataList in $signals.ManagedMetadataLists) {
+                    $managedMetadataLists.Add($managedMetadataList)
                 }
 
                 $result = Measure-SPSSiteComplexity -Signals $signals -Scoring $Scoring
@@ -170,6 +174,10 @@
                     EmailEnabledListExamples = $signals['EmailEnabledListExamples']
                     HtmlFileCount = $signals['HtmlFileCount']
                     HtmlFileExamples = $signals['HtmlFileExamples']
+                    ManagedMetadataListCount = $signals['ManagedMetadataListCount']
+                    ManagedMetadataColumnCount = $signals['ManagedMetadataColumnCount']
+                    ManagedMetadataTermSetCount = $signals['ManagedMetadataTermSetCount']
+                    ManagedMetadataExamples = $signals['ManagedMetadataExamples']
                     InfoPathFormCount = $signals['InfoPathFormCount']
                     IrmEnabledListCount = $signals['IrmEnabledListCount']
                     IsLargeSite = $signals['IsLargeSite']
@@ -250,6 +258,10 @@
                     EmailEnabledListExamples = $null
                     HtmlFileCount = $null
                     HtmlFileExamples = $null
+                    ManagedMetadataListCount = $null
+                    ManagedMetadataColumnCount = $null
+                    ManagedMetadataTermSetCount = $null
+                    ManagedMetadataExamples = $null
                     InfoPathFormCount = $null
                     IrmEnabledListCount = $null
                     IsLargeSite = $null
@@ -291,5 +303,6 @@
     [PSCustomObject]@{
         Inventory = $scored.ToArray()
         ContentTypes = $contentTypes.ToArray()
+        ManagedMetadataLists = $managedMetadataLists.ToArray()
     }
 }

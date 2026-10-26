@@ -43,16 +43,17 @@ report pack, plus a dedicated farm-solution report, to the output folder:
 | `*-publishing-*.json` | Publishing and customized-page dataset (`PublishingInfrastructureEnabled`, `PublishingWebCount`, `PublishingPageCount`, `PublishingPageLayoutCount`/`PublishingPageLayoutExamples`, `CustomizedPageCount`/`CustomizedPageExamples`, status, category). |
 | `*-irm-locks-*.json` | Security/lock dataset (`IrmEnabledListCount`, `SiteLockState`, `IsLockedSite`). |
 | `*-large-content-*.json` | Large-content risk dataset (`IsLargeSite`, large lists/views, checked-out files, high file-version counts, plus examples). |
-| `*-alerts-*.json` | Normalized risk alerts extracted from site signals (partial/failed, FBA, template compatibility/language review, full-trust, workflows, apps, publishing, customized pages, custom permission levels, e-mail enabled lists, HTML files, web application policies, permissive browser file handling, InfoPath, IRM, lock, large content). Web application alerts are written once per web application. |
+| `*-alerts-*.json` | Normalized risk alerts extracted from site signals (partial/failed, FBA, template compatibility/language review, full-trust, workflows, apps, publishing, customized pages, custom permission levels, e-mail enabled lists, HTML files, managed metadata columns, web application policies, permissive browser file handling, InfoPath, IRM, lock, large content). Web application alerts are written once per web application. |
 | `*-solutions-*.csv` | Farm-solution (WSP) inventory for Excel; one row per solution, with the feature scopes/ids flattened. |
 | `*-solutions-*.json` | Farm-solution (WSP) inventory for automation, with the feature scopes/ids kept as arrays. |
 | `*-contenttypes-*.csv` / `*-contenttypes-*.json` | Content-type definitions and list bindings, including standard types. One row per web definition or list binding, not per item. |
+| `*-managedmetadata-*.csv` / `*-managedmetadata-*.json` | Managed metadata columns by list, following the SMAT Managed Metadata Columns report. One row per list or library with at least one visible managed metadata column. |
 
-The HTML report also includes configured authentication by web application/zone and
-a content-type detail section. Authentication errors stop the scan rather than
-silently producing Windows-only results. Unrecognized/federated providers are flagged
-for identity review; a missing provider identity leaves `HasFbaZone` unknown unless
-FBA was positively detected in another provider or zone.
+The HTML report also includes configured authentication by web application/zone,
+a content-type detail section and a managed metadata section. Authentication errors
+stop the scan rather than silently producing Windows-only results. Unrecognized/federated
+providers are flagged for identity review; a missing provider identity leaves
+`HasFbaZone` unknown unless FBA was positively detected in another provider or zone.
 
 ## Output fields
 
@@ -93,6 +94,8 @@ CSV/JSON rows describe site collections and any web-application enumeration fail
 | `CustomPermissionLevelCount` / `CustomPermissionLevelExamples` | Distinct custom permission levels in the site collection and up to five examples with the web that defines them. Provisioned levels are recognized by type and by name (`PermissionLevels.BuiltInNames`) |
 | `EmailEnabledListCount` / `EmailEnabledListExamples` | Lists with incoming e-mail enabled and up to five examples (title and list URL) |
 | `HtmlFileCount` / `HtmlFileExamples` | `.htm`/`.html` files in document libraries and up to five examples. Collected only when the web application is Permissive, otherwise 0 |
+| `ManagedMetadataListCount` / `ManagedMetadataColumnCount` | Lists with at least one visible managed metadata column, and those columns counted once per list. Enterprise Keywords is included; hidden columns are not |
+| `ManagedMetadataTermSetCount` / `ManagedMetadataExamples` | Distinct term sets, by ID, that those columns use in the site collection, and up to five lists with their column names |
 | `BrowserFileHandling` | Web application setting, `Strict` or `Permissive`. SharePoint Online enforces Strict |
 | `WebAppPolicyCount` / `WebAppPolicyExamples` | Web application policies (all zones and each zone), including accounts SharePoint adds itself, and the first ten as `user: permission levels`. They are not migrated |
 | `CustomizedPageCount` / `CustomizedPageExamples` | Customized (unghosted) pages at the root of each web, ignoring System Account edits, and up to five server-relative URLs. List view and form pages are not scanned |
@@ -146,6 +149,33 @@ definitions. Field types and template URLs are review leads, not a complete sche
 export or proof of a WSP dependency. Standard types are included and are not
 automatically classified as custom or blocking. Collection happens during the existing
 site walk; it does not add a separate full-site scan.
+
+### Managed metadata detail
+
+The `*-managedmetadata-*` files hold one row per list or library with at least one visible
+managed metadata column, like the SMAT Managed Metadata Columns report: `SiteUrl`,
+`WebUrl`, `ListTitle`, `ListUrl`, `ListTemplate`, `ListType`, `ListItemCount`,
+`ItemLastModifiedDate` (as SharePoint returns it, written as `yyyy-MM-dd HH:mm:ss`),
+`ManagedMetadataColumnCount`, `ManagedMetadataColumns` (column titles separated by `; `)
+and `TermSetIds` (the distinct term set GUIDs the columns use, separated by `; `). The
+list creator that SMAT reports is not collected. Rows are only written for lists whose
+columns and properties could all be read: an unreadable list marks the site `Partial`
+with a warning, so check `CustomizationInventoryComplete` before treating the files as
+complete.
+
+Managed metadata columns take their values from the term store. They usually migrate
+with their list, as long as the term sets they use are migrated too:
+
+1. Size the work with the per-site `ManagedMetadataListCount` and
+   `ManagedMetadataTermSetCount`, and the `TermSetIds` column to see which sites share a
+   term set.
+2. Migrate these lists close to the term store migration rather than long before or
+   after it.
+3. After the migration, check that items in these lists can still be created and edited.
+
+Term sets appear as IDs because the inventory never queries the term store service. To
+find the name of a term set, match its ID with the **Unique Identifier** shown on the
+General tab of the term set in the Term Store Management Tool.
 
 ### Migration categories
 

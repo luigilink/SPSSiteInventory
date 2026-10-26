@@ -62,6 +62,14 @@
         files prompt a download instead of opening in the browser. System catalogs
         (/_catalogs/) are skipped.
 
+        ManagedMetadataListCount counts the lists and libraries with at least one visible
+        managed metadata column (Enterprise Keywords included), ManagedMetadataColumnCount
+        counts those columns and ManagedMetadataTermSetCount the distinct term sets they
+        use. Those lists depend on the term store, so they are best migrated together with
+        it. ManagedMetadataLists holds one row per list, like the SMAT Managed Metadata
+        Columns report; term set IDs are read from the field definitions, so the term
+        store service is not called and term set names are not resolved.
+
         The returned hashtable is designed to be passed straight to
         Measure-SPSSiteComplexity. CustomizationInventoryComplete is false when a signal
         cannot be read; partial results are returned with warnings rather than aborting
@@ -169,6 +177,10 @@
         EmailEnabledListExamples = ''
         HtmlFileCount            = 0
         HtmlFileExamples         = ''
+        ManagedMetadataListCount = 0
+        ManagedMetadataColumnCount = 0
+        ManagedMetadataTermSetCount = 0
+        ManagedMetadataExamples  = ''
         InfoPathFormCount        = 0
         IrmEnabledListCount      = 0
         IsLargeSite              = $false
@@ -205,6 +217,9 @@
     $customPermissionLevelExamples = [System.Collections.Generic.List[string]]::new()
     $emailEnabledListExamples = [System.Collections.Generic.List[string]]::new()
     $htmlFileExamples = [System.Collections.Generic.List[string]]::new()
+    $managedMetadataLists = [System.Collections.Generic.List[object]]::new()
+    $managedMetadataExamples = [System.Collections.Generic.List[string]]::new()
+    $managedMetadataTermSets = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     $publishingLayouts = [System.Collections.Generic.Dictionary[string, object]]::new([System.StringComparer]::OrdinalIgnoreCase)
 
     $largeListItemThreshold = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'LargeListItemCount' -DefaultValue 5000 -MinimumValue 1)
@@ -885,6 +900,26 @@
                             Write-Warning -Message "Could not read the incoming e-mail setting on list '$listTitle' in web '$($web.Url)': $($_.Exception.Message)"
                         }
 
+                        try {
+                            $managedMetadataRecord = ConvertTo-SPSManagedMetadataListRecord -List $list -SiteUrl $Site.Url -WebUrl $web.Url
+                            if ($null -ne $managedMetadataRecord) {
+                                $managedMetadataLists.Add($managedMetadataRecord)
+                                $signals.ManagedMetadataColumnCount += $managedMetadataRecord.ManagedMetadataColumnCount
+                                foreach ($termSetId in ($managedMetadataRecord.TermSetIds -split '; ')) {
+                                    if ($termSetId) {
+                                        [void]$managedMetadataTermSets.Add($termSetId)
+                                    }
+                                }
+                                if ($managedMetadataExamples.Count -lt 5) {
+                                    $managedMetadataExamples.Add(('{0} ({1})' -f $listTitle, ($managedMetadataRecord.ManagedMetadataColumns -replace '; ', ', ')))
+                                }
+                            }
+                        }
+                        catch {
+                            $signals.CustomizationInventoryComplete = $false
+                            Write-Warning -Message "Could not read the managed metadata columns on list '$listTitle' in web '$($web.Url)': $($_.Exception.Message)"
+                        }
+
                         if ($ScanHtmlFile -and $isDocumentLibrary -and [string]$list.RootFolder.ServerRelativeUrl -notmatch '/_catalogs/') {
                             try {
                                 $htmlQuery = & $newPagedQuery -RowLimit 200 -QueryText '<Where><Or><Eq><FieldRef Name="File_x0020_Type" /><Value Type="Text">htm</Value></Eq><Eq><FieldRef Name="File_x0020_Type" /><Value Type="Text">html</Value></Eq></Or></Where>'
@@ -1013,6 +1048,10 @@
     $signals.CustomPermissionLevelExamples = $customPermissionLevelExamples -join '; '
     $signals.EmailEnabledListExamples = $emailEnabledListExamples -join '; '
     $signals.HtmlFileExamples = $htmlFileExamples -join '; '
+    $signals.ManagedMetadataListCount = $managedMetadataLists.Count
+    $signals.ManagedMetadataTermSetCount = $managedMetadataTermSets.Count
+    $signals.ManagedMetadataExamples = $managedMetadataExamples -join '; '
+    $signals.ManagedMetadataLists = $managedMetadataLists.ToArray()
     $signals.PublishingPageLayoutCount = $publishingLayouts.Count
     $signals.PublishingPageLayoutExamples = @(
         $publishingLayouts.Values |

@@ -47,6 +47,11 @@
         renders their metadata without classifying standard types as custom or
         blocking. Site-level completeness flags identify partial collection.
 
+        .PARAMETER ManagedMetadataLists
+        Optional per-list managed metadata rows (one row per list with managed metadata
+        columns). When supplied, renders a managed metadata section with interpretation
+        guidance; the term store dependency is not a migration blocker by itself.
+
         .EXAMPLE
         $html = ConvertTo-SPSInventoryHtml -InputObject $scored -EnvName 'PROD'
         Set-Content -Path report.html -Value $html -Encoding UTF8
@@ -84,7 +89,12 @@
         [Parameter()]
         [AllowEmptyCollection()]
         [System.Object[]]
-        $ContentTypes = @()
+        $ContentTypes = @(),
+
+        [Parameter()]
+        [AllowEmptyCollection()]
+        [System.Object[]]
+        $ManagedMetadataLists = @()
     )
 
     # Category metadata: name and accent colour for each complexity level. A plain
@@ -142,6 +152,7 @@
         [PSCustomObject]@{ Label = 'Sites with custom permission levels'; Count = @($siteRecords | Where-Object { [int]$_.CustomPermissionLevelCount -gt 0 }).Count }
         [PSCustomObject]@{ Label = 'Sites with e-mail enabled lists'; Count = @($siteRecords | Where-Object { [int]$_.EmailEnabledListCount -gt 0 }).Count }
         [PSCustomObject]@{ Label = 'Sites with HTML files'; Count = @($siteRecords | Where-Object { [int]$_.HtmlFileCount -gt 0 }).Count }
+        [PSCustomObject]@{ Label = 'Sites with managed metadata columns'; Count = @($siteRecords | Where-Object { [int]$_.ManagedMetadataListCount -gt 0 }).Count }
         [PSCustomObject]@{ Label = 'Sites in web applications with permissive browser file handling'; Count = @($siteRecords | Where-Object { [string]$_.BrowserFileHandling -eq 'Permissive' }).Count }
         [PSCustomObject]@{ Label = 'Sites above large-size threshold'; Count = @($siteRecords | Where-Object { $_.IsLargeSite }).Count }
         [PSCustomObject]@{ Label = 'Sites with large lists'; Count = @($siteRecords | Where-Object { [int]$_.LargeListCount -gt 0 }).Count }
@@ -174,6 +185,7 @@
     $authenticationRecords = @($records | Where-Object { $_.AuthenticationZones })
     $policyRecords = @($records | Where-Object { $null -ne $_.WebAppPolicyCount -or $_.BrowserFileHandling })
     $hasContentTypeSection = $PSBoundParameters.ContainsKey('ContentTypes')
+    $hasManagedMetadataSection = $PSBoundParameters.ContainsKey('ManagedMetadataLists')
 
     $encTitle = ConvertTo-SPSHtmlText -Value $Title
     $encEnv = ConvertTo-SPSHtmlText -Value $EnvName
@@ -334,6 +346,9 @@ td.muted, .muted { color: var(--muted); }
     }
     if ($hasContentTypeSection) {
         [void]$sb.AppendLine('<a href="#content-types">Content types</a>')
+    }
+    if ($hasManagedMetadataSection) {
+        [void]$sb.AppendLine('<a href="#managed-metadata">Managed metadata</a>')
     }
     [void]$sb.AppendLine('</div>')
 
@@ -533,6 +548,45 @@ td.muted, .muted { color: var(--muted); }
         [void]$sb.AppendLine('</tbody></table></div>')
     }
 
+    if ($hasManagedMetadataSection) {
+        $incompleteSites = @($siteRecords | Where-Object { $_.CustomizationInventoryComplete -eq $false })
+        [void]$sb.AppendLine('<h2 id="managed-metadata">Managed metadata columns by list</h2>')
+        [void]$sb.AppendLine(('<p><strong>{0}</strong> list(s) with managed metadata columns. These columns take their values from the term store: they usually migrate with the list, but the term sets they use must be migrated too. Plan the term store migration together with these lists, and verify afterwards that items can be created and edited. Hidden columns are not listed, and term sets are shown by ID, not by name; resolve them in the Term Store Management Tool.</p>' -f $ManagedMetadataLists.Count))
+        if ($enumerationFailureCount -gt 0) {
+            [void]$sb.AppendLine(('<p><strong>Coverage warning:</strong> {0} web application(s) had site collection enumeration failures; managed metadata results do not cover those scopes.</p>' -f $enumerationFailureCount))
+        }
+        if ($incompleteSites.Count -gt 0) {
+            [void]$sb.AppendLine(('<p><strong>Partial collection:</strong> {0} site collection(s) have an incomplete customization inventory. Rows are a lower bound; consult CustomizationInventoryComplete and the run warnings.</p>' -f $incompleteSites.Count))
+        }
+        [void]$sb.AppendLine('<div class="table-scroll"><table class="managedmetadata">')
+        $managedMetadataColumns = @(
+            @{ Key = 'SiteUrl'; Label = 'Site' }
+            @{ Key = 'WebUrl'; Label = 'Web' }
+            @{ Key = 'ListTitle'; Label = 'List' }
+            @{ Key = 'ListUrl'; Label = 'List URL' }
+            @{ Key = 'ListTemplate'; Label = 'Template' }
+            @{ Key = 'ListType'; Label = 'Type' }
+            @{ Key = 'ListItemCount'; Label = 'Items' }
+            @{ Key = 'ItemLastModifiedDate'; Label = 'Last modified' }
+            @{ Key = 'ManagedMetadataColumnCount'; Label = 'Columns' }
+            @{ Key = 'ManagedMetadataColumns'; Label = 'Managed metadata columns' }
+            @{ Key = 'TermSetIds'; Label = 'Term set IDs' }
+        )
+        [void]$sb.AppendLine('<thead><tr>')
+        foreach ($column in $managedMetadataColumns) {
+            [void]$sb.AppendLine(('<th>{0}</th>' -f $column.Label))
+        }
+        [void]$sb.AppendLine('</tr></thead><tbody>')
+        foreach ($managedMetadataList in $ManagedMetadataLists) {
+            [void]$sb.AppendLine('<tr>')
+            foreach ($column in $managedMetadataColumns) {
+                [void]$sb.AppendLine(('<td>{0}</td>' -f (ConvertTo-SPSHtmlText -Value $managedMetadataList.($column.Key))))
+            }
+            [void]$sb.AppendLine('</tr>')
+        }
+        [void]$sb.AppendLine('</tbody></table></div>')
+    }
+
     # Filter bar.
     [void]$sb.AppendLine('<div class="filters">')
     [void]$sb.AppendLine('<button data-filter="all" class="active">All</button>')
@@ -575,6 +629,10 @@ td.muted, .muted { color: var(--muted); }
         @{ Key = 'BrowserFileHandling'; Label = 'Browser file handling'; Class = ''; Type = 'text' }
         @{ Key = 'WebAppPolicyCount'; Label = 'Web application policies'; Class = 'num'; Type = 'num' }
         @{ Key = 'WebAppPolicyExamples'; Label = 'Web application policy examples'; Class = 'reasons'; Type = 'text' }
+        @{ Key = 'ManagedMetadataListCount'; Label = 'Managed metadata lists'; Class = 'num'; Type = 'num' }
+        @{ Key = 'ManagedMetadataColumnCount'; Label = 'Managed metadata columns'; Class = 'num'; Type = 'num' }
+        @{ Key = 'ManagedMetadataTermSetCount'; Label = 'Term sets in use'; Class = 'num'; Type = 'num' }
+        @{ Key = 'ManagedMetadataExamples'; Label = 'Managed metadata examples'; Class = 'reasons'; Type = 'text' }
         @{ Key = 'SizeGB'; Label = 'Size (GB)'; Class = 'num'; Type = 'num' }
         @{ Key = 'SubWebCount'; Label = 'Sub-webs'; Class = 'num'; Type = 'num' }
         @{ Key = 'LastModified'; Label = 'Last modified'; Class = ''; Type = 'text' }

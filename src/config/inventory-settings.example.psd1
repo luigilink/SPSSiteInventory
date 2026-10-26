@@ -168,6 +168,10 @@
             # .htm/.html files prompt a download under the Strict browser file handling that
             # SharePoint Online enforces. Counted only where a web application is Permissive.
             HtmlFileCount = 0.1
+            # Managed metadata columns read their values from the term store, which is
+            # migrated separately from the sites. Weighted, not blocking.
+            ManagedMetadataListCount = 0.1
+            ManagedMetadataTermSetCount = 0.25
             # Unsupported site templates cannot be migrated directly to SPO.
             IsUnsupportedSiteTemplate = 5.0
             # Language mismatches or unknown language metadata require readiness review.

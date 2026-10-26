@@ -97,6 +97,7 @@ try {
     } $inventory $customFeatureId $fullTrustFeatureId $settings.Scoring $largeContentThresholds $permissionLevels
     $scored = @($assessment.Inventory)
     $contentTypes = @($assessment.ContentTypes)
+    $managedMetadataLists = @($assessment.ManagedMetadataLists)
     if (@($scored | Where-Object { $_.IsLockedSite }).Count -gt 0 -and
         @($settings.Scoring.BlockingSignals) -notcontains 'IsLockedSite') {
         Add-SPSInventoryEvent -Message 'Locked site collections were detected, but IsLockedSite is not in Scoring.BlockingSignals. Add it to classify lock states as migration blockers.' -Level Warning
@@ -128,12 +129,13 @@ try {
     $scored = @(Group-SPSMigrationWave -InputObject $scored -MigrationWaves $waves)
 
     $solutionOutput = Export-SPSSolutionReport -InputObject @($solutionMap) -OutputFolder $settings.OutputFolder -BaseName ('SPSSiteInventory-' + $settings.EnvName)
-    $output = Export-SPSInventoryReport -InputObject @($scored) -OutputFolder $settings.OutputFolder -BaseName ('SPSSiteInventory-' + $settings.EnvName) -EnvName $settings.EnvName -SolutionMap @($solutionMap) -ContentTypes $contentTypes -SolutionJsonPath $solutionOutput.JsonPath
+    $output = Export-SPSInventoryReport -InputObject @($scored) -OutputFolder $settings.OutputFolder -BaseName ('SPSSiteInventory-' + $settings.EnvName) -EnvName $settings.EnvName -SolutionMap @($solutionMap) -ContentTypes $contentTypes -ManagedMetadataLists $managedMetadataLists -SolutionJsonPath $solutionOutput.JsonPath
 
     Add-SPSInventoryEvent -Message "Inventory complete. CSV: $($output.CsvPath) | JSON: $($output.JsonPath) | HTML: $($output.HtmlPath)" -Level Information
     Add-SPSInventoryEvent -Message "Report pack. Sites: $($output.SitesJsonPath) | Auth: $($output.AuthJsonPath) | Workflows: $($output.WorkflowsJsonPath) | Apps: $($output.AppsJsonPath) | Publishing: $($output.PublishingJsonPath) | Permissions: $($output.PermissionsJsonPath) | IRM/Locks: $($output.IrmLocksJsonPath) | Large content: $($output.LargeContentJsonPath) | Alerts: $($output.AlertsJsonPath) | Manifest: $($output.ManifestJsonPath)" -Level Information
     Add-SPSInventoryEvent -Message "Farm-solution report. CSV: $($solutionOutput.CsvPath) | JSON: $($solutionOutput.JsonPath)" -Level Information
     Add-SPSInventoryEvent -Message "Content-type report. CSV: $($output.ContentTypesCsvPath) | JSON: $($output.ContentTypesJsonPath)" -Level Information
+    Add-SPSInventoryEvent -Message "Managed metadata report. CSV: $($output.ManagedMetadataCsvPath) | JSON: $($output.ManagedMetadataJsonPath)" -Level Information
 }
 catch {
     Add-SPSInventoryEvent -Message "Inventory failed: $($_.Exception.Message)" -Level Error

@@ -22,6 +22,7 @@ BeforeAll {
             CustomPermissionLevelCount = 0; CustomPermissionLevelExamples = ''
             EmailEnabledListCount = 0; EmailEnabledListExamples = ''
             HtmlFileCount = 0; HtmlFileExamples = ''
+            ManagedMetadataListCount = 0; ManagedMetadataColumnCount = 0; ManagedMetadataTermSetCount = 0; ManagedMetadataExamples = ''
             IsLargeSite = $false; LargeListCount = 0; LargeListExamples = ''
             LargeListViewCount = 0; LargeListViewExamples = ''
             CheckedOutFileCount = 0; CheckedOutFileExamples = ''
@@ -47,6 +48,8 @@ BeforeAll {
             CustomPermissionLevelCount = 2; CustomPermissionLevelExamples = 'Project Manager (https://intranet/sites/legacy)'
             EmailEnabledListCount = 1; EmailEnabledListExamples = 'Invoices (/sites/legacy/Invoices)'
             HtmlFileCount = 4; HtmlFileExamples = '/sites/legacy/Docs/a.htm'
+            ManagedMetadataListCount = 2; ManagedMetadataColumnCount = 3; ManagedMetadataTermSetCount = 2
+            ManagedMetadataExamples = 'Contracts (Department, Region); Projects <Q&A> (Department)'
             IsLargeSite = $true; LargeListCount = 2; LargeListExamples = 'Documents (7000); Records (5100)'
             LargeListViewCount = 1; LargeListViewExamples = 'Documents/All Documents (7000)'
             CheckedOutFileCount = 3; CheckedOutFileExamples = 'Documents (3)'
@@ -147,6 +150,17 @@ Describe 'ConvertTo-SPSInventoryHtml' {
             $html | Should -Match ('>{0} <span class="arrow">' -f $label)
         }
         $html | Should -Match 'Project Manager \(https://intranet/sites/legacy\)'
+    }
+
+    It 'shows managed metadata signals in the summary card and table columns' {
+        $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
+
+        $html | Should -Match '<div class="num">1</div><div class="lbl">Sites with managed metadata columns</div>'
+        foreach ($label in @('Managed metadata lists', 'Managed metadata columns', 'Term sets in use', 'Managed metadata examples')) {
+            $html | Should -Match ('>{0} <span class="arrow">' -f $label)
+        }
+        $html | Should -Match 'Projects &lt;Q&amp;A&gt; \(Department\)'
+        $html | Should -Not -Match 'Projects <Q&A>'
     }
 
     It 'renders a web application policies section grouped by web application' {
@@ -411,6 +425,7 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $html | Should -Not -Match 'href="#farm-solutions"'
         $html | Should -Not -Match 'href="#authentication"'
         $html | Should -Not -Match 'href="#content-types"'
+        $html | Should -Not -Match 'href="#managed-metadata"'
     }
 
     It 'renders large-content columns in the main table' {
@@ -465,5 +480,57 @@ Describe 'ConvertTo-SPSInventoryHtml' {
 
         $html | Should -Match '0</strong> definition/binding row'
         $html | Should -Not -Match 'href="#wave-plan"'
+    }
+
+    It 'renders encoded managed metadata detail, guidance and coverage warnings' {
+        $sites = @(
+            [PSCustomObject]@{
+                Url = 'https://intranet/sites/team'; Category = 1
+                ManagedMetadataListCount = 1; CustomizationInventoryComplete = $false
+            },
+            [PSCustomObject]@{
+                InventoryScope = 'WebApplication'; Url = 'https://other'; WebAppUrl = 'https://other'
+                AssessmentStatus = 'Failed'
+            }
+        )
+        $lists = @([PSCustomObject]@{
+            SiteUrl = 'https://intranet/sites/team'; WebUrl = 'https://intranet/sites/team/sub'
+            ListTitle = 'Records <Admin>'; ListUrl = '/sites/team/records?a=1&b=2'
+            ListTemplate = 'DocumentLibrary'; ListType = 'DocumentLibrary'
+            ListItemCount = 1250; ItemLastModifiedDate = '2026-03-04 10:20:30'
+            ManagedMetadataColumnCount = 2; ManagedMetadataColumns = 'Department; R&D'
+            TermSetIds = '11111111-1111-1111-1111-111111111111; 22222222-2222-2222-2222-222222222222'
+        })
+
+        $html = ConvertTo-SPSInventoryHtml -InputObject $sites -ManagedMetadataLists $lists
+
+        $html | Should -Match '<h2 id="managed-metadata">Managed metadata columns by list</h2>'
+        $html | Should -Match '<a href="#managed-metadata">Managed metadata</a>'
+        $html | Should -Match '<strong>1</strong> list\(s\) with managed metadata columns'
+        $html | Should -Match 'Plan the term store migration together with these lists'
+        $html | Should -Match 'Coverage warning:</strong> 1 web application'
+        $html | Should -Match 'Partial collection:</strong> 1 site collection'
+        $html | Should -Match '(?s)<th>Site</th>.*<th>Web</th>.*<th>List</th>.*<th>List URL</th>.*<th>Template</th>.*<th>Type</th>.*<th>Items</th>.*<th>Last modified</th>.*<th>Columns</th>.*<th>Managed metadata columns</th>.*<th>Term set IDs</th>'
+        $html | Should -Match 'Records &lt;Admin&gt;'
+        $html | Should -Match '/sites/team/records\?a=1&amp;b=2'
+        $html | Should -Match 'Department; R&amp;D'
+        $html | Should -Match '<td>1250</td>'
+        $html | Should -Match '11111111-1111-1111-1111-111111111111; 22222222-2222-2222-2222-222222222222'
+        $html | Should -Not -Match 'Records <Admin>'
+    }
+
+    It 'renders an explicit empty managed metadata section when requested' {
+        $html = ConvertTo-SPSInventoryHtml -InputObject @() -ManagedMetadataLists @()
+
+        $html | Should -Match '<strong>0</strong> list\(s\) with managed metadata columns'
+        $html | Should -Not -Match 'Coverage warning'
+        $html | Should -Not -Match 'Partial collection'
+    }
+
+    It 'omits the managed metadata section when no managed metadata rows are passed' {
+        $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
+
+        $html | Should -Not -Match 'id="managed-metadata"'
+        $html | Should -Not -Match 'href="#managed-metadata"'
     }
 }
