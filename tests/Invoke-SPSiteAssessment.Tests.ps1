@@ -43,6 +43,12 @@ Describe 'Invoke-SPSiteAssessment' {
                     PublishingPageLayoutExamples = 'ArticleLeft.aspx (30); WelcomeSplash.aspx (10)'
                     CustomizedPageCount = 1
                     CustomizedPageExamples = '/sites/first/default.aspx'
+                    CustomPermissionLevelCount = 2
+                    CustomPermissionLevelExamples = 'Project Manager (https://intranet/sites/first)'
+                    EmailEnabledListCount = 1
+                    EmailEnabledListExamples = 'Invoices (/sites/first/Invoices)'
+                    HtmlFileCount = 4
+                    HtmlFileExamples = '/sites/first/Docs/a.htm'
                     InfoPathFormCount = 0
                     IrmEnabledListCount = 0
                     IsLargeSite = $false
@@ -90,6 +96,12 @@ Describe 'Invoke-SPSiteAssessment' {
             $result.Inventory[0].PublishingPageLayoutExamples | Should -Be 'ArticleLeft.aspx (30); WelcomeSplash.aspx (10)'
             $result.Inventory[0].CustomizedPageCount | Should -Be 1
             $result.Inventory[0].CustomizedPageExamples | Should -Be '/sites/first/default.aspx'
+            $result.Inventory[0].CustomPermissionLevelCount | Should -Be 2
+            $result.Inventory[0].CustomPermissionLevelExamples | Should -Be 'Project Manager (https://intranet/sites/first)'
+            $result.Inventory[0].EmailEnabledListCount | Should -Be 1
+            $result.Inventory[0].EmailEnabledListExamples | Should -Be 'Invoices (/sites/first/Invoices)'
+            $result.Inventory[0].HtmlFileCount | Should -Be 4
+            $result.Inventory[0].HtmlFileExamples | Should -Be '/sites/first/Docs/a.htm'
             $result.Inventory[0].IsLargeSite | Should -BeFalse
             $result.Inventory[0].IsLockedSite | Should -BeFalse
             $result.Inventory[0].SiteLockState | Should -Be 'Unlock'
@@ -109,6 +121,12 @@ Describe 'Invoke-SPSiteAssessment' {
             $result.Inventory[1].PublishingPageLayoutExamples | Should -BeNullOrEmpty
             $result.Inventory[1].CustomizedPageCount | Should -BeNullOrEmpty
             $result.Inventory[1].CustomizedPageExamples | Should -BeNullOrEmpty
+            $result.Inventory[1].CustomPermissionLevelCount | Should -BeNullOrEmpty
+            $result.Inventory[1].CustomPermissionLevelExamples | Should -BeNullOrEmpty
+            $result.Inventory[1].EmailEnabledListCount | Should -BeNullOrEmpty
+            $result.Inventory[1].EmailEnabledListExamples | Should -BeNullOrEmpty
+            $result.Inventory[1].HtmlFileCount | Should -BeNullOrEmpty
+            $result.Inventory[1].HtmlFileExamples | Should -BeNullOrEmpty
             $result.Inventory[1].IsLargeSite | Should -BeNullOrEmpty
             $result.Inventory[1].IsLockedSite | Should -BeNullOrEmpty
             $result.Inventory[1].SiteLockState | Should -BeNullOrEmpty
@@ -143,6 +161,12 @@ Describe 'Invoke-SPSiteAssessment' {
                     PublishingPageLayoutExamples = ''
                     CustomizedPageCount = 0
                     CustomizedPageExamples = ''
+                    CustomPermissionLevelCount = 0
+                    CustomPermissionLevelExamples = ''
+                    EmailEnabledListCount = 0
+                    EmailEnabledListExamples = ''
+                    HtmlFileCount = 0
+                    HtmlFileExamples = ''
                     InfoPathFormCount = 0
                     IrmEnabledListCount = 0
                     IsLargeSite = $false
@@ -208,6 +232,12 @@ Describe 'Invoke-SPSiteAssessment' {
                     PublishingPageLayoutExamples = ''
                     CustomizedPageCount = 0
                     CustomizedPageExamples = ''
+                    CustomPermissionLevelCount = 0
+                    CustomPermissionLevelExamples = ''
+                    EmailEnabledListCount = 0
+                    EmailEnabledListExamples = ''
+                    HtmlFileCount = 0
+                    HtmlFileExamples = ''
                     InfoPathFormCount = 0
                     IrmEnabledListCount = 0
                     IsLargeSite = $false
@@ -270,6 +300,12 @@ Describe 'Invoke-SPSiteAssessment' {
                     PublishingPageLayoutExamples = ''
                     CustomizedPageCount = 0
                     CustomizedPageExamples = ''
+                    CustomPermissionLevelCount = 0
+                    CustomPermissionLevelExamples = ''
+                    EmailEnabledListCount = 0
+                    EmailEnabledListExamples = ''
+                    HtmlFileCount = 0
+                    HtmlFileExamples = ''
                     InfoPathFormCount = 0
                     IrmEnabledListCount = 0
                     IsLargeSite = $false
@@ -344,6 +380,59 @@ Describe 'Invoke-SPSiteAssessment' {
             $result.Inventory[0].AssessmentWarnings | Should -Match 'Access denied'
             $result.Inventory[0].CategoryName | Should -Be 'Not assessed'
             Should -Invoke Get-SPSite -Times 0 -Exactly
+        }
+    }
+
+    It 'scans HTML files only for permissive web applications and passes the web application fields through' {
+        InModuleScope SPSSiteInventory.Common {
+            Mock Get-SPSite {
+                param ($Identity)
+                if ($Identity -match '/denied$') {
+                    throw 'Access denied'
+                }
+                $site = [PSCustomObject]@{ Url = $Identity }
+                $site | Add-Member -MemberType ScriptMethod -Name Dispose -Value { }
+                $site
+            }
+            Mock Get-SPSSiteCustomization {
+                @{
+                    ContentTypeInventoryComplete = $true
+                    CustomizationInventoryComplete = $true
+                    ContentTypes = @()
+                    CustomPermissionLevelCount = 0
+                }
+            }
+            Mock Add-SPSInventoryEvent { }
+            Mock Write-Progress { }
+
+            $inventory = @(
+                [PSCustomObject]@{
+                    Url = 'https://legacy/sites/a'; Title = 'A'; SiteInventoryComplete = $true; SiteInventoryWarnings = ''
+                    BrowserFileHandling = 'Permissive'; WebAppPolicyCount = 3; WebAppPolicyExamples = 'CONTOSO\farm: Full Control'
+                }
+                [PSCustomObject]@{
+                    Url = 'https://modern/sites/b'; Title = 'B'; SiteInventoryComplete = $true; SiteInventoryWarnings = ''
+                    BrowserFileHandling = 'Strict'; WebAppPolicyCount = 1; WebAppPolicyExamples = 'CONTOSO\farm: Full Control'
+                }
+                [PSCustomObject]@{
+                    Url = 'https://legacy/sites/denied'; Title = 'Denied'; SiteInventoryComplete = $true; SiteInventoryWarnings = ''
+                    BrowserFileHandling = 'Permissive'; WebAppPolicyCount = 3; WebAppPolicyExamples = 'CONTOSO\farm: Full Control'
+                }
+            )
+            $scoring = @{ Weights = @{}; Thresholds = @{}; BlockingSignals = @() }
+
+            $result = Invoke-SPSiteAssessment -Inventory $inventory -Scoring $scoring -PermissionLevels @{ BuiltInNames = @('Affichage seul') }
+
+            Should -Invoke Get-SPSSiteCustomization -Times 1 -Exactly -ParameterFilter { $Site.Url -eq 'https://legacy/sites/a' -and $ScanHtmlFile }
+            Should -Invoke Get-SPSSiteCustomization -Times 1 -Exactly -ParameterFilter { $Site.Url -eq 'https://modern/sites/b' -and -not $ScanHtmlFile }
+            Should -Invoke Get-SPSSiteCustomization -Times 2 -Exactly -ParameterFilter { $PermissionLevels.BuiltInNames -contains 'Affichage seul' }
+            $result.Inventory[0].BrowserFileHandling | Should -Be 'Permissive'
+            $result.Inventory[0].WebAppPolicyCount | Should -Be 3
+            $result.Inventory[0].WebAppPolicyExamples | Should -Be 'CONTOSO\farm: Full Control'
+            $result.Inventory[1].BrowserFileHandling | Should -Be 'Strict'
+            $result.Inventory[2].AssessmentStatus | Should -Be 'Failed'
+            $result.Inventory[2].BrowserFileHandling | Should -Be 'Permissive'
+            $result.Inventory[2].WebAppPolicyCount | Should -Be 3
         }
     }
 }

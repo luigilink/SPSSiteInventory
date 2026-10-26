@@ -30,7 +30,11 @@
 
         [Parameter()]
         [System.Collections.IDictionary]
-        $LargeContentThresholds = @{}
+        $LargeContentThresholds = @{},
+
+        [Parameter()]
+        [System.Collections.IDictionary]
+        $PermissionLevels = @{}
     )
 
     $contentTypes = [System.Collections.Generic.List[object]]::new()
@@ -72,7 +76,9 @@
                     throw "SharePoint did not return a site collection for '$($item.Url)'."
                 }
                 $customizationWarnings = @()
-                $signals = Get-SPSSiteCustomization -Site $site -CustomFeatureId $CustomFeatureId -FullTrustFeatureId $FullTrustFeatureId -LargeContentThresholds $LargeContentThresholds -WarningVariable customizationWarnings
+                # HTML files only matter where browser file handling is Permissive; SharePoint Online enforces Strict.
+                $scanHtmlFile = [string]$item.BrowserFileHandling -eq 'Permissive'
+                $signals = Get-SPSSiteCustomization -Site $site -CustomFeatureId $CustomFeatureId -FullTrustFeatureId $FullTrustFeatureId -LargeContentThresholds $LargeContentThresholds -PermissionLevels $PermissionLevels -ScanHtmlFile:$scanHtmlFile -WarningVariable customizationWarnings
                 foreach ($warning in $customizationWarnings) {
                     $siteWarnings.Add([string]$warning)
                 }
@@ -122,6 +128,9 @@
                     FbaRoleProviders = $item.FbaRoleProviders
                     HasFbaZone = $item.HasFbaZone
                     AuthenticationReviewRequired = $item.AuthenticationReviewRequired
+                    BrowserFileHandling = $item.BrowserFileHandling
+                    WebAppPolicyCount = $item.WebAppPolicyCount
+                    WebAppPolicyExamples = $item.WebAppPolicyExamples
                     ContentDb = $item.ContentDb
                     Template = $item.Template
                     IsUnsupportedSiteTemplate = $item.IsUnsupportedSiteTemplate
@@ -155,6 +164,12 @@
                     PublishingPageLayoutExamples = $signals['PublishingPageLayoutExamples']
                     CustomizedPageCount = $signals['CustomizedPageCount']
                     CustomizedPageExamples = $signals['CustomizedPageExamples']
+                    CustomPermissionLevelCount = $signals['CustomPermissionLevelCount']
+                    CustomPermissionLevelExamples = $signals['CustomPermissionLevelExamples']
+                    EmailEnabledListCount = $signals['EmailEnabledListCount']
+                    EmailEnabledListExamples = $signals['EmailEnabledListExamples']
+                    HtmlFileCount = $signals['HtmlFileCount']
+                    HtmlFileExamples = $signals['HtmlFileExamples']
                     InfoPathFormCount = $signals['InfoPathFormCount']
                     IrmEnabledListCount = $signals['IrmEnabledListCount']
                     IsLargeSite = $signals['IsLargeSite']
@@ -193,6 +208,9 @@
                     FbaRoleProviders = $item.FbaRoleProviders
                     HasFbaZone = $item.HasFbaZone
                     AuthenticationReviewRequired = $item.AuthenticationReviewRequired
+                    BrowserFileHandling = $item.BrowserFileHandling
+                    WebAppPolicyCount = $item.WebAppPolicyCount
+                    WebAppPolicyExamples = $item.WebAppPolicyExamples
                     ContentDb = $item.ContentDb
                     Template = $item.Template
                     IsUnsupportedSiteTemplate = $item.IsUnsupportedSiteTemplate
@@ -226,6 +244,12 @@
                     PublishingPageLayoutExamples = $null
                     CustomizedPageCount = $null
                     CustomizedPageExamples = $null
+                    CustomPermissionLevelCount = $null
+                    CustomPermissionLevelExamples = $null
+                    EmailEnabledListCount = $null
+                    EmailEnabledListExamples = $null
+                    HtmlFileCount = $null
+                    HtmlFileExamples = $null
                     InfoPathFormCount = $null
                     IrmEnabledListCount = $null
                     IsLargeSite = $null

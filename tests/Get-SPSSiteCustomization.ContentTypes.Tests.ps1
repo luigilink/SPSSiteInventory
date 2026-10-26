@@ -104,6 +104,9 @@ public sealed class SPSSiteInventoryThrowAfterOne : IEnumerable
             CustomMasterUrl = ''
             Features = @()
             Files = @()
+            IsRootWeb = $true
+            HasUniqueRoleDefinitions = $true
+            RoleDefinitions = @()
         }
         $web | Add-Member -MemberType ScriptMethod -Name Dispose -Value { }
         return $web
@@ -160,6 +163,87 @@ public sealed class SPSSiteInventoryThrowAfterOne : IEnumerable
             [PSCustomObject]@{ Items = @($batch.Items); ListItemCollectionPosition = $batch.Position }
         }
         return $list
+    }
+
+    function Get-TestRole {
+        param ([string]$Name, [string]$Type = 'None')
+        [PSCustomObject]@{ Name = $Name; Type = $Type }
+    }
+
+    function Get-TestMailList {
+        param ([string]$Title, [string]$EmailAlias = $null, [bool]$CanReceiveEmail = $true)
+        [PSCustomObject]@{
+            Title = $Title
+            RootFolder = [PSCustomObject]@{ ServerRelativeUrl = "/sites/team/$Title"; Properties = @{} }
+            ContentTypes = @()
+            WorkflowAssociations = @()
+            EventReceivers = @()
+            IrmEnabled = $false
+            ItemCount = 0
+            Views = @()
+            CheckedOutFiles = @()
+            EnableVersioning = $false
+            Items = @()
+            BaseTemplate = 100
+            EmailAlias = $EmailAlias
+            CanReceiveEmail = $CanReceiveEmail
+        }
+    }
+
+    function Get-TestLibrary {
+        param ([string]$Title = 'Docs', [string]$Url = '', [object[]]$HtmlBatches = @(), [int]$BaseTemplate = 101)
+
+        $library = Get-TestMailList -Title $Title
+        if ($Url) { $library.RootFolder.ServerRelativeUrl = $Url }
+        $library.BaseTemplate = $BaseTemplate
+        $library | Add-Member -MemberType NoteProperty -Name HtmlBatches -Value $HtmlBatches
+        $library | Add-Member -MemberType NoteProperty -Name HtmlBatchIndex -Value 0
+        $library | Add-Member -MemberType NoteProperty -Name HtmlQueries -Value ([System.Collections.Generic.List[object]]::new())
+        $library | Add-Member -MemberType ScriptMethod -Name GetItems -Value {
+            param ($Query)
+            # Checkout and version scans share GetItems; only the HTML query returns files.
+            if ($Query.PSObject.Properties['Query'] -and [string]$Query.Query -match 'File_x0020_Type') {
+                $this.HtmlQueries.Add($Query)
+                $batch = $this.HtmlBatches[$this.HtmlBatchIndex]
+                $this.HtmlBatchIndex++
+                return [PSCustomObject]@{ Items = @($batch.Items); ListItemCollectionPosition = $batch.Position }
+            }
+            [PSCustomObject]@{ Items = @(); ListItemCollectionPosition = $null }
+        }
+        return $library
+    }
+
+    function Get-TestHtmlBatch {
+        param ([string[]]$Urls, $Position = $null)
+        [PSCustomObject]@{
+            Items = @($Urls | ForEach-Object { [PSCustomObject]@{ File = [PSCustomObject]@{ ServerRelativeUrl = $_ } } })
+            Position = $Position
+        }
+    }
+
+    # A real .NET type: PowerShell also swallows exceptions from script properties, so only a
+    # compiled getter reproduces a failed SharePoint property read.
+    if (-not ('SPSTestThrowingMailList' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+public class SPSTestThrowingMailList
+{
+    public string Title { get; set; }
+    public object RootFolder { get; set; }
+    public object ContentTypes { get; set; }
+    public object WorkflowAssociations { get; set; }
+    public object EventReceivers { get; set; }
+    public object IrmEnabled { get; set; }
+    public object ItemCount { get; set; }
+    public object Views { get; set; }
+    public object CheckedOutFiles { get; set; }
+    public object EnableVersioning { get; set; }
+    public object Items { get; set; }
+    public object BaseTemplate { get; set; }
+    public bool CanReceiveEmail { get; set; }
+    public string EmailAlias { get { throw new InvalidOperationException("alias store unavailable"); } }
+}
+'@
     }
 
     function Get-TestPageBatch {
@@ -779,6 +863,279 @@ Describe 'Get-SPSSiteCustomization content types' {
         $signals.PublishingPageLayoutCount | Should -Be 0
         $signals.CustomizationInventoryComplete | Should -BeFalse
         ($warnings -join ';') | Should -Match 'No page layout could be read from the 2 page\(s\) scanned on .Pages.'
+    }
+
+    It 'counts distinct custom permission levels from the webs that own them' {
+        $rootWeb = Get-TestWeb -Definitions @() -Bindings @()
+        $rootWeb.RoleDefinitions = @(
+            (Get-TestRole -Name 'Full Control' -Type 'Administrator')
+            (Get-TestRole -Name 'Read' -Type 'Reader')
+            (Get-TestRole -Name 'View Only')
+            (Get-TestRole -Name 'Approve')
+            (Get-TestRole -Name 'Project Manager')
+            (Get-TestRole -Name 'Auditor')
+        )
+        $inheritingWeb = Get-TestWeb -Definitions @() -Bindings @()
+        $inheritingWeb.Url = 'https://intranet.contoso.com/sites/team/inherits'
+        $inheritingWeb.IsRootWeb = $false
+        $inheritingWeb.HasUniqueRoleDefinitions = $false
+        $inheritingWeb | Add-Member -MemberType ScriptProperty -Name RoleDefinitions -Value { throw 'Inherited levels must not be read.' } -Force
+        $ownWeb = Get-TestWeb -Definitions @() -Bindings @()
+        $ownWeb.Url = 'https://intranet.contoso.com/sites/team/own'
+        $ownWeb.IsRootWeb = $false
+        $ownWeb.RoleDefinitions = @((Get-TestRole -Name 'auditor'), (Get-TestRole -Name 'External'))
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($rootWeb, $inheritingWeb, $ownWeb)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site
+
+        $signals.CustomPermissionLevelCount | Should -Be 3
+        $signals.CustomPermissionLevelExamples | Should -Be 'Project Manager (https://intranet.contoso.com/sites/team); Auditor (https://intranet.contoso.com/sites/team); External (https://intranet.contoso.com/sites/team/own)'
+        $signals.CustomizationInventoryComplete | Should -BeTrue
+    }
+
+    It 'adds configured localized names to the built-in permission level names' {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.RoleDefinitions = @(
+            (Get-TestRole -Name 'Affichage seul')
+            (Get-TestRole -Name 'View Only')
+            (Get-TestRole -Name 'Gestionnaire projet')
+        )
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $default = Get-SPSSiteCustomization -Site $site
+        $configured = Get-SPSSiteCustomization -Site $site -PermissionLevels @{ BuiltInNames = @('Affichage seul') }
+
+        $default.CustomPermissionLevelCount | Should -Be 2
+        $configured.CustomPermissionLevelCount | Should -Be 1
+        $configured.CustomPermissionLevelExamples | Should -Match '^Gestionnaire projet'
+    }
+
+    It 'reports no custom permission levels when only base and provisioned levels exist' {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.RoleDefinitions = @((Get-TestRole -Name 'Contribute' -Type 'Contributor'), (Get-TestRole -Name 'Manage Hierarchy'))
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site
+
+        $signals.CustomPermissionLevelCount | Should -Be 0
+        $signals.CustomPermissionLevelExamples | Should -Be ''
+        $signals.CustomizationInventoryComplete | Should -BeTrue
+    }
+
+    It 'marks unreadable permission level ownership or collections as partial instead of reporting none' {
+        $unknownOwner = Get-TestWeb -Definitions @() -Bindings @()
+        $unknownOwner.IsRootWeb = $null
+        $noLevels = Get-TestWeb -Definitions @() -Bindings @()
+        $noLevels.Url = 'https://intranet.contoso.com/sites/team/nolevels'
+        $noLevels.RoleDefinitions = $null
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($unknownOwner, $noLevels)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -WarningVariable warnings -WarningAction SilentlyContinue
+        $warningText = $warnings -join ';'
+
+        $signals.CustomizationInventoryComplete | Should -BeFalse
+        $warningText | Should -Match "permission level ownership could not be read on 'https://intranet.contoso.com/sites/team'"
+        $warningText | Should -Match "permission levels are unavailable on 'https://intranet.contoso.com/sites/team/nolevels'"
+    }
+
+    It 'isolates a permission level that cannot be classified and keeps the others' {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.RoleDefinitions = @(
+            [PSCustomObject]@{ Name = $null; Type = 'None' }
+            (Get-TestRole -Name 'Project Manager')
+        )
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -WarningVariable warnings -WarningAction SilentlyContinue
+
+        $signals.CustomPermissionLevelCount | Should -Be 1
+        $signals.CustomizationInventoryComplete | Should -BeFalse
+        ($warnings -join ';') | Should -Match 'Could not classify a permission level'
+    }
+
+    It 'counts lists with an incoming e-mail alias and ignores lists that can only receive e-mail' {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Lists = @(
+            (Get-TestMailList -Title 'Invoices' -EmailAlias 'invoices')
+            (Get-TestMailList -Title 'Capable' -EmailAlias $null -CanReceiveEmail $true)
+            (Get-TestMailList -Title 'Blank' -EmailAlias '')
+            (Get-TestMailList -Title 'Requests' -EmailAlias 'requests')
+        )
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site
+
+        $signals.EmailEnabledListCount | Should -Be 2
+        $signals.EmailEnabledListExamples | Should -Be 'Invoices (/sites/team/Invoices); Requests (/sites/team/Requests)'
+        $signals.CustomizationInventoryComplete | Should -BeTrue
+    }
+
+    It 'marks an unreadable incoming e-mail setting as partial instead of reporting the list as disabled' {
+        $mailList = [SPSTestThrowingMailList]::new()
+        $mailList.Title = 'Mailbox'
+        $mailList.RootFolder = [PSCustomObject]@{ ServerRelativeUrl = '/sites/team/Mailbox'; Properties = @{} }
+        $mailList.ContentTypes = @()
+        $mailList.WorkflowAssociations = @()
+        $mailList.EventReceivers = @()
+        $mailList.IrmEnabled = $false
+        $mailList.ItemCount = 0
+        $mailList.Views = @()
+        $mailList.CheckedOutFiles = @()
+        $mailList.EnableVersioning = $false
+        $mailList.Items = @()
+        $mailList.BaseTemplate = 100
+        $mailList.CanReceiveEmail = $true
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Lists = @($mailList, (Get-TestMailList -Title 'Requests' -EmailAlias 'requests'))
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -WarningVariable warnings -WarningAction SilentlyContinue
+
+        $signals.EmailEnabledListCount | Should -Be 1
+        $signals.EmailEnabledListExamples | Should -Be 'Requests (/sites/team/Requests)'
+        $signals.CustomizationInventoryComplete | Should -BeFalse
+        ($warnings -join ';') | Should -Match "Could not read the incoming e-mail setting on list 'Mailbox'"
+        ($warnings -join ';') | Should -Match 'alias store unavailable'
+    }
+
+    It 'does not scan HTML files unless asked to' {
+        $library = Get-TestLibrary -HtmlBatches @(Get-TestHtmlBatch -Urls @('/sites/team/Docs/a.htm'))
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Lists = @($library)
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -WarningVariable warnings -WarningAction SilentlyContinue
+
+        $signals.HtmlFileCount | Should -Be 0
+        $signals.HtmlFileExamples | Should -Be ''
+        $library.HtmlQueries | Should -HaveCount 0
+        @($warnings) | Should -HaveCount 0
+    }
+
+    It 'counts .htm and .html files in document libraries when the scan is requested' {
+        $library = Get-TestLibrary -HtmlBatches @(
+            Get-TestHtmlBatch -Urls @('/sites/team/Docs/a.htm', '/sites/team/Docs/b.html') -Position 'next'
+            Get-TestHtmlBatch -Urls @('/sites/team/Docs/sub/c.html')
+        )
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Lists = @($library)
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -ScanHtmlFile
+
+        $signals.HtmlFileCount | Should -Be 3
+        $signals.HtmlFileExamples | Should -Be '/sites/team/Docs/a.htm; /sites/team/Docs/b.html; /sites/team/Docs/sub/c.html'
+        $signals.CustomizationInventoryComplete | Should -BeTrue
+        $library.HtmlQueries | Should -HaveCount 2
+        $library.HtmlQueries[0].Query | Should -Match '>htm<.*>html<'
+        $library.HtmlQueries[0].ViewFields | Should -Match 'FileRef'
+        $library.HtmlQueries[0].QueryThrottleMode | Should -Be 'Override'
+    }
+
+    It 'skips system catalogs and lists that are not document libraries when scanning HTML files' {
+        $catalog = Get-TestLibrary -Title 'masterpage' -Url '/sites/team/_catalogs/masterpage' -HtmlBatches @(Get-TestHtmlBatch -Urls @('/x.html'))
+        $tasks = Get-TestLibrary -Title 'Tasks' -BaseTemplate 100 -HtmlBatches @(Get-TestHtmlBatch -Urls @('/y.html'))
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Lists = @($catalog, $tasks)
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -ScanHtmlFile
+
+        $signals.HtmlFileCount | Should -Be 0
+        $catalog.HtmlQueries | Should -HaveCount 0
+        $tasks.HtmlQueries | Should -HaveCount 0
+    }
+
+    It 'caps the HTML file scan and marks it partial' {
+        $library = Get-TestLibrary -HtmlBatches @(
+            Get-TestHtmlBatch -Urls @('/sites/team/Docs/a.htm', '/sites/team/Docs/b.htm', '/sites/team/Docs/c.htm')
+        )
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Lists = @($library)
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -ScanHtmlFile -LargeContentThresholds @{ MaxItemsForHtmlFileScanPerLibrary = 2 } -WarningVariable warnings -WarningAction SilentlyContinue
+
+        $signals.HtmlFileCount | Should -Be 2
+        $signals.CustomizationInventoryComplete | Should -BeFalse
+        ($warnings -join ';') | Should -Match 'HTML file scan stopped'
+        ($warnings -join ';') | Should -Match 'MaxItemsForHtmlFileScanPerLibrary'
+    }
+
+    It 'marks an unreadable HTML file query as partial and keeps the other libraries' {
+        $broken = Get-TestLibrary -Title 'Broken'
+        $broken | Add-Member -MemberType ScriptMethod -Name GetItems -Value { throw 'Query throttled' } -Force
+        $good = Get-TestLibrary -Title 'Good' -HtmlBatches @(Get-TestHtmlBatch -Urls @('/sites/team/Good/a.htm'))
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Lists = @($broken, $good)
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -ScanHtmlFile -WarningVariable warnings -WarningAction SilentlyContinue
+
+        $signals.HtmlFileCount | Should -Be 1
+        $signals.CustomizationInventoryComplete | Should -BeFalse
+        ($warnings -join ';') | Should -Match "Could not scan HTML files on 'Broken'"
+        ($warnings -join ';') | Should -Match 'Query throttled'
     }
 
     It 'keeps running workflow counts at zero when Workflow Manager APIs are unavailable' {

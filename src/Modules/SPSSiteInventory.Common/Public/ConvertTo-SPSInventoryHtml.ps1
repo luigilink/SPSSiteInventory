@@ -139,6 +139,10 @@
         [PSCustomObject]@{ Label = 'Sites with publishing features'; Count = @($siteRecords | Where-Object { [bool]$_.PublishingInfrastructureEnabled -or [int]$_.PublishingWebCount -gt 0 }).Count }
         [PSCustomObject]@{ Label = 'Sites with publishing pages'; Count = @($siteRecords | Where-Object { [int]$_.PublishingPageCount -gt 0 }).Count }
         [PSCustomObject]@{ Label = 'Sites with customized pages'; Count = @($siteRecords | Where-Object { [int]$_.CustomizedPageCount -gt 0 }).Count }
+        [PSCustomObject]@{ Label = 'Sites with custom permission levels'; Count = @($siteRecords | Where-Object { [int]$_.CustomPermissionLevelCount -gt 0 }).Count }
+        [PSCustomObject]@{ Label = 'Sites with e-mail enabled lists'; Count = @($siteRecords | Where-Object { [int]$_.EmailEnabledListCount -gt 0 }).Count }
+        [PSCustomObject]@{ Label = 'Sites with HTML files'; Count = @($siteRecords | Where-Object { [int]$_.HtmlFileCount -gt 0 }).Count }
+        [PSCustomObject]@{ Label = 'Sites in web applications with permissive browser file handling'; Count = @($siteRecords | Where-Object { [string]$_.BrowserFileHandling -eq 'Permissive' }).Count }
         [PSCustomObject]@{ Label = 'Sites above large-size threshold'; Count = @($siteRecords | Where-Object { $_.IsLargeSite }).Count }
         [PSCustomObject]@{ Label = 'Sites with large lists'; Count = @($siteRecords | Where-Object { [int]$_.LargeListCount -gt 0 }).Count }
         [PSCustomObject]@{ Label = 'Sites with checked-out files'; Count = @($siteRecords | Where-Object { [int]$_.CheckedOutFileCount -gt 0 }).Count }
@@ -168,6 +172,7 @@
         @{ Expression = { [string]$waveAgg[$_].Name } })
     $solutions = @($SolutionMap | Where-Object { $null -ne $_ })
     $authenticationRecords = @($records | Where-Object { $_.AuthenticationZones })
+    $policyRecords = @($records | Where-Object { $null -ne $_.WebAppPolicyCount -or $_.BrowserFileHandling })
     $hasContentTypeSection = $PSBoundParameters.ContainsKey('ContentTypes')
 
     $encTitle = ConvertTo-SPSHtmlText -Value $Title
@@ -324,6 +329,9 @@ td.muted, .muted { color: var(--muted); }
     if ($authenticationRecords.Count -gt 0) {
         [void]$sb.AppendLine('<a href="#authentication">Authentication</a>')
     }
+    if ($policyRecords.Count -gt 0) {
+        [void]$sb.AppendLine('<a href="#web-app-policies">Web application policies</a>')
+    }
     if ($hasContentTypeSection) {
         [void]$sb.AppendLine('<a href="#content-types">Content types</a>')
     }
@@ -458,6 +466,30 @@ td.muted, .muted { color: var(--muted); }
         [void]$sb.AppendLine('</tbody></table></div>')
     }
 
+    if ($policyRecords.Count -gt 0) {
+        [void]$sb.AppendLine('<h2 id="web-app-policies">Web application policies</h2>')
+        [void]$sb.AppendLine('<p>Policies grant or deny permissions across a whole web application and override site-level permissions; they are not migrated to SharePoint Online. They include accounts SharePoint adds itself, such as the farm and search crawl accounts. SharePoint Online enforces Strict browser file handling, so .htm and .html files in a Permissive web application prompt a download after migration.</p>')
+        [void]$sb.AppendLine('<div class="table-scroll"><table class="web-app-policies">')
+        [void]$sb.AppendLine('<thead><tr><th>Web application</th><th>Browser file handling</th><th class="num">Policies</th><th>Policy examples</th><th class="num">Collections</th></tr></thead><tbody>')
+        foreach ($group in ($policyRecords | Group-Object -Property WebAppUrl)) {
+            $webAppRecord = $group.Group[0]
+            $collectionCount = @($group.Group | Where-Object { $_.InventoryScope -ne 'WebApplication' }).Count
+            $handling = if ([string]$webAppRecord.BrowserFileHandling -eq 'Permissive') {
+                '<span class="pill warn">Permissive</span>'
+            }
+            else {
+                ConvertTo-SPSHtmlText -Value $webAppRecord.BrowserFileHandling
+            }
+            [void]$sb.AppendLine(('<tr><td>{0}</td><td>{1}</td><td class="num">{2}</td><td class="reasons">{3}</td><td class="num">{4}</td></tr>' -f
+                (ConvertTo-SPSHtmlText -Value $webAppRecord.WebAppUrl),
+                $handling,
+                (ConvertTo-SPSHtmlText -Value $webAppRecord.WebAppPolicyCount),
+                (ConvertTo-SPSHtmlText -Value $webAppRecord.WebAppPolicyExamples),
+                $collectionCount))
+        }
+        [void]$sb.AppendLine('</tbody></table></div>')
+    }
+
     if ($hasContentTypeSection) {
         $partialSites = @($siteRecords | Where-Object { $_.ContentTypeInventoryComplete -eq $false })
         [void]$sb.AppendLine('<h2 id="content-types">Content types and list bindings</h2>')
@@ -534,6 +566,15 @@ td.muted, .muted { color: var(--muted); }
         @{ Key = 'PublishingPageLayoutExamples'; Label = 'Page layout examples'; Class = 'reasons'; Type = 'text' }
         @{ Key = 'CustomizedPageCount'; Label = 'Customized pages'; Class = 'num'; Type = 'num' }
         @{ Key = 'CustomizedPageExamples'; Label = 'Customized page examples'; Class = 'reasons'; Type = 'text' }
+        @{ Key = 'CustomPermissionLevelCount'; Label = 'Custom permission levels'; Class = 'num'; Type = 'num' }
+        @{ Key = 'CustomPermissionLevelExamples'; Label = 'Custom permission level examples'; Class = 'reasons'; Type = 'text' }
+        @{ Key = 'EmailEnabledListCount'; Label = 'E-mail enabled lists'; Class = 'num'; Type = 'num' }
+        @{ Key = 'EmailEnabledListExamples'; Label = 'E-mail enabled list examples'; Class = 'reasons'; Type = 'text' }
+        @{ Key = 'HtmlFileCount'; Label = 'HTML files'; Class = 'num'; Type = 'num' }
+        @{ Key = 'HtmlFileExamples'; Label = 'HTML file examples'; Class = 'reasons'; Type = 'text' }
+        @{ Key = 'BrowserFileHandling'; Label = 'Browser file handling'; Class = ''; Type = 'text' }
+        @{ Key = 'WebAppPolicyCount'; Label = 'Web application policies'; Class = 'num'; Type = 'num' }
+        @{ Key = 'WebAppPolicyExamples'; Label = 'Web application policy examples'; Class = 'reasons'; Type = 'text' }
         @{ Key = 'SizeGB'; Label = 'Size (GB)'; Class = 'num'; Type = 'num' }
         @{ Key = 'SubWebCount'; Label = 'Sub-webs'; Class = 'num'; Type = 'num' }
         @{ Key = 'LastModified'; Label = 'Last modified'; Class = ''; Type = 'text' }

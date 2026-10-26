@@ -18,6 +18,7 @@
         'Get-SPSInstalledProductVersion'
         'Get-SPSInventorySetting'
         'Get-SPSWebApplicationAuthentication'
+        'Get-SPSWebApplicationPolicy'
         'Get-SPSSiteCustomization'
         'Get-SPSSiteInventory'
         'Group-SPSMigrationWave'

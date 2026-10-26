@@ -52,6 +52,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   outputs, report-pack `-publishing-*.json`, and dedicated alerts. Publishing signals
   are weighted but not blocking by default, and the page-layout scan is capped by the
   new `LargeContentThresholds.MaxItemsForPublishingPageScanPerLibrary`. (#42)
+- Added SMAT permission and policy parity signals: `CustomPermissionLevelCount` /
+  `CustomPermissionLevelExamples` (Custom Permission Level), `EmailEnabledListCount` /
+  `EmailEnabledListExamples` (Email Enabled Lists), `HtmlFileCount` / `HtmlFileExamples`
+  (Browser File Handling, collected only in Permissive web applications) and, per web
+  application, `BrowserFileHandling`, `WebAppPolicyCount` and `WebAppPolicyExamples`
+  (Web Application Policies, read by the new `Get-SPSWebApplicationPolicy`). They flow to
+  scoring, CSV/JSON/HTML (including a web application policies section), a new
+  `-permissions-*.json` report-pack dataset and dedicated alerts. A new `PermissionLevels`
+  setting adds localized names of the permission levels SharePoint provisions, and
+  `LargeContentThresholds.MaxItemsForHtmlFileScanPerLibrary` caps the HTML file count.
+  A failed policy read marks the site records partial instead of reporting no policies. (#43)
 - Zone-aware web application authentication inventory, including mixed Windows/FBA,
   membership/role provider names and explicit identity-review flags. The example
   configuration treats `HasFbaZone` as a SharePoint Online migration blocker.

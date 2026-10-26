@@ -69,6 +69,12 @@ Describe 'Get-SPSWebApplicationAuthentication' {
             IisSettings = @{ Default = @{}; Extranet = @{} }
             UseClaimsAuthentication = $true
         }
+        Mock Get-SPSWebApplicationPolicy -ModuleName SPSSiteInventory.Common {
+            [PSCustomObject]@{
+                BrowserFileHandling = 'Strict'; WebAppPolicyCount = 2
+                WebAppPolicyExamples = 'CONTOSO\farm: Full Control; CONTOSO\crawl: Full Read'; Policies = @()
+            }
+        }
     }
 
     It 'detects FBA in a non-default zone even with Windows in another zone' {
@@ -349,5 +355,78 @@ Describe 'Get-SPSWebApplicationAuthentication' {
         $inventory[1].SiteInventoryComplete | Should -BeFalse
         $inventory[1].SiteInventoryWarnings | Should -Match 'stopped early after 1 site collection'
         $inventory[1].SiteInventoryWarnings | Should -Match 'Access denied while advancing'
+    }
+
+    It 'propagates web application policies and browser file handling to each site and to the failure row' {
+        $root = [PSCustomObject]@{
+            Title = 'Team'; WebTemplate = 'STS'; Configuration = 0
+            LastItemModifiedDate = [datetime]'2026-01-01'
+        }
+        $root | Add-Member -MemberType ScriptMethod -Name Dispose -Value { }
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            RootWeb = $root
+            ContentDatabase = [PSCustomObject]@{ Name = 'WSS_Content' }
+            Usage = [PSCustomObject]@{ Storage = 1GB }
+            AllWebs = @($root)
+        }
+        $site | Add-Member -MemberType ScriptMethod -Name Dispose -Value { }
+        $script:webApp | Add-Member -NotePropertyName Name -NotePropertyValue 'Intranet'
+        $script:webApp | Add-Member -NotePropertyName Sites -NotePropertyValue @($site)
+        $inaccessibleWebApp = [PSCustomObject]@{ Url = 'https://other.contoso.com'; Name = 'Other' }
+        $inaccessibleWebApp | Add-Member -MemberType ScriptProperty -Name Sites -Value { throw 'Access denied' }
+        Mock Get-SPWebApplication -ModuleName SPSSiteInventory.Common { @($script:webApp, $inaccessibleWebApp) }
+        Mock Get-SPSWebApplicationAuthentication -ModuleName SPSSiteInventory.Common {
+            [PSCustomObject]@{ AuthenticationModes = 'Windows'; AuthenticationZones = 'Default: Windows'; HasFbaZone = $false; AuthenticationReviewRequired = $false }
+        }
+        Mock Add-SPSInventoryEvent -ModuleName SPSSiteInventory.Common { }
+        Mock Write-Progress -ModuleName SPSSiteInventory.Common { }
+
+        $inventory = @(Get-SPSSiteInventory)
+
+        $inventory | Should -HaveCount 2
+        $inventory[1].InventoryScope | Should -Be 'WebApplication'
+        foreach ($record in $inventory) {
+            $record.BrowserFileHandling | Should -Be 'Strict'
+            $record.WebAppPolicyCount | Should -Be 2
+            $record.WebAppPolicyExamples | Should -Be 'CONTOSO\farm: Full Control; CONTOSO\crawl: Full Read'
+        }
+        $inventory[0].SiteInventoryComplete | Should -BeTrue
+        Should -Invoke Get-SPSWebApplicationPolicy -ModuleName SPSSiteInventory.Common -Times 2 -Exactly
+    }
+
+    It 'keeps collecting and marks sites partial when the web application policies cannot be read' {
+        $root = [PSCustomObject]@{
+            Title = 'Team'; WebTemplate = 'STS'; Configuration = 0
+            LastItemModifiedDate = [datetime]'2026-01-01'
+        }
+        $root | Add-Member -MemberType ScriptMethod -Name Dispose -Value { }
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            RootWeb = $root
+            ContentDatabase = [PSCustomObject]@{ Name = 'WSS_Content' }
+            Usage = [PSCustomObject]@{ Storage = 1GB }
+            AllWebs = @($root)
+        }
+        $site | Add-Member -MemberType ScriptMethod -Name Dispose -Value { }
+        $script:webApp | Add-Member -NotePropertyName Name -NotePropertyValue 'Intranet'
+        $script:webApp | Add-Member -NotePropertyName Sites -NotePropertyValue @($site)
+        Mock Get-SPWebApplication -ModuleName SPSSiteInventory.Common { $script:webApp }
+        Mock Get-SPSWebApplicationAuthentication -ModuleName SPSSiteInventory.Common {
+            [PSCustomObject]@{ AuthenticationModes = 'Windows'; AuthenticationZones = 'Default: Windows'; HasFbaZone = $false; AuthenticationReviewRequired = $false }
+        }
+        Mock Get-SPSWebApplicationPolicy -ModuleName SPSSiteInventory.Common { throw 'Policy store access denied' }
+        Mock Add-SPSInventoryEvent -ModuleName SPSSiteInventory.Common { }
+        Mock Write-Progress -ModuleName SPSSiteInventory.Common { }
+
+        $inventory = @(Get-SPSSiteInventory)
+
+        $inventory | Should -HaveCount 1
+        $inventory[0].Url | Should -Be 'https://intranet.contoso.com/sites/team'
+        $inventory[0].BrowserFileHandling | Should -BeNullOrEmpty
+        $inventory[0].WebAppPolicyCount | Should -BeNullOrEmpty
+        $inventory[0].SiteInventoryComplete | Should -BeFalse
+        $inventory[0].SiteInventoryWarnings | Should -Match 'Web application policies could not be read: Policy store access denied'
+        Should -Invoke Add-SPSInventoryEvent -ModuleName SPSSiteInventory.Common -ParameterFilter { $Level -eq 'Warning' -and $Message -match 'Could not read the policies of web application' } -Times 1 -Exactly
     }
 }

@@ -22,7 +22,7 @@ Microsoft's assessment tooling has shifted: **SMAT reaches end of support on 1 O
 - Customization and readiness signals: 2010 vs 2013 workflows (including running-instance coverage), site-template compatibility (unsupported/review), template-language review flags, InfoPath forms, IRM-enabled lists, large-site/list/view/file-volume risks (large lists/views, checked-out files, high file-version counts), site lock state, sandbox solutions, custom master pages, event receivers, unique permissions
 - Correlation between **farm solutions (WSP)** and the sites that activate their features, including **full-trust code** detection (assemblies deployed to the GAC), CAS policy, deployment reach and features per solution
 - A **complexity score and category** per site, plus a **migration wave** proposal (configurable category-to-wave mapping)
-- Outputs: a **CSV** (Excel), a **JSON** (automation), a **self-contained HTML dashboard** (summary/risk cards, migration wave plan, sortable/filterable table), a modular **report-pack JSON set** (sites/auth/workflows/apps/publishing/IRM-locks/large-content/alerts/manifest), plus a dedicated **farm-solution (WSP) CSV/JSON** report
+- Outputs: a **CSV** (Excel), a **JSON** (automation), a **self-contained HTML dashboard** (summary/risk cards, migration wave plan, sortable/filterable table), a modular **report-pack JSON set** (sites/auth/workflows/apps/publishing/permissions/IRM-locks/large-content/alerts/manifest), plus a dedicated **farm-solution (WSP) CSV/JSON** report
 
 ## Quick links
 

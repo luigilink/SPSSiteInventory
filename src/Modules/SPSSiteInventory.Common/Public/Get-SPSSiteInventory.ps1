@@ -18,6 +18,11 @@
         Customization signals that feed the complexity score are collected separately by
         Get-SPSSiteCustomization, so a fast "identity + size" pass can run on its own.
 
+        Web application policies and the browser file handling setting are read once per
+        web application and surfaced on each of its site collections. A failed read does
+        not stop collection: the policy fields stay empty and the site records are marked
+        partial, so an unreadable setting is never reported as no policies.
+
         Requires the SharePoint commands (see Import-SPSSharePointCommand) and to run as
         the farm account on a farm server.
 
@@ -54,6 +59,15 @@
     $inventory = [System.Collections.Generic.List[object]]::new()
     foreach ($webApp in $webApps) {
         $authentication = Get-SPSWebApplicationAuthentication -WebApplication $webApp
+        $policy = $null
+        $policyWarning = ''
+        try {
+            $policy = Get-SPSWebApplicationPolicy -WebApplication $webApp
+        }
+        catch {
+            $policyWarning = "Web application policies could not be read: $($_.Exception.Message)"
+            $null = Add-SPSInventoryEvent -Message "Could not read the policies of web application '$($webApp.Url)': $($_.Exception.Message)" -Level Warning
+        }
         Write-Progress -Id 1 -Activity 'Enumerating site collections' -Status "Opening the site collection list for $($webApp.Url)" -PercentComplete 0
         Add-SPSInventoryEvent -Message "Starting site collection enumeration for web application '$($webApp.Url)'." -Level Information | Out-Host
         $addEnumerationFailure = {
@@ -70,6 +84,9 @@
                 FbaRoleProviders = $authentication.FbaRoleProviders
                 HasFbaZone = $authentication.HasFbaZone
                 AuthenticationReviewRequired = $authentication.AuthenticationReviewRequired
+                BrowserFileHandling = if ($null -ne $policy) { $policy.BrowserFileHandling } else { $null }
+                WebAppPolicyCount = if ($null -ne $policy) { $policy.WebAppPolicyCount } else { $null }
+                WebAppPolicyExamples = if ($null -ne $policy) { $policy.WebAppPolicyExamples } else { $null }
                 ContentDb = ''
                 Template = ''
                 IsUnsupportedSiteTemplate = $null
@@ -84,7 +101,7 @@
                 SubWebCount = $null
                 LastModified = $null
                 SiteInventoryComplete = $false
-                SiteInventoryWarnings = $Message
+                SiteInventoryWarnings = (@($Message, $policyWarning) | Where-Object { $_ }) -join '; '
             })
         }
         try {
@@ -115,6 +132,9 @@
                 $siteIndex++
                 $siteUrl = ''
                 $warnings = [System.Collections.Generic.List[string]]::new()
+                if ($policyWarning) {
+                    $warnings.Add($policyWarning)
+                }
                 try {
                     $siteUrl = [string]$site.Url
                 }
@@ -154,6 +174,9 @@
                     FbaRoleProviders = $authentication.FbaRoleProviders
                     HasFbaZone = $authentication.HasFbaZone
                     AuthenticationReviewRequired = $authentication.AuthenticationReviewRequired
+                    BrowserFileHandling = if ($null -ne $policy) { $policy.BrowserFileHandling } else { $null }
+                    WebAppPolicyCount = if ($null -ne $policy) { $policy.WebAppPolicyCount } else { $null }
+                    WebAppPolicyExamples = if ($null -ne $policy) { $policy.WebAppPolicyExamples } else { $null }
                     ContentDb = ''
                     Template = ''
                     IsUnsupportedSiteTemplate = $false
