@@ -200,9 +200,11 @@ Describe 'Export-SPSInventoryReport content types' {
         )
 
         $output = Export-SPSInventoryReport -InputObject $records -OutputFolder $TestDrive -BaseName 'NoPublishing'
-        $alerts = @(Get-Content $output.AlertsJsonPath -Raw | ConvertFrom-Json)
+        # Assign without @() because Windows PowerShell 5.1 does not unroll a JSON array in a pipeline.
+        $alerts = Get-Content $output.AlertsJsonPath -Raw | ConvertFrom-Json
+        $rows = Get-Content $output.PublishingJsonPath -Raw | ConvertFrom-Json
 
-        @($alerts | Where-Object { $_.AlertType -in @('PublishingSite', 'PublishingPages', 'CustomizedPages') }).Count | Should -Be 0
-        @(Get-Content $output.PublishingJsonPath -Raw | ConvertFrom-Json) | Should -HaveCount 2
+        ($alerts | Measure-Object).Count | Should -Be 0
+        @($rows).Count | Should -Be 2
     }
 }
