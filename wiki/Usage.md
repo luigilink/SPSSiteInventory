@@ -159,8 +159,9 @@ managed metadata column, like the SMAT Managed Metadata Columns report: `SiteUrl
 `ManagedMetadataColumnCount`, `ManagedMetadataColumns` (column titles separated by `; `)
 and `TermSetIds` (the distinct term set GUIDs the columns use, separated by `; `). The
 list creator that SMAT reports is not collected. Rows are only written for lists whose
-fields could be read: an unreadable list marks the site `Partial` with a warning, so
-check `CustomizationInventoryComplete` before treating the files as complete.
+columns and properties could all be read: an unreadable list marks the site `Partial`
+with a warning, so check `CustomizationInventoryComplete` before treating the files as
+complete.
 
 Managed metadata columns take their values from the term store. They usually migrate
 with their list, as long as the term sets they use are migrated too:

@@ -273,6 +273,7 @@ public class SPSTestThrowingMailList
         $list = Get-TestMailList -Title $Title
         $list.Fields = $Fields
         $list.ItemCount = $ItemCount
+        $list | Add-Member -MemberType NoteProperty -Name BaseType -Value 'GenericList'
         return $list
     }
 

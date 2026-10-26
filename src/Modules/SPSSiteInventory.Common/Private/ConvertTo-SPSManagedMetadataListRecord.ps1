@@ -15,8 +15,8 @@
         creator that SMAT reports is not collected.
 
         A property that cannot be read raises an error instead of being read as "no
-        managed metadata column" (PowerShell turns a failing .NET getter into $null), so
-        the collector can mark the inventory partial.
+        managed metadata column" or exported as an empty value (PowerShell turns a failing
+        .NET getter into $null), so the collector can mark the inventory partial.
 
         Private because it is an implementation detail of Get-SPSSiteCustomization.
 
@@ -69,9 +69,9 @@
             continue
         }
 
-        $columnName = [string]$field.Title
+        $columnName = [string](Get-SPSPropertyValue -InputObject $field -Name 'Title')
         if ([string]::IsNullOrWhiteSpace($columnName)) {
-            $columnName = [string]$field.InternalName
+            $columnName = [string](Get-SPSPropertyValue -InputObject $field -Name 'InternalName')
         }
         if ([string]::IsNullOrWhiteSpace($columnName)) {
             throw 'A managed metadata column has no readable name.'
@@ -114,10 +114,20 @@
         throw "The item count of list '$listTitle' could not be read."
     }
 
+    $listTemplate = Get-SPSPropertyValue -InputObject $List -Name 'BaseTemplate'
+    if ($null -eq $listTemplate) {
+        throw "The template of list '$listTitle' could not be read."
+    }
+    $listType = Get-SPSPropertyValue -InputObject $List -Name 'BaseType'
+    if ($null -eq $listType) {
+        throw "The type of list '$listTitle' could not be read."
+    }
+
+    # A failing getter raises; a read that returns no date leaves the value empty.
     $lastModified = ''
-    $lastModifiedValue = $List.LastItemModifiedDate
-    if ($lastModifiedValue -is [datetime]) {
-        $lastModified = $lastModifiedValue.ToString('yyyy-MM-dd HH:mm:ss', [System.Globalization.CultureInfo]::InvariantCulture)
+    $lastModifiedValue = Get-SPSPropertyValue -InputObject $List -Name 'LastItemModifiedDate'
+    if ($null -ne $lastModifiedValue) {
+        $lastModified = ([datetime]$lastModifiedValue).ToString('yyyy-MM-dd HH:mm:ss', [System.Globalization.CultureInfo]::InvariantCulture)
     }
 
     # Ordinal sorting keeps the output stable between runs and cultures.
@@ -131,8 +141,8 @@
         WebUrl                     = $WebUrl
         ListTitle                  = $listTitle
         ListUrl                    = $listUrl
-        ListTemplate               = [string]$List.BaseTemplate
-        ListType                   = [string]$List.BaseType
+        ListTemplate               = [string]$listTemplate
+        ListType                   = [string]$listType
         ListItemCount              = [int]$itemCount
         ItemLastModifiedDate       = $lastModified
         ManagedMetadataColumnCount = $columnNames.Count

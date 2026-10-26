@@ -14,13 +14,31 @@ BeforeAll {
 using System;
 public class SPSTestTaxonomyField
 {
-    public string Title { get; set; }
-    public string InternalName { get; set; }
+    private string title;
+    public string Title { get { if (FailTitle) { throw new InvalidOperationException("title unavailable"); } return title; } set { title = value; } }
+    public bool FailTitle { get; set; }
+    private string internalName;
+    public string InternalName { get { if (FailInternalName) { throw new InvalidOperationException("internal name unavailable"); } return internalName; } set { internalName = value; } }
+    public bool FailInternalName { get; set; }
     public string TypeAsString { get; set; }
     public bool FailHidden { get; set; }
     public bool FailTermSet { get; set; }
     public bool Hidden { get { if (FailHidden) { throw new InvalidOperationException("hidden state unavailable"); } return false; } }
     public Guid TermSetId { get { if (FailTermSet) { throw new InvalidOperationException("term set unavailable"); } return Guid.NewGuid(); } }
+}
+
+public class SPSTestDescriptiveList
+{
+    public object Fields { get; set; }
+    public string Title { get; set; }
+    public object RootFolder { get; set; }
+    public bool FailTemplate { get; set; }
+    public bool FailType { get; set; }
+    public bool FailDate { get; set; }
+    public int ItemCount { get { return 5; } }
+    public string BaseTemplate { get { if (FailTemplate) { throw new InvalidOperationException("template unavailable"); } return "DocumentLibrary"; } }
+    public string BaseType { get { if (FailType) { throw new InvalidOperationException("type unavailable"); } return "GenericList"; } }
+    public DateTime LastItemModifiedDate { get { if (FailDate) { throw new InvalidOperationException("date unavailable"); } return new DateTime(2026, 3, 4, 10, 20, 30); } }
 }
 
 public class SPSTestCountingList
@@ -62,6 +80,14 @@ public class SPSTestCountingList
             BaseType = 'DocumentLibrary'
             LastItemModifiedDate = [datetime]'2026-03-04T10:20:30'
         }
+    }
+
+    function Get-TestDescriptiveList {
+        $list = [SPSTestDescriptiveList]::new()
+        $list.Title = 'Contracts'
+        $list.RootFolder = [PSCustomObject]@{ ServerRelativeUrl = '/sites/team/Contracts' }
+        $list.Fields = @((Get-TestField))
+        return $list
     }
 
     function Convert-List {
@@ -206,6 +232,25 @@ Describe 'ConvertTo-SPSManagedMetadataListRecord' {
         { Convert-List -List (Get-TestList -Fields @($termSetFails)) } | Should -Throw '*term set unavailable*'
     }
 
+    It 'lets a failing title getter propagate instead of falling back to the internal name' {
+        $field = [SPSTestTaxonomyField]::new()
+        $field.Title = 'Department'
+        $field.InternalName = 'Department'
+        $field.TypeAsString = 'TaxonomyFieldType'
+        $field.FailTitle = $true
+
+        { Convert-List -List (Get-TestList -Fields @($field)) } | Should -Throw '*title unavailable*'
+    }
+
+    It 'lets a failing internal-name getter propagate when the title is blank' {
+        $field = [SPSTestTaxonomyField]::new()
+        $field.Title = ''
+        $field.TypeAsString = 'TaxonomyFieldType'
+        $field.FailInternalName = $true
+
+        { Convert-List -List (Get-TestList -Fields @($field)) } | Should -Throw '*internal name unavailable*'
+    }
+
     It 'reads the term set ID of a real .NET field' {
         $field = [SPSTestTaxonomyField]::new()
         $field.Title = 'Department'
@@ -215,6 +260,46 @@ Describe 'ConvertTo-SPSManagedMetadataListRecord' {
 
         $record.ManagedMetadataColumnCount | Should -Be 1
         $record.TermSetIds | Should -Match '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+    }
+
+    It 'reads the template, type and last-modified date of a real .NET list' {
+        $record = Convert-List -List (Get-TestDescriptiveList)
+
+        $record.ListTemplate | Should -Be 'DocumentLibrary'
+        $record.ListType | Should -Be 'GenericList'
+        $record.ItemLastModifiedDate | Should -Be '2026-03-04 10:20:30'
+    }
+
+    It 'lets a failing template, type or last-modified getter propagate instead of exporting an empty value' {
+        foreach ($case in @(
+                @{ Flag = 'FailTemplate'; Message = '*template unavailable*' }
+                @{ Flag = 'FailType'; Message = '*type unavailable*' }
+                @{ Flag = 'FailDate'; Message = '*date unavailable*' }
+            )) {
+            $list = Get-TestDescriptiveList
+            $list.($case.Flag) = $true
+
+            { Convert-List -List $list } | Should -Throw -ExpectedMessage $case.Message
+        }
+    }
+
+    It 'rejects a missing list template or type instead of exporting an empty value' {
+        $noTemplate = Get-TestList -Fields @((Get-TestField))
+        $noTemplate.BaseTemplate = $null
+        { Convert-List -List $noTemplate } | Should -Throw "*template of list 'Contracts' could not be read*"
+        $noType = Get-TestList -Fields @((Get-TestField))
+        $noType.BaseType = $null
+        { Convert-List -List $noType } | Should -Throw "*type of list 'Contracts' could not be read*"
+    }
+
+    It 'normalizes a date given as text and rejects a value that is not a date' {
+        $list = Get-TestList -Fields @((Get-TestField))
+        $list.LastItemModifiedDate = '2026-03-04T10:20:30'
+
+        (Convert-List -List $list).ItemLastModifiedDate | Should -Be '2026-03-04 10:20:30'
+
+        $list.LastItemModifiedDate = 'yesterday'
+        { Convert-List -List $list } | Should -Throw
     }
 
     It 'rejects a list whose title, URL or item count cannot be read' {

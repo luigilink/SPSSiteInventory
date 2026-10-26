@@ -70,8 +70,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   by ID from the field definitions, without calling the term store service. They flow to
   scoring (weighted, not blocking), CSV/JSON/HTML, a per-list `-managedmetadata-*` CSV/JSON
   report with a matching HTML section, and a dedicated alert, with guidance to migrate
-  these lists close to the term store. A field that cannot be read marks the site
-  partial instead of reporting no managed metadata. (#44)
+  these lists close to the term store. A column or list property that cannot be read
+  marks the site partial instead of reporting no managed metadata or an empty value. (#44)
 - Zone-aware web application authentication inventory, including mixed Windows/FBA,
   membership/role provider names and explicit identity-review flags. The example
   configuration treats `HasFbaZone` as a SharePoint Online migration blocker.
