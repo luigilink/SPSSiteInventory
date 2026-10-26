@@ -44,6 +44,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added SMAT apps parity signals: `AppInstanceCount`, `AppWebCount`, and
   `AppInstanceExamples`. These fields are now propagated to scoring, CSV/JSON/HTML
   outputs, report-pack `-apps-*.json`, and dedicated app alerts. (#40)
+- Added SMAT page and publishing parity signals: `PublishingInfrastructureEnabled`,
+  `PublishingWebCount`, `PublishingPageCount`, `PublishingPageLayoutCount` /
+  `PublishingPageLayoutExamples` (Publishing Sites and Publishing Pages scans) and
+  `CustomizedPageCount` / `CustomizedPageExamples` (Customized Pages scan: web-root
+  pages, System Account edits ignored). They are propagated to scoring, CSV/JSON/HTML
+  outputs, report-pack `-publishing-*.json`, and dedicated alerts. Publishing signals
+  are weighted but not blocking by default, and the page-layout scan is capped by the
+  new `LargeContentThresholds.MaxItemsForPublishingPageScanPerLibrary`. (#42)
 - Zone-aware web application authentication inventory, including mixed Windows/FBA,
   membership/role provider names and explicit identity-review flags. The example
   configuration treats `HasFbaZone` as a SharePoint Online migration blocker.

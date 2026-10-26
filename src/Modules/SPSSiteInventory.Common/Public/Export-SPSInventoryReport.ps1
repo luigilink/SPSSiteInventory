@@ -22,6 +22,7 @@
         - `*-auth-*.json`
         - `*-workflows-*.json`
         - `*-apps-*.json`
+        - `*-publishing-*.json`
         - `*-irm-locks-*.json`
         - `*-large-content-*.json`
         - `*-alerts-*.json`
@@ -108,6 +109,7 @@
     $authJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-auth-{1}.json' -f $BaseName, $timestamp)
     $workflowsJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-workflows-{1}.json' -f $BaseName, $timestamp)
     $appsJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-apps-{1}.json' -f $BaseName, $timestamp)
+    $publishingJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-publishing-{1}.json' -f $BaseName, $timestamp)
     $irmLocksJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-irm-locks-{1}.json' -f $BaseName, $timestamp)
     $largeContentJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-large-content-{1}.json' -f $BaseName, $timestamp)
     $alertsJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-alerts-{1}.json' -f $BaseName, $timestamp)
@@ -174,6 +176,23 @@
                 AppInstanceCount = $record.AppInstanceCount
                 AppWebCount = $record.AppWebCount
                 AppInstanceExamples = $record.AppInstanceExamples
+            }
+        }
+    )
+    $publishingRecords = @(
+        foreach ($record in $siteRecords) {
+            [PSCustomObject]@{
+                Url = $record.Url
+                WebApp = $record.WebApp
+                AssessmentStatus = $record.AssessmentStatus
+                Category = $record.Category
+                PublishingInfrastructureEnabled = $record.PublishingInfrastructureEnabled
+                PublishingWebCount = $record.PublishingWebCount
+                PublishingPageCount = $record.PublishingPageCount
+                PublishingPageLayoutCount = $record.PublishingPageLayoutCount
+                PublishingPageLayoutExamples = $record.PublishingPageLayoutExamples
+                CustomizedPageCount = $record.CustomizedPageCount
+                CustomizedPageExamples = $record.CustomizedPageExamples
             }
         }
     )
@@ -269,6 +288,33 @@
                     Url = $record.Url
                     Value = [int]$record.AppWebCount
                     Message = 'App webs were detected and should be assessed for SharePoint Online replacement paths.'
+                })
+        }
+        if ($scope -eq 'SiteCollection' -and ([bool]$record.PublishingInfrastructureEnabled -or [int]$record.PublishingWebCount -gt 0)) {
+            $alerts.Add([PSCustomObject]@{
+                    AlertType = 'PublishingSite'
+                    Severity = 'Medium'
+                    Url = $record.Url
+                    Value = [int]$record.PublishingWebCount
+                    Message = 'Publishing features are enabled; page layouts and publishing customizations typically need extensive remediation.'
+                })
+        }
+        if ($scope -eq 'SiteCollection' -and [int]$record.PublishingPageCount -gt 0) {
+            $alerts.Add([PSCustomObject]@{
+                    AlertType = 'PublishingPages'
+                    Severity = 'Medium'
+                    Url = $record.Url
+                    Value = [int]$record.PublishingPageCount
+                    Message = 'Publishing pages were detected; their pages may not render correctly until page layouts, master pages and styles are reviewed.'
+                })
+        }
+        if ($scope -eq 'SiteCollection' -and [int]$record.CustomizedPageCount -gt 0) {
+            $alerts.Add([PSCustomObject]@{
+                    AlertType = 'CustomizedPages'
+                    Severity = 'Medium'
+                    Url = $record.Url
+                    Value = [int]$record.CustomizedPageCount
+                    Message = 'Customized pages are reverted to their default state during migration; owners must reapply customizations afterwards.'
                 })
         }
         if ($scope -eq 'SiteCollection' -and [bool]$record.IsUnsupportedSiteTemplate) {
@@ -394,6 +440,7 @@
     ConvertTo-Json -InputObject @($authRecords) -Depth 6 | Set-Content -Path $authJsonPath -Encoding UTF8
     ConvertTo-Json -InputObject @($workflowRecords) -Depth 6 | Set-Content -Path $workflowsJsonPath -Encoding UTF8
     ConvertTo-Json -InputObject @($appRecords) -Depth 6 | Set-Content -Path $appsJsonPath -Encoding UTF8
+    ConvertTo-Json -InputObject @($publishingRecords) -Depth 6 | Set-Content -Path $publishingJsonPath -Encoding UTF8
     ConvertTo-Json -InputObject @($irmLockRecords) -Depth 6 | Set-Content -Path $irmLocksJsonPath -Encoding UTF8
     ConvertTo-Json -InputObject @($largeContentRecords) -Depth 6 | Set-Content -Path $largeContentJsonPath -Encoding UTF8
     ConvertTo-Json -InputObject @($alerts.ToArray()) -Depth 6 | Set-Content -Path $alertsJsonPath -Encoding UTF8
@@ -462,6 +509,7 @@
             AuthJson = $authJsonPath
             WorkflowsJson = $workflowsJsonPath
             AppsJson = $appsJsonPath
+            PublishingJson = $publishingJsonPath
             IrmLocksJson = $irmLocksJsonPath
             LargeContentJson = $largeContentJsonPath
             AlertsJson = $alertsJsonPath
@@ -480,6 +528,7 @@
         AuthJsonPath = $authJsonPath
         WorkflowsJsonPath = $workflowsJsonPath
         AppsJsonPath = $appsJsonPath
+        PublishingJsonPath = $publishingJsonPath
         IrmLocksJsonPath = $irmLocksJsonPath
         LargeContentJsonPath = $largeContentJsonPath
         AlertsJsonPath = $alertsJsonPath

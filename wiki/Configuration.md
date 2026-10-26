@@ -51,6 +51,11 @@ Scoring = @{
         Workflow2013RunningInstanceCount = 0.5
         AppInstanceCount         = 1.0
         AppWebCount              = 1.5
+        PublishingInfrastructureEnabled = 2.0
+        PublishingWebCount       = 0.5
+        PublishingPageLayoutCount = 0.5
+        PublishingPageCount      = 0.001
+        CustomizedPageCount      = 1.0
         IsUnsupportedSiteTemplate = 5.0
         TemplateLanguageReviewRequired = 0.5
         InfoPathFormCount        = 3.0
@@ -128,6 +133,27 @@ Large-content parity signals are threshold-driven:
 - `CheckedOutFileCount` — checked-out files detected in document libraries.
 - `FileVersionCount` — files whose version count is at or above
   `LargeContentThresholds.FileVersionCount`.
+
+Publishing and customized-page signals describe classic publishing dependencies:
+
+- `PublishingInfrastructureEnabled` — the SharePoint Server Publishing Infrastructure
+  site collection feature is active.
+- `PublishingWebCount` — webs where the SharePoint Server Publishing feature is active.
+- `PublishingPageCount` — items in the Pages libraries of those webs.
+- `PublishingPageLayoutCount` — distinct page layouts used by the pages that were
+  scanned. At most `LargeContentThresholds.MaxItemsForPublishingPageScanPerLibrary` pages
+  are read per Pages library, so the value is a lower bound when that cap is reached
+  (the assessment is then marked partial with a warning).
+- `CustomizedPageCount` — customized (unghosted) pages at the root of each web, for
+  example a `default.aspx` edited with SharePoint Designer. Migration reverts them to
+  their default state and owners must reapply the customization. Files last modified
+  by the System Account are ignored, as in the SMAT Customized Pages scan. List view
+  and form pages are not scanned.
+
+Publishing signals are weighted but **not blocking** in the example configuration:
+SMAT describes publishing sites as needing extensive remediation, not as unmigratable.
+Add `PublishingInfrastructureEnabled` to `BlockingSignals` to treat every publishing
+site as a dedicated project.
 
 `EventReceivers` counts only **custom** event receivers (those registered from a
 non-Microsoft assembly). Out-of-the-box receivers on native lists are ignored, so a stock
@@ -226,6 +252,7 @@ LargeContentThresholds = @{
     CheckedOutFileCount = 1
     FileVersionCount = 50
     MaxItemsForVersionScanPerLibrary = 2000
+    MaxItemsForPublishingPageScanPerLibrary = 2000
 }
 ```
 
@@ -237,6 +264,9 @@ LargeContentThresholds = @{
 - `FileVersionCount` — minimum file-version count for `FileVersionCount`.
 - `MaxItemsForVersionScanPerLibrary` — cap for per-library file-version scanning.
   When the cap is reached, assessment stays usable but is marked partial with a warning.
+- `MaxItemsForPublishingPageScanPerLibrary` — cap for the page-layout scan of each
+  publishing Pages library. `PublishingPageCount` still uses the library item count, so
+  only the layout summary is affected when the cap is reached.
 
 ## MigrationWaves section
 

@@ -49,7 +49,8 @@
     #
     # File-version counting scans document-library items. To keep runtime predictable,
     # MaxItemsForVersionScanPerLibrary caps per-library scanning; when hit, the scan is
-    # marked partial and a warning is emitted.
+    # marked partial and a warning is emitted. MaxItemsForPublishingPageScanPerLibrary
+    # applies the same cap to the page-layout scan of publishing Pages libraries.
     # -------------------------------------------------------------------------------
     LargeContentThresholds = @{
         LargeSiteSizeGB = 100
@@ -58,6 +59,7 @@
         CheckedOutFileCount = 1
         FileVersionCount = 50
         MaxItemsForVersionScanPerLibrary = 2000
+        MaxItemsForPublishingPageScanPerLibrary = 2000
     }
 
     # -------------------------------------------------------------------------------
@@ -131,6 +133,15 @@
             # SharePoint Online, especially for provider-hosted/custom add-ins.
             AppInstanceCount = 1.0
             AppWebCount = 1.5
+            # Classic publishing sites rely on page layouts and publishing features that
+            # need extensive remediation. Weighted, not blocking: add
+            # 'PublishingInfrastructureEnabled' to BlockingSignals to treat them as projects.
+            PublishingInfrastructureEnabled = 2.0
+            PublishingWebCount = 0.5
+            PublishingPageLayoutCount = 0.5
+            PublishingPageCount = 0.001
+            # Customized (unghosted) pages are reverted to their default state on migration.
+            CustomizedPageCount = 1.0
             # Unsupported site templates cannot be migrated directly to SPO.
             IsUnsupportedSiteTemplate = 5.0
             # Language mismatches or unknown language metadata require readiness review.
