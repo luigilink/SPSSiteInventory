@@ -145,6 +145,9 @@
                     Workflow2010RunningInstanceCount = $signals['Workflow2010RunningInstanceCount']
                     Workflow2013Count = $signals['Workflow2013Count']
                     Workflow2013RunningInstanceCount = $signals['Workflow2013RunningInstanceCount']
+                    AppInstanceCount = $signals['AppInstanceCount']
+                    AppWebCount = $signals['AppWebCount']
+                    AppInstanceExamples = $signals['AppInstanceExamples']
                     InfoPathFormCount = $signals['InfoPathFormCount']
                     IrmEnabledListCount = $signals['IrmEnabledListCount']
                     IsLargeSite = $signals['IsLargeSite']
@@ -206,6 +209,9 @@
                     Workflow2010RunningInstanceCount = $null
                     Workflow2013Count = $null
                     Workflow2013RunningInstanceCount = $null
+                    AppInstanceCount = $null
+                    AppWebCount = $null
+                    AppInstanceExamples = $null
                     InfoPathFormCount = $null
                     IrmEnabledListCount = $null
                     IsLargeSite = $null

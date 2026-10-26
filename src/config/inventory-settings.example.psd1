@@ -127,6 +127,10 @@
             # effort in addition to workflow definition migration.
             Workflow2010RunningInstanceCount = 1.0
             Workflow2013RunningInstanceCount = 0.5
+            # SharePoint add-ins and app webs often require replacement planning in
+            # SharePoint Online, especially for provider-hosted/custom add-ins.
+            AppInstanceCount = 1.0
+            AppWebCount = 1.5
             # Unsupported site templates cannot be migrated directly to SPO.
             IsUnsupportedSiteTemplate = 5.0
             # Language mismatches or unknown language metadata require readiness review.

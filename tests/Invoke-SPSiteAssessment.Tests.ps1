@@ -33,6 +33,9 @@ Describe 'Invoke-SPSiteAssessment' {
                     Workflow2010RunningInstanceCount = 0
                     Workflow2013Count = 0
                     Workflow2013RunningInstanceCount = 0
+                    AppInstanceCount = 0
+                    AppWebCount = 0
+                    AppInstanceExamples = ''
                     InfoPathFormCount = 0
                     IrmEnabledListCount = 0
                     IsLargeSite = $false
@@ -70,6 +73,9 @@ Describe 'Invoke-SPSiteAssessment' {
             $result.Inventory[0].IrmEnabledListCount | Should -Be 0
             $result.Inventory[0].Workflow2010RunningInstanceCount | Should -Be 0
             $result.Inventory[0].Workflow2013RunningInstanceCount | Should -Be 0
+            $result.Inventory[0].AppInstanceCount | Should -Be 0
+            $result.Inventory[0].AppWebCount | Should -Be 0
+            $result.Inventory[0].AppInstanceExamples | Should -Be ''
             $result.Inventory[0].IsLargeSite | Should -BeFalse
             $result.Inventory[0].IsLockedSite | Should -BeFalse
             $result.Inventory[0].SiteLockState | Should -Be 'Unlock'
@@ -79,6 +85,9 @@ Describe 'Invoke-SPSiteAssessment' {
             $result.Inventory[1].IrmEnabledListCount | Should -BeNullOrEmpty
             $result.Inventory[1].Workflow2010RunningInstanceCount | Should -BeNullOrEmpty
             $result.Inventory[1].Workflow2013RunningInstanceCount | Should -BeNullOrEmpty
+            $result.Inventory[1].AppInstanceCount | Should -BeNullOrEmpty
+            $result.Inventory[1].AppWebCount | Should -BeNullOrEmpty
+            $result.Inventory[1].AppInstanceExamples | Should -BeNullOrEmpty
             $result.Inventory[1].IsLargeSite | Should -BeNullOrEmpty
             $result.Inventory[1].IsLockedSite | Should -BeNullOrEmpty
             $result.Inventory[1].SiteLockState | Should -BeNullOrEmpty
@@ -103,6 +112,9 @@ Describe 'Invoke-SPSiteAssessment' {
                     Workflow2010RunningInstanceCount = 0
                     Workflow2013Count = 0
                     Workflow2013RunningInstanceCount = 0
+                    AppInstanceCount = 0
+                    AppWebCount = 0
+                    AppInstanceExamples = ''
                     InfoPathFormCount = 0
                     IrmEnabledListCount = 0
                     IsLargeSite = $false
@@ -158,6 +170,9 @@ Describe 'Invoke-SPSiteAssessment' {
                     Workflow2010RunningInstanceCount = 0
                     Workflow2013Count = 0
                     Workflow2013RunningInstanceCount = 0
+                    AppInstanceCount = 0
+                    AppWebCount = 0
+                    AppInstanceExamples = ''
                     InfoPathFormCount = 0
                     IrmEnabledListCount = 0
                     IsLargeSite = $false
@@ -210,6 +225,9 @@ Describe 'Invoke-SPSiteAssessment' {
                     Workflow2010RunningInstanceCount = 0
                     Workflow2013Count = 0
                     Workflow2013RunningInstanceCount = 0
+                    AppInstanceCount = 0
+                    AppWebCount = 0
+                    AppInstanceExamples = ''
                     InfoPathFormCount = 0
                     IrmEnabledListCount = 0
                     IsLargeSite = $false

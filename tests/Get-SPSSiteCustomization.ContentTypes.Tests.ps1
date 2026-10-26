@@ -57,6 +57,11 @@ public sealed class SPSSiteInventoryThrowAfterOne : IEnumerable
 }
 '@
 
+    function global:Get-SPAppInstance {
+        param($Web)
+        @()
+    }
+
     function Get-TestContentType {
         param ([string]$Id, [string]$Name)
         [PSCustomObject]@{
@@ -226,6 +231,63 @@ Describe 'Get-SPSSiteCustomization content types' {
 
         $signals.Workflow2010Count | Should -Be 2
         $signals.Workflow2010RunningInstanceCount | Should -Be 10
+    }
+
+    It 'collects app instance and app web signals with examples' {
+        $appWeb = Get-TestWeb -Definitions @() -Bindings @()
+        $appWeb | Add-Member -MemberType NoteProperty -Name IsAppWeb -Value $true
+        $regularWeb = Get-TestWeb -Definitions @() -Bindings @()
+        $regularWeb.Url = 'https://intranet.contoso.com/sites/team/subweb'
+        Mock Get-SPAppInstance -ModuleName SPSSiteInventory.Common {
+            param($Web)
+            if ($Web.Url -eq 'https://intranet.contoso.com/sites/team') {
+                return @(
+                    [PSCustomObject]@{ Title = 'Contoso App' }
+                    [PSCustomObject]@{ AppId = '11111111-1111-1111-1111-111111111111' }
+                )
+            }
+            if ($Web.Url -eq 'https://intranet.contoso.com/sites/team/subweb') {
+                return @(
+                    [PSCustomObject]@{ DisplayName = 'Legacy Provider App' }
+                )
+            }
+            return @()
+        }
+
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Solutions = @()
+            AllWebs = @($appWeb, $regularWeb)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site
+
+        $signals.AppInstanceCount | Should -Be 3
+        $signals.AppWebCount | Should -Be 1
+        $signals.AppInstanceExamples | Should -Match 'Contoso App'
+        $signals.AppInstanceExamples | Should -Match 'Legacy Provider App'
+        Should -Invoke Get-SPAppInstance -ModuleName SPSSiteInventory.Common -Times 2 -Exactly
+    }
+
+    It 'marks app-instance read failures as partial with a warning' {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        Mock Get-SPAppInstance -ModuleName SPSSiteInventory.Common {
+            throw 'App catalog access denied'
+        }
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -WarningVariable warnings -WarningAction SilentlyContinue
+
+        $signals.CustomizationInventoryComplete | Should -BeFalse
+        $signals.AppInstanceCount | Should -Be 0
+        $signals.AppWebCount | Should -Be 0
+        ($warnings -join ';') | Should -Match 'Could not read app instances on'
+        ($warnings -join ';') | Should -Match 'App catalog access denied'
+        Should -Invoke Get-SPAppInstance -ModuleName SPSSiteInventory.Common -Times 1 -Exactly
     }
 
     It 'keeps running workflow counts at zero when Workflow Manager APIs are unavailable' {

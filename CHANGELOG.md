@@ -41,6 +41,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and template-language review metadata (`TemplateLanguage*`). These fields are
   now propagated to CSV/JSON/HTML/report-pack and alert outputs, with
   configurable rules under `TemplateParity`. (#39)
+- Added SMAT apps parity signals: `AppInstanceCount`, `AppWebCount`, and
+  `AppInstanceExamples`. These fields are now propagated to scoring, CSV/JSON/HTML
+  outputs, report-pack `-apps-*.json`, and dedicated app alerts. (#40)
 - Zone-aware web application authentication inventory, including mixed Windows/FBA,
   membership/role provider names and explicit identity-review flags. The example
   configuration treats `HasFbaZone` as a SharePoint Online migration blocker.
