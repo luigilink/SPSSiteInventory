@@ -63,6 +63,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   setting adds localized names of the permission levels SharePoint provisions, and
   `LargeContentThresholds.MaxItemsForHtmlFileScanPerLibrary` caps the HTML file count.
   A failed policy read marks the site records partial instead of reporting no policies. (#43)
+- Added SMAT managed metadata parity: `ManagedMetadataListCount`,
+  `ManagedMetadataColumnCount`, `ManagedMetadataTermSetCount` and `ManagedMetadataExamples`
+  (Managed Metadata Columns). A managed metadata column is a visible `TaxonomyFieldType`
+  or `TaxonomyFieldTypeMulti` field, Enterprise Keywords included; term sets are counted
+  by ID from the field definitions, without calling the term store service. They flow to
+  scoring (weighted, not blocking), CSV/JSON/HTML, a per-list `-managedmetadata-*` CSV/JSON
+  report with a matching HTML section, and a dedicated alert, with guidance to migrate
+  these lists close to the term store. A field that cannot be read marks the site
+  partial instead of reporting no managed metadata. (#44)
 - Zone-aware web application authentication inventory, including mixed Windows/FBA,
   membership/role provider names and explicit identity-review flags. The example
   configuration treats `HasFbaZone` as a SharePoint Online migration blocker.

@@ -49,6 +49,11 @@ Describe 'Invoke-SPSiteAssessment' {
                     EmailEnabledListExamples = 'Invoices (/sites/first/Invoices)'
                     HtmlFileCount = 4
                     HtmlFileExamples = '/sites/first/Docs/a.htm'
+                    ManagedMetadataListCount = 2
+                    ManagedMetadataColumnCount = 3
+                    ManagedMetadataTermSetCount = 2
+                    ManagedMetadataExamples = 'Contracts (Department, Region); Projects (Department)'
+                    ManagedMetadataLists = @([PSCustomObject]@{ ListTitle = 'Contracts' })
                     InfoPathFormCount = 0
                     IrmEnabledListCount = 0
                     IsLargeSite = $false
@@ -102,6 +107,10 @@ Describe 'Invoke-SPSiteAssessment' {
             $result.Inventory[0].EmailEnabledListExamples | Should -Be 'Invoices (/sites/first/Invoices)'
             $result.Inventory[0].HtmlFileCount | Should -Be 4
             $result.Inventory[0].HtmlFileExamples | Should -Be '/sites/first/Docs/a.htm'
+            $result.Inventory[0].ManagedMetadataListCount | Should -Be 2
+            $result.Inventory[0].ManagedMetadataColumnCount | Should -Be 3
+            $result.Inventory[0].ManagedMetadataTermSetCount | Should -Be 2
+            $result.Inventory[0].ManagedMetadataExamples | Should -Be 'Contracts (Department, Region); Projects (Department)'
             $result.Inventory[0].IsLargeSite | Should -BeFalse
             $result.Inventory[0].IsLockedSite | Should -BeFalse
             $result.Inventory[0].SiteLockState | Should -Be 'Unlock'
@@ -127,11 +136,16 @@ Describe 'Invoke-SPSiteAssessment' {
             $result.Inventory[1].EmailEnabledListExamples | Should -BeNullOrEmpty
             $result.Inventory[1].HtmlFileCount | Should -BeNullOrEmpty
             $result.Inventory[1].HtmlFileExamples | Should -BeNullOrEmpty
+            $result.Inventory[1].ManagedMetadataListCount | Should -BeNullOrEmpty
+            $result.Inventory[1].ManagedMetadataColumnCount | Should -BeNullOrEmpty
+            $result.Inventory[1].ManagedMetadataTermSetCount | Should -BeNullOrEmpty
+            $result.Inventory[1].ManagedMetadataExamples | Should -BeNullOrEmpty
             $result.Inventory[1].IsLargeSite | Should -BeNullOrEmpty
             $result.Inventory[1].IsLockedSite | Should -BeNullOrEmpty
             $result.Inventory[1].SiteLockState | Should -BeNullOrEmpty
             $result.Inventory[2].AssessmentStatus | Should -Be 'Complete'
             @($result.ContentTypes).Count | Should -Be 0
+            @($result.ManagedMetadataLists).Count | Should -Be 2
             Should -Invoke Get-SPSite -Times 3 -Exactly
             Should -Invoke Get-SPSSiteCustomization -Times 2 -Exactly
             Should -Invoke Write-Progress -Times 4 -Exactly

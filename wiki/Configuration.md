@@ -60,6 +60,8 @@ Scoring = @{
         CustomPermissionLevelCount = 0.5
         EmailEnabledListCount    = 0.5
         HtmlFileCount            = 0.1
+        ManagedMetadataListCount = 0.1
+        ManagedMetadataTermSetCount = 0.25
         IsUnsupportedSiteTemplate = 5.0
         TemplateLanguageReviewRequired = 0.5
         InfoPathFormCount        = 3.0
@@ -186,6 +188,29 @@ Lists, Browser File Handling and Web Application Policies scans:
   such as the farm and search crawl accounts, so a count above zero is expected.
 
 None of these signals is blocking in the example configuration.
+
+Managed metadata signals follow the SMAT Managed Metadata Columns report:
+
+- `ManagedMetadataListCount` — lists and libraries with at least one visible managed
+  metadata column, that is a field of type `TaxonomyFieldType` or
+  `TaxonomyFieldTypeMulti` (the Enterprise Keywords column included). Hidden columns,
+  and the hidden helper fields SharePoint adds for each column, are ignored.
+- `ManagedMetadataColumnCount` — those columns, counted once per list. It is reported
+  but not scored, because it follows the list count.
+- `ManagedMetadataTermSetCount` — distinct term sets, by ID, that those columns use
+  across the site collection. A term set shared by several lists counts once.
+- `ManagedMetadataExamples` — up to five lists with their column names.
+
+The term set IDs come from the column definitions, so the term store service is never
+called and term set names are not resolved. The per-list detail goes to the
+`*-managedmetadata-*` CSV/JSON files and the HTML report (see
+[Usage](Usage#managed-metadata-detail)).
+
+These signals are weighted but **not blocking**: managed metadata columns usually migrate
+with their list. What they add is a dependency on the term store, so the lists should be
+migrated close to the term store migration. The weights are deliberately small because
+many sites use a few such columns; raise them if your term store migration is a project
+of its own.
 
 `EventReceivers` counts only **custom** event receivers (those registered from a
 non-Microsoft assembly). Out-of-the-box receivers on native lists are ignored, so a stock

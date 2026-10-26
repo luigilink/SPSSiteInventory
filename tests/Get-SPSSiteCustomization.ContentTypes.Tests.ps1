@@ -94,6 +94,7 @@ public sealed class SPSSiteInventoryThrowAfterOne : IEnumerable
             EnableVersioning = $false
             Items = @()
             BaseTemplate = 101
+            Fields = @()
         }
         $web = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
@@ -151,6 +152,7 @@ public sealed class SPSSiteInventoryThrowAfterOne : IEnumerable
             EnableVersioning = $false
             Items = @()
             BaseTemplate = 850
+            Fields = @()
             Batches = $Batches
             BatchIndex = 0
             Queries = [System.Collections.Generic.List[object]]::new()
@@ -185,6 +187,7 @@ public sealed class SPSSiteInventoryThrowAfterOne : IEnumerable
             EnableVersioning = $false
             Items = @()
             BaseTemplate = 100
+            Fields = @()
             EmailAlias = $EmailAlias
             CanReceiveEmail = $CanReceiveEmail
         }
@@ -240,6 +243,7 @@ public class SPSTestThrowingMailList
     public object EnableVersioning { get; set; }
     public object Items { get; set; }
     public object BaseTemplate { get; set; }
+    public object Fields { get; set; }
     public bool CanReceiveEmail { get; set; }
     public string EmailAlias { get { throw new InvalidOperationException("alias store unavailable"); } }
 }
@@ -252,6 +256,57 @@ public class SPSTestThrowingMailList
             Items = @($Layouts | ForEach-Object { @{ PublishingPageLayout = $_ } })
             Position = $Position
         }
+    }
+
+    function Get-TestTaxonomyField {
+        param (
+            [string]$Title = 'Department',
+            [string]$Type = 'TaxonomyFieldType',
+            [string]$TermSetId = '11111111-1111-1111-1111-111111111111',
+            [bool]$Hidden = $false
+        )
+        [PSCustomObject]@{ Title = $Title; InternalName = $Title; TypeAsString = $Type; Hidden = $Hidden; TermSetId = [guid]$TermSetId }
+    }
+
+    function Get-TestManagedMetadataList {
+        param ([string]$Title, [object[]]$Fields, [int]$ItemCount = 3)
+        $list = Get-TestMailList -Title $Title
+        $list.Fields = $Fields
+        $list.ItemCount = $ItemCount
+        return $list
+    }
+
+    # Real .NET types: a failed SharePoint property read comes back as $null in PowerShell.
+    if (-not ('SPSTestCollectorTaxonomyField' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+public class SPSTestCollectorTaxonomyField
+{
+    public string Title { get; set; }
+    public string TypeAsString { get { return "TaxonomyFieldType"; } }
+    public bool Hidden { get { throw new InvalidOperationException("hidden state unavailable"); } }
+    public Guid TermSetId { get { return Guid.NewGuid(); } }
+}
+
+public class SPSTestFailingCountList
+{
+    public string Title { get; set; }
+    public object RootFolder { get; set; }
+    public object ContentTypes { get; set; }
+    public object WorkflowAssociations { get; set; }
+    public object EventReceivers { get; set; }
+    public object IrmEnabled { get; set; }
+    public object Views { get; set; }
+    public object CheckedOutFiles { get; set; }
+    public object EnableVersioning { get; set; }
+    public object Items { get; set; }
+    public object BaseTemplate { get; set; }
+    public object Fields { get; set; }
+    public string EmailAlias { get { return null; } }
+    public bool CanReceiveEmail { get; set; }
+    public int ItemCount { get { throw new InvalidOperationException("item count unavailable"); } }
+}
+'@
     }
 }
 
@@ -1014,6 +1069,7 @@ Describe 'Get-SPSSiteCustomization content types' {
         $mailList.EnableVersioning = $false
         $mailList.Items = @()
         $mailList.BaseTemplate = 100
+        $mailList.Fields = @()
         $mailList.CanReceiveEmail = $true
         $web = Get-TestWeb -Definitions @() -Bindings @()
         $web.Lists = @($mailList, (Get-TestMailList -Title 'Requests' -EmailAlias 'requests'))
@@ -1807,5 +1863,178 @@ Describe 'Get-SPSSiteCustomization content types' {
         $signals.ContentTypeInventoryComplete | Should -BeFalse
         $signals.ContentTypeCount | Should -Be 1
         $signals.ContentTypes | Should -HaveCount 1
+    }
+
+    It 'counts lists with managed metadata columns, their columns and the distinct term sets' {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Lists = @(
+            (Get-TestManagedMetadataList -Title 'Contracts' -ItemCount 12 -Fields @(
+                (Get-TestTaxonomyField -Title 'Department' -TermSetId '11111111-1111-1111-1111-111111111111')
+                (Get-TestTaxonomyField -Title 'Region' -Type 'TaxonomyFieldTypeMulti' -TermSetId '22222222-2222-2222-2222-222222222222')))
+            (Get-TestManagedMetadataList -Title 'Projects' -Fields @((Get-TestTaxonomyField -Title 'Department' -TermSetId '11111111-1111-1111-1111-111111111111')))
+            (Get-TestManagedMetadataList -Title 'Plain' -Fields @([PSCustomObject]@{ Title = 'Title'; TypeAsString = 'Text' }))
+        )
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -WarningVariable warnings -WarningAction SilentlyContinue
+
+        $signals.ManagedMetadataListCount | Should -Be 2
+        $signals.ManagedMetadataColumnCount | Should -Be 3
+        $signals.ManagedMetadataTermSetCount | Should -Be 2
+        $signals.ManagedMetadataExamples | Should -Be 'Contracts (Department, Region); Projects (Department)'
+        $signals.ManagedMetadataLists | Should -HaveCount 2
+        $signals.ManagedMetadataLists[0].SiteUrl | Should -Be 'https://intranet.contoso.com/sites/team'
+        $signals.ManagedMetadataLists[0].WebUrl | Should -Be 'https://intranet.contoso.com/sites/team'
+        $signals.ManagedMetadataLists[0].ListTitle | Should -Be 'Contracts'
+        $signals.ManagedMetadataLists[0].ListUrl | Should -Be '/sites/team/Contracts'
+        $signals.ManagedMetadataLists[0].ListItemCount | Should -Be 12
+        $signals.ManagedMetadataLists[0].ManagedMetadataColumns | Should -Be 'Department; Region'
+        $signals.CustomizationInventoryComplete | Should -BeTrue
+        @($warnings) | Should -HaveCount 0
+    }
+
+    It 'counts a term set shared by several webs once for the site collection' {
+        $first = Get-TestWeb -Definitions @() -Bindings @()
+        $first.Lists = @((Get-TestManagedMetadataList -Title 'Contracts' -Fields @((Get-TestTaxonomyField))))
+        $second = Get-TestWeb -Definitions @() -Bindings @()
+        $second.Url = 'https://intranet.contoso.com/sites/team/sub'
+        $second.Lists = @((Get-TestManagedMetadataList -Title 'Tasks' -Fields @((Get-TestTaxonomyField -Title 'Owner department'))))
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($first, $second)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site
+
+        $signals.ManagedMetadataListCount | Should -Be 2
+        $signals.ManagedMetadataColumnCount | Should -Be 2
+        $signals.ManagedMetadataTermSetCount | Should -Be 1
+        $signals.ManagedMetadataLists[1].WebUrl | Should -Be 'https://intranet.contoso.com/sites/team/sub'
+    }
+
+    It 'ignores hidden managed metadata columns and the helper fields SharePoint adds for them' {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Lists = @(
+            (Get-TestManagedMetadataList -Title 'Contracts' -Fields @(
+                [PSCustomObject]@{ Title = 'Title'; TypeAsString = 'Text' }
+                (Get-TestTaxonomyField -Title 'Department_0' -Type 'Note' -Hidden $true)
+                (Get-TestTaxonomyField -Title 'Taxonomy Catch All Column' -Type 'LookupMulti' -Hidden $true)
+                (Get-TestTaxonomyField -Title 'Retired' -Hidden $true)))
+        )
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site
+
+        $signals.ManagedMetadataListCount | Should -Be 0
+        $signals.ManagedMetadataColumnCount | Should -Be 0
+        $signals.ManagedMetadataTermSetCount | Should -Be 0
+        $signals.ManagedMetadataExamples | Should -Be ''
+        $signals.ManagedMetadataLists | Should -HaveCount 0
+        $signals.CustomizationInventoryComplete | Should -BeTrue
+    }
+
+    It 'lists at most five managed metadata examples but counts every list' {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Lists = @(1..7 | ForEach-Object { Get-TestManagedMetadataList -Title "List$_" -Fields @((Get-TestTaxonomyField)) })
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site
+
+        $signals.ManagedMetadataListCount | Should -Be 7
+        $signals.ManagedMetadataLists | Should -HaveCount 7
+        ($signals.ManagedMetadataExamples -split '; ') | Should -HaveCount 5
+    }
+
+    It 'marks an unreadable field collection as partial and keeps the other lists' {
+        $broken = Get-TestManagedMetadataList -Title 'Broken' -Fields @()
+        $broken.Fields = $null
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Lists = @($broken, (Get-TestManagedMetadataList -Title 'Good' -Fields @((Get-TestTaxonomyField))))
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -WarningVariable warnings -WarningAction SilentlyContinue
+
+        $signals.ManagedMetadataListCount | Should -Be 1
+        $signals.ManagedMetadataLists[0].ListTitle | Should -Be 'Good'
+        $signals.CustomizationInventoryComplete | Should -BeFalse
+        ($warnings -join ';') | Should -Match "Could not read the managed metadata columns on list 'Broken' in web 'https://intranet.contoso.com/sites/team'"
+        ($warnings -join ';') | Should -Match 'field collection is unavailable'
+    }
+
+    It 'marks a failing hidden-state getter as partial instead of counting or skipping the column' {
+        $field = [SPSTestCollectorTaxonomyField]::new()
+        $field.Title = 'Department'
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Lists = @(
+            (Get-TestManagedMetadataList -Title 'Contracts' -Fields @($field))
+            (Get-TestManagedMetadataList -Title 'Good' -Fields @((Get-TestTaxonomyField)))
+        )
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -WarningVariable warnings -WarningAction SilentlyContinue
+
+        $signals.ManagedMetadataListCount | Should -Be 1
+        $signals.CustomizationInventoryComplete | Should -BeFalse
+        ($warnings -join ';') | Should -Match "Could not read the managed metadata columns on list 'Contracts'"
+        ($warnings -join ';') | Should -Match 'hidden state unavailable'
+    }
+
+    It 'marks a failing item count as partial instead of exporting a zero count' {
+        $list = [SPSTestFailingCountList]::new()
+        $list.Title = 'Contracts'
+        $list.RootFolder = [PSCustomObject]@{ ServerRelativeUrl = '/sites/team/Contracts'; Properties = @{} }
+        $list.ContentTypes = @()
+        $list.WorkflowAssociations = @()
+        $list.EventReceivers = @()
+        $list.IrmEnabled = $false
+        $list.Views = @()
+        $list.CheckedOutFiles = @()
+        $list.EnableVersioning = $false
+        $list.Items = @()
+        $list.BaseTemplate = 100
+        $list.Fields = @((Get-TestTaxonomyField))
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Lists = @($list)
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -WarningVariable warnings -WarningAction SilentlyContinue
+
+        $signals.ManagedMetadataListCount | Should -Be 0
+        $signals.ManagedMetadataLists | Should -HaveCount 0
+        $signals.CustomizationInventoryComplete | Should -BeFalse
+        ($warnings -join ';') | Should -Match "Could not read the managed metadata columns on list 'Contracts'"
+        ($warnings -join ';') | Should -Match 'item count unavailable'
     }
 }

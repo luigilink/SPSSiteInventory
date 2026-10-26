@@ -14,6 +14,13 @@ Describe 'Export-SPSInventoryReport content types' {
             }
             return $count
         }
+
+        function Get-RowCount {
+            param ($Rows)
+            $count = 0
+            foreach ($row in $Rows) { $count++ }
+            return $count
+        }
     }
 
     It 'writes aligned site CSV, JSON, HTML and content-type CSV/JSON' {
@@ -321,5 +328,103 @@ Describe 'Export-SPSInventoryReport content types' {
             Get-AlertCount -Alerts $alerts -Type $type | Should -Be 0
         }
         @($rows).Count | Should -Be 2
+    }
+
+    It 'writes the per-list managed metadata CSV and JSON, manifest entries and one alert per site' {
+        $sites = @([PSCustomObject]@{
+            InventoryScope = 'SiteCollection'; Url = 'https://intranet/sites/team'; WebApp = 'Intranet'
+            AssessmentStatus = 'Complete'; Category = 2
+            ManagedMetadataListCount = 2; ManagedMetadataColumnCount = 3; ManagedMetadataTermSetCount = 2
+            ManagedMetadataExamples = 'Legal, & Compliance (Department, Region); Projects (Department)'
+        })
+        $lists = @(
+            [PSCustomObject]@{
+                SiteUrl = 'https://intranet/sites/team'; WebUrl = 'https://intranet/sites/team'
+                ListTitle = 'Legal, & Compliance'; ListUrl = '/sites/team/legal?a=1&b=2'
+                ListTemplate = 'DocumentLibrary'; ListType = 'DocumentLibrary'
+                ListItemCount = 12; ItemLastModifiedDate = '2026-03-04 10:20:30'
+                ManagedMetadataColumnCount = 2; ManagedMetadataColumns = 'Department; Region'
+                TermSetIds = '11111111-1111-1111-1111-111111111111; 22222222-2222-2222-2222-222222222222'
+            }
+            [PSCustomObject]@{
+                SiteUrl = 'https://intranet/sites/team'; WebUrl = 'https://intranet/sites/team/sub'
+                ListTitle = 'Projects'; ListUrl = '/sites/team/sub/Projects'
+                ListTemplate = 'GenericList'; ListType = 'GenericList'
+                ListItemCount = 340; ItemLastModifiedDate = ''
+                ManagedMetadataColumnCount = 1; ManagedMetadataColumns = 'Department'
+                TermSetIds = '11111111-1111-1111-1111-111111111111'
+            }
+        )
+
+        $output = Export-SPSInventoryReport -InputObject $sites -ManagedMetadataLists $lists -OutputFolder $TestDrive -BaseName 'MetaData'
+
+        $csvRows = @(Import-Csv $output.ManagedMetadataCsvPath)
+        $csvRows | Should -HaveCount 2
+        $csvRows[0].ListTitle | Should -Be 'Legal, & Compliance'
+        $csvRows[0].ListUrl | Should -Be '/sites/team/legal?a=1&b=2'
+        $csvRows[0].ListItemCount | Should -Be '12'
+        $csvRows[0].ManagedMetadataColumns | Should -Be 'Department; Region'
+        $csvRows[0].TermSetIds | Should -Be '11111111-1111-1111-1111-111111111111; 22222222-2222-2222-2222-222222222222'
+        $csvRows[1].WebUrl | Should -Be 'https://intranet/sites/team/sub'
+        (Get-Content $output.ManagedMetadataCsvPath -TotalCount 1) | Should -Be '"SiteUrl","WebUrl","ListTitle","ListUrl","ListTemplate","ListType","ListItemCount","ItemLastModifiedDate","ManagedMetadataColumnCount","ManagedMetadataColumns","TermSetIds"'
+        $jsonRows = Get-Content $output.ManagedMetadataJsonPath -Raw | ConvertFrom-Json
+        Get-RowCount -Rows $jsonRows | Should -Be 2
+        $jsonRows[0].ManagedMetadataColumnCount | Should -Be 2
+        $jsonRows[0].ListItemCount | Should -Be 12
+        $manifest = Get-Content $output.ManifestJsonPath -Raw | ConvertFrom-Json
+        $manifest.Files.ManagedMetadataCsv | Should -Be $output.ManagedMetadataCsvPath
+        $manifest.Files.ManagedMetadataJson | Should -Be $output.ManagedMetadataJsonPath
+        $alerts = Get-Content $output.AlertsJsonPath -Raw | ConvertFrom-Json
+        Get-AlertCount -Alerts $alerts -Type 'ManagedMetadataColumns' -Url 'https://intranet/sites/team' | Should -Be 1
+        @($alerts | Where-Object { $_.AlertType -eq 'ManagedMetadataColumns' })[0].Value | Should -Be 2
+        @($alerts | Where-Object { $_.AlertType -eq 'ManagedMetadataColumns' })[0].Severity | Should -Be 'Medium'
+        $html = Get-Content $output.HtmlPath -Raw
+        $html | Should -Match 'Managed metadata columns by list'
+        $html | Should -Match 'Legal, &amp; Compliance'
+        (Get-Content $output.SitesJsonPath -Raw | ConvertFrom-Json)[0].ManagedMetadataTermSetCount | Should -Be 2
+    }
+
+    It 'writes a valid empty managed metadata report instead of dropping the files' {
+        $output = Export-SPSInventoryReport -InputObject @() -ManagedMetadataLists @() -OutputFolder $TestDrive -BaseName 'EmptyMetadata'
+
+        (Get-Content $output.ManagedMetadataCsvPath -TotalCount 1) | Should -Match 'ManagedMetadataColumns'
+        @(Import-Csv $output.ManagedMetadataCsvPath) | Should -HaveCount 0
+        Get-RowCount -Rows (Get-Content $output.ManagedMetadataJsonPath -Raw | ConvertFrom-Json) | Should -Be 0
+        (Get-Content $output.ManifestJsonPath -Raw | ConvertFrom-Json).Files.ManagedMetadataJson | Should -Be $output.ManagedMetadataJsonPath
+        (Get-Content $output.HtmlPath -Raw) | Should -Match 'Managed metadata columns by list'
+    }
+
+    It 'does not create managed metadata files when callers omit the optional parameter' {
+        $sites = @([PSCustomObject]@{ Url = 'https://intranet/sites/team'; Category = 1 })
+
+        $output = Export-SPSInventoryReport -InputObject $sites -OutputFolder $TestDrive -BaseName 'NoMetadataFiles'
+
+        $output.ManagedMetadataCsvPath | Should -BeNullOrEmpty
+        $output.ManagedMetadataJsonPath | Should -BeNullOrEmpty
+        @(Get-ChildItem $TestDrive 'NoMetadataFiles-managedmetadata-*') | Should -HaveCount 0
+        (Get-Content $output.ManifestJsonPath -Raw | ConvertFrom-Json).Files.ManagedMetadataJson | Should -BeNullOrEmpty
+        (Get-Content $output.HtmlPath -Raw) | Should -Not -Match 'Managed metadata columns by list'
+    }
+
+    It 'does not write a managed metadata alert for empty counts, absent signals or web application failure rows' {
+        $records = @(
+            [PSCustomObject]@{
+                InventoryScope = 'SiteCollection'; Url = 'https://intranet/sites/plain'; WebApp = 'Intranet'
+                AssessmentStatus = 'Complete'; Category = 1; ManagedMetadataListCount = 0
+            },
+            [PSCustomObject]@{
+                InventoryScope = 'SiteCollection'; Url = 'https://intranet/sites/legacy-row'; WebApp = 'Intranet'
+                AssessmentStatus = 'Complete'; Category = 1
+            },
+            [PSCustomObject]@{
+                InventoryScope = 'WebApplication'; Url = 'https://other'; WebAppUrl = 'https://other'
+                AssessmentStatus = 'Failed'; Category = $null; ManagedMetadataListCount = 4
+            }
+        )
+
+        $output = Export-SPSInventoryReport -InputObject $records -OutputFolder $TestDrive -BaseName 'NoMetadataAlert'
+        $alerts = Get-Content $output.AlertsJsonPath -Raw | ConvertFrom-Json
+
+        Get-AlertCount -Alerts $alerts -Type 'ManagedMetadataColumns' | Should -Be 0
     }
 }
