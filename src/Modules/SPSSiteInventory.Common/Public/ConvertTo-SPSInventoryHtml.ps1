@@ -136,6 +136,9 @@
         [PSCustomObject]@{ Label = 'Sites with running Workflow 2013'; Count = @($siteRecords | Where-Object { [int]$_.Workflow2013RunningInstanceCount -gt 0 }).Count }
         [PSCustomObject]@{ Label = 'Sites with app instances'; Count = @($siteRecords | Where-Object { [int]$_.AppInstanceCount -gt 0 }).Count }
         [PSCustomObject]@{ Label = 'Sites with app webs'; Count = @($siteRecords | Where-Object { [int]$_.AppWebCount -gt 0 }).Count }
+        [PSCustomObject]@{ Label = 'Sites with publishing features'; Count = @($siteRecords | Where-Object { [bool]$_.PublishingInfrastructureEnabled -or [int]$_.PublishingWebCount -gt 0 }).Count }
+        [PSCustomObject]@{ Label = 'Sites with publishing pages'; Count = @($siteRecords | Where-Object { [int]$_.PublishingPageCount -gt 0 }).Count }
+        [PSCustomObject]@{ Label = 'Sites with customized pages'; Count = @($siteRecords | Where-Object { [int]$_.CustomizedPageCount -gt 0 }).Count }
         [PSCustomObject]@{ Label = 'Sites above large-size threshold'; Count = @($siteRecords | Where-Object { $_.IsLargeSite }).Count }
         [PSCustomObject]@{ Label = 'Sites with large lists'; Count = @($siteRecords | Where-Object { [int]$_.LargeListCount -gt 0 }).Count }
         [PSCustomObject]@{ Label = 'Sites with checked-out files'; Count = @($siteRecords | Where-Object { [int]$_.CheckedOutFileCount -gt 0 }).Count }
@@ -524,6 +527,13 @@ td.muted, .muted { color: var(--muted); }
         @{ Key = 'AppInstanceCount'; Label = 'App instances'; Class = 'num'; Type = 'num' }
         @{ Key = 'AppWebCount'; Label = 'App webs'; Class = 'num'; Type = 'num' }
         @{ Key = 'AppInstanceExamples'; Label = 'App instance examples'; Class = 'reasons'; Type = 'text' }
+        @{ Key = 'PublishingInfrastructureEnabled'; Label = 'Publishing infrastructure'; Class = ''; Type = 'text' }
+        @{ Key = 'PublishingWebCount'; Label = 'Publishing webs'; Class = 'num'; Type = 'num' }
+        @{ Key = 'PublishingPageCount'; Label = 'Publishing pages'; Class = 'num'; Type = 'num' }
+        @{ Key = 'PublishingPageLayoutCount'; Label = 'Page layouts in use'; Class = 'num'; Type = 'num' }
+        @{ Key = 'PublishingPageLayoutExamples'; Label = 'Page layout examples'; Class = 'reasons'; Type = 'text' }
+        @{ Key = 'CustomizedPageCount'; Label = 'Customized pages'; Class = 'num'; Type = 'num' }
+        @{ Key = 'CustomizedPageExamples'; Label = 'Customized page examples'; Class = 'reasons'; Type = 'text' }
         @{ Key = 'SizeGB'; Label = 'Size (GB)'; Class = 'num'; Type = 'num' }
         @{ Key = 'SubWebCount'; Label = 'Sub-webs'; Class = 'num'; Type = 'num' }
         @{ Key = 'LastModified'; Label = 'Last modified'; Class = ''; Type = 'text' }

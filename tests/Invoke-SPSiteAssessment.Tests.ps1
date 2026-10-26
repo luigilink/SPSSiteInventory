@@ -36,6 +36,13 @@ Describe 'Invoke-SPSiteAssessment' {
                     AppInstanceCount = 0
                     AppWebCount = 0
                     AppInstanceExamples = ''
+                    PublishingInfrastructureEnabled = $true
+                    PublishingWebCount = 2
+                    PublishingPageCount = 40
+                    PublishingPageLayoutCount = 3
+                    PublishingPageLayoutExamples = 'ArticleLeft.aspx (30); WelcomeSplash.aspx (10)'
+                    CustomizedPageCount = 1
+                    CustomizedPageExamples = '/sites/first/default.aspx'
                     InfoPathFormCount = 0
                     IrmEnabledListCount = 0
                     IsLargeSite = $false
@@ -76,6 +83,13 @@ Describe 'Invoke-SPSiteAssessment' {
             $result.Inventory[0].AppInstanceCount | Should -Be 0
             $result.Inventory[0].AppWebCount | Should -Be 0
             $result.Inventory[0].AppInstanceExamples | Should -Be ''
+            $result.Inventory[0].PublishingInfrastructureEnabled | Should -BeTrue
+            $result.Inventory[0].PublishingWebCount | Should -Be 2
+            $result.Inventory[0].PublishingPageCount | Should -Be 40
+            $result.Inventory[0].PublishingPageLayoutCount | Should -Be 3
+            $result.Inventory[0].PublishingPageLayoutExamples | Should -Be 'ArticleLeft.aspx (30); WelcomeSplash.aspx (10)'
+            $result.Inventory[0].CustomizedPageCount | Should -Be 1
+            $result.Inventory[0].CustomizedPageExamples | Should -Be '/sites/first/default.aspx'
             $result.Inventory[0].IsLargeSite | Should -BeFalse
             $result.Inventory[0].IsLockedSite | Should -BeFalse
             $result.Inventory[0].SiteLockState | Should -Be 'Unlock'
@@ -88,6 +102,13 @@ Describe 'Invoke-SPSiteAssessment' {
             $result.Inventory[1].AppInstanceCount | Should -BeNullOrEmpty
             $result.Inventory[1].AppWebCount | Should -BeNullOrEmpty
             $result.Inventory[1].AppInstanceExamples | Should -BeNullOrEmpty
+            $result.Inventory[1].PublishingInfrastructureEnabled | Should -BeNullOrEmpty
+            $result.Inventory[1].PublishingWebCount | Should -BeNullOrEmpty
+            $result.Inventory[1].PublishingPageCount | Should -BeNullOrEmpty
+            $result.Inventory[1].PublishingPageLayoutCount | Should -BeNullOrEmpty
+            $result.Inventory[1].PublishingPageLayoutExamples | Should -BeNullOrEmpty
+            $result.Inventory[1].CustomizedPageCount | Should -BeNullOrEmpty
+            $result.Inventory[1].CustomizedPageExamples | Should -BeNullOrEmpty
             $result.Inventory[1].IsLargeSite | Should -BeNullOrEmpty
             $result.Inventory[1].IsLockedSite | Should -BeNullOrEmpty
             $result.Inventory[1].SiteLockState | Should -BeNullOrEmpty
@@ -115,6 +136,13 @@ Describe 'Invoke-SPSiteAssessment' {
                     AppInstanceCount = 0
                     AppWebCount = 0
                     AppInstanceExamples = ''
+                    PublishingInfrastructureEnabled = $false
+                    PublishingWebCount = 0
+                    PublishingPageCount = 0
+                    PublishingPageLayoutCount = 0
+                    PublishingPageLayoutExamples = ''
+                    CustomizedPageCount = 0
+                    CustomizedPageExamples = ''
                     InfoPathFormCount = 0
                     IrmEnabledListCount = 0
                     IsLargeSite = $false
@@ -173,6 +201,13 @@ Describe 'Invoke-SPSiteAssessment' {
                     AppInstanceCount = 0
                     AppWebCount = 0
                     AppInstanceExamples = ''
+                    PublishingInfrastructureEnabled = $false
+                    PublishingWebCount = 0
+                    PublishingPageCount = 0
+                    PublishingPageLayoutCount = 0
+                    PublishingPageLayoutExamples = ''
+                    CustomizedPageCount = 0
+                    CustomizedPageExamples = ''
                     InfoPathFormCount = 0
                     IrmEnabledListCount = 0
                     IsLargeSite = $false
@@ -228,6 +263,13 @@ Describe 'Invoke-SPSiteAssessment' {
                     AppInstanceCount = 0
                     AppWebCount = 0
                     AppInstanceExamples = ''
+                    PublishingInfrastructureEnabled = $false
+                    PublishingWebCount = 0
+                    PublishingPageCount = 0
+                    PublishingPageLayoutCount = 0
+                    PublishingPageLayoutExamples = ''
+                    CustomizedPageCount = 0
+                    CustomizedPageExamples = ''
                     InfoPathFormCount = 0
                     IrmEnabledListCount = 0
                     IsLargeSite = $false

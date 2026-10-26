@@ -39,9 +39,10 @@ report pack, plus a dedicated farm-solution report, to the output folder:
 | `*-auth-*.json` | Authentication-by-web-application dataset (zone/provider summary + collection counts). |
 | `*-workflows-*.json` | Workflow/template-focused dataset (`Workflow2010Count`, `Workflow2013Count`, running-instance counts, template-compatibility and template-language review fields, status, category). |
 | `*-apps-*.json` | App-focused dataset (`AppInstanceCount`, `AppWebCount`, `AppInstanceExamples`, status, category). |
+| `*-publishing-*.json` | Publishing and customized-page dataset (`PublishingInfrastructureEnabled`, `PublishingWebCount`, `PublishingPageCount`, `PublishingPageLayoutCount`/`PublishingPageLayoutExamples`, `CustomizedPageCount`/`CustomizedPageExamples`, status, category). |
 | `*-irm-locks-*.json` | Security/lock dataset (`IrmEnabledListCount`, `SiteLockState`, `IsLockedSite`). |
 | `*-large-content-*.json` | Large-content risk dataset (`IsLargeSite`, large lists/views, checked-out files, high file-version counts, plus examples). |
-| `*-alerts-*.json` | Normalized risk alerts extracted from site signals (partial/failed, FBA, template compatibility/language review, full-trust, workflows, apps, InfoPath, IRM, lock, large content). |
+| `*-alerts-*.json` | Normalized risk alerts extracted from site signals (partial/failed, FBA, template compatibility/language review, full-trust, workflows, apps, publishing, customized pages, InfoPath, IRM, lock, large content). |
 | `*-solutions-*.csv` | Farm-solution (WSP) inventory for Excel; one row per solution, with the feature scopes/ids flattened. |
 | `*-solutions-*.json` | Farm-solution (WSP) inventory for automation, with the feature scopes/ids kept as arrays. |
 | `*-contenttypes-*.csv` / `*-contenttypes-*.json` | Content-type definitions and list bindings, including standard types. One row per web definition or list binding, not per item. |
@@ -84,6 +85,11 @@ CSV/JSON rows describe site collections and any web-application enumeration fail
 | `Workflow2013RunningInstanceCount` | Active SharePoint 2013 workflow runtime instances where instance APIs are available |
 | `AppInstanceCount` / `AppInstanceExamples` | SharePoint add-in instances detected across the site collection and up to five examples (name + web URL) |
 | `AppWebCount` | Number of webs identified as app webs (`APP#*` / `IsAppWeb`) |
+| `PublishingInfrastructureEnabled` | The SharePoint Server Publishing Infrastructure site collection feature is active |
+| `PublishingWebCount` | Number of webs where the SharePoint Server Publishing feature is active |
+| `PublishingPageCount` | Items in the Pages libraries of publishing webs |
+| `PublishingPageLayoutCount` / `PublishingPageLayoutExamples` | Distinct page layouts, identified by path, used by the scanned pages (lower bound when the scan cap is reached) and up to five examples, shown as the path below the Master Page Gallery with their page counts |
+| `CustomizedPageCount` / `CustomizedPageExamples` | Customized (unghosted) pages at the root of each web, ignoring System Account edits, and up to five server-relative URLs. List view and form pages are not scanned |
 | `InfoPathFormCount` | InfoPath-driven lists/libraries (retired, no SPO equivalent) |
 | `IrmEnabledListCount` | Number of lists/libraries with IRM enabled |
 | `IsLargeSite` | Site is above the configured large-site threshold |

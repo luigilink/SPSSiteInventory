@@ -6,11 +6,12 @@
         .DESCRIPTION
         Inspects one site collection and returns the signals that drive the migration
         complexity score: 2010 vs 2013 workflows, app inventory and app-web signals,
-        InfoPath forms, IRM-enabled lists, large-content migration risks (large
-        lists/views, checked-out files, file versions), site lock state, sandbox
-        solutions, custom master page, unique permissions, custom event receivers, and
-        whether the site activates a feature that comes from a custom farm solution
-        (correlated through the farm-solution map).
+        publishing and customized-page signals, InfoPath forms, IRM-enabled lists,
+        large-content migration risks (large lists/views, checked-out files, file
+        versions), site lock state, sandbox solutions, custom master page, unique
+        permissions, custom event receivers, and whether the site activates a feature
+        that comes from a custom farm solution (correlated through the farm-solution
+        map).
 
         EventReceivers counts only custom event receivers (those registered from a
         non-Microsoft assembly). Out-of-the-box receivers on native lists are ignored so
@@ -37,6 +38,18 @@
         IrmEnabledListCount counts lists and libraries where IRM is enabled. IsLockedSite
         and SiteLockState surface site lock status (ReadOnly / NoAdditions / NoAccess),
         which can block or delay migration.
+
+        PublishingInfrastructureEnabled, PublishingWebCount, PublishingPageCount and
+        PublishingPageLayoutCount describe classic publishing dependencies: the
+        Publishing Infrastructure site feature, the webs that activate the Publishing
+        feature, the items in their Pages libraries and the distinct page layouts those
+        pages use. Publishing sites usually need extensive remediation, so these are
+        weighted rather than blocking by default.
+
+        CustomizedPageCount counts customized (unghosted) pages at the root of each web,
+        for example a default.aspx edited with SharePoint Designer. Migration reverts
+        them to their default state. Files last modified by the System Account are
+        ignored, and list view and form pages are not scanned.
 
         The returned hashtable is designed to be passed straight to
         Measure-SPSSiteComplexity. CustomizationInventoryComplete is false when a signal
@@ -71,7 +84,9 @@
         .PARAMETER LargeContentThresholds
         Optional thresholds for large-content parity signals:
         LargeListItemCount, LargeListViewRowLimit, CheckedOutFileCount,
-        FileVersionCount, and MaxItemsForVersionScanPerLibrary.
+        FileVersionCount, and MaxItemsForVersionScanPerLibrary. Also reads
+        MaxItemsForPublishingPageScanPerLibrary, which caps how many pages per Pages
+        library are read to count page layouts.
 
         .EXAMPLE
         $map = Get-SPSFarmSolutionMap -CustomSolutionPrefix @('contoso')
@@ -110,6 +125,13 @@
         AppInstanceCount         = 0
         AppWebCount              = 0
         AppInstanceExamples      = ''
+        PublishingInfrastructureEnabled = $false
+        PublishingWebCount       = 0
+        PublishingPageCount      = 0
+        PublishingPageLayoutCount = 0
+        PublishingPageLayoutExamples = ''
+        CustomizedPageCount      = 0
+        CustomizedPageExamples   = ''
         InfoPathFormCount        = 0
         IrmEnabledListCount      = 0
         IsLargeSite              = $false
@@ -141,12 +163,20 @@
     $checkedOutFileExamples = [System.Collections.Generic.List[string]]::new()
     $fileVersionExamples = [System.Collections.Generic.List[string]]::new()
     $appInstanceExamples = [System.Collections.Generic.List[string]]::new()
+    $customizedPageExamples = [System.Collections.Generic.List[string]]::new()
+    $publishingLayouts = [System.Collections.Generic.Dictionary[string, object]]::new([System.StringComparer]::OrdinalIgnoreCase)
 
     $largeListItemThreshold = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'LargeListItemCount' -DefaultValue 5000 -MinimumValue 1)
     $largeListViewRowLimitThreshold = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'LargeListViewRowLimit' -DefaultValue 5000 -MinimumValue 1)
     $checkedOutFileThreshold = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'CheckedOutFileCount' -DefaultValue 1 -MinimumValue 1)
     $fileVersionThreshold = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'FileVersionCount' -DefaultValue 50 -MinimumValue 1)
     $maxItemsForVersionScan = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'MaxItemsForVersionScanPerLibrary' -DefaultValue 2000 -MinimumValue 1)
+    $maxPublishingPageScan = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'MaxItemsForPublishingPageScanPerLibrary' -DefaultValue 2000 -MinimumValue 1)
+    # Well-known SharePoint Server IDs: Publishing Infrastructure (site feature),
+    # Publishing (web feature) and the Pages library list template.
+    $publishingInfrastructureFeatureId = 'f6924d36-2fa8-4f0b-b16d-06b7250180fa'
+    $publishingWebFeatureId = '94c94ca6-b32f-4da9-a9e3-1f3d343d7ecb'
+    $pagesLibraryTemplateId = 850
     $setQueryProperty = {
         param([object]$QueryObject, [string]$PropertyName, [object]$Value)
         if ($null -ne $QueryObject.PSObject.Properties[$PropertyName]) {
@@ -272,6 +302,14 @@
     }
 
     try {
+        $signals.PublishingInfrastructureEnabled = Test-SPSFeatureActivated -Feature $Site.Features -FeatureId $publishingInfrastructureFeatureId
+    }
+    catch {
+        $signals.CustomizationInventoryComplete = $false
+        Write-Warning -Message "Could not read the publishing infrastructure feature for site collection '$($Site.Url)': $($_.Exception.Message)"
+    }
+
+    try {
         $siteWebs = $Site.AllWebs
         if ($null -eq $siteWebs) {
             throw "The web collection is unavailable for '$($Site.Url)'."
@@ -295,9 +333,6 @@
                     Write-Warning -Message "Content-type definitions could not be fully read on '$($web.Url)': $($_.Exception.Message)"
                 }
 
-                # SharePoint 2010 platform: classic workflow associations at web and list scope.
-                # Keep definition counts tied to active associations only, but include historical
-                # associations for running-instance totals because previous versions can still run.
                 try {
                     $isAppWeb = $false
                     if ($null -ne $web.PSObject.Properties['IsAppWeb'] -and $null -ne $web.IsAppWeb) {
@@ -351,6 +386,54 @@
                     Write-Warning -Message "Could not read app instances on '$($web.Url)': $($_.Exception.Message)"
                 }
 
+                $isPublishingWeb = $false
+                try {
+                    $isPublishingWeb = Test-SPSFeatureActivated -Feature $web.Features -FeatureId $publishingWebFeatureId
+                    if ($isPublishingWeb) {
+                        $signals.PublishingWebCount++
+                    }
+                }
+                catch {
+                    $signals.CustomizationInventoryComplete = $false
+                    Write-Warning -Message "Could not read the publishing feature on '$($web.Url)': $($_.Exception.Message)"
+                }
+
+                try {
+                    # A getter failure surfaces as $null, so an unreadable collection must not look empty.
+                    $rootFiles = $web.Files
+                    if ($null -eq $rootFiles) {
+                        throw "The root file collection is unavailable on '$($web.Url)'."
+                    }
+                    foreach ($rootFile in $rootFiles) {
+                        try {
+                            if (-not (Test-SPSCustomizedPageFile -File $rootFile)) {
+                                continue
+                            }
+
+                            $signals.CustomizedPageCount++
+                            $pageIdentity = [string](& $getFileIdentity $rootFile $null)
+                            if (-not [string]::IsNullOrWhiteSpace($pageIdentity) -and $customizedPageExamples.Count -lt 5) {
+                                $customizedPageExamples.Add($pageIdentity)
+                            }
+                        }
+                        catch {
+                            $signals.CustomizationInventoryComplete = $false
+                            $fileLabel = [string](& $getFileIdentity $rootFile $null)
+                            if ([string]::IsNullOrWhiteSpace($fileLabel)) {
+                                $fileLabel = 'an unidentified file'
+                            }
+                            Write-Warning -Message "Could not read the customized page status of '$fileLabel' at the root of '$($web.Url)': $($_.Exception.Message)"
+                        }
+                    }
+                }
+                catch {
+                    $signals.CustomizationInventoryComplete = $false
+                    Write-Warning -Message "Could not read customized pages at the root of '$($web.Url)': $($_.Exception.Message)"
+                }
+
+                # SharePoint 2010 platform: classic workflow associations at web and list scope.
+                # Keep definition counts tied to active associations only, but include historical
+                # associations for running-instance totals because previous versions can still run.
                 $allWebWorkflowAssociations = @($web.WorkflowAssociations)
                 $webWorkflowAssociations = @(Get-SPSActiveWorkflowAssociations -WorkflowAssociations $allWebWorkflowAssociations)
                 $signals.Workflow2010Count += $webWorkflowAssociations.Count
@@ -622,6 +705,83 @@
                             $signals.CustomizationInventoryComplete = $false
                             Write-Warning -Message "Could not scan file versions on '$listTitle' in web '$($web.Url)': $($_.Exception.Message)"
                         }
+
+                        $isPagesLibrary = $false
+                        if ($isPublishingWeb) {
+                            try {
+                                $baseTemplate = $list.BaseTemplate
+                                if ($null -eq $baseTemplate) {
+                                    throw "The list template is unavailable on '$listTitle'."
+                                }
+                                $isPagesLibrary = [int]$baseTemplate -eq $pagesLibraryTemplateId
+                            }
+                            catch {
+                                $signals.CustomizationInventoryComplete = $false
+                                Write-Warning -Message "Could not read the list template on '$listTitle' in web '$($web.Url)': $($_.Exception.Message)"
+                            }
+                        }
+
+                        if ($isPagesLibrary) {
+                            try {
+                                $pagesItemCount = $list.ItemCount
+                                if ($null -eq $pagesItemCount) {
+                                    $signals.CustomizationInventoryComplete = $false
+                                    Write-Warning -Message "The item count is unavailable on Pages library '$listTitle' in web '$($web.Url)'; PublishingPageCount may be understated."
+                                }
+                                else {
+                                    $signals.PublishingPageCount += [int]$pagesItemCount
+                                }
+
+                                # Files only (FSObjType 0) and just the layout column keep the scan light.
+                                $pageQuery = & $newPagedQuery -RowLimit 200 -QueryText '<Where><Eq><FieldRef Name="FSObjType" /><Value Type="Integer">0</Value></Eq></Where>'
+                                & $setQueryProperty $pageQuery 'ViewFields' '<FieldRef Name="PublishingPageLayout" />'
+                                & $setQueryProperty $pageQuery 'ViewFieldsOnly' $true
+                                $pageScanCount = 0
+                                $pagesWithLayout = 0
+                                $hasUnscannedPages = $false
+                                $pagePosition = $null
+                                do {
+                                    & $setQueryProperty $pageQuery 'ListItemCollectionPosition' $pagePosition
+                                    $pageBatch = $list.GetItems($pageQuery)
+                                    foreach ($pageItem in (& $getBatchItems $pageBatch)) {
+                                        if ($pageScanCount -ge $maxPublishingPageScan) {
+                                            $hasUnscannedPages = $true
+                                            break
+                                        }
+                                        $pageScanCount++
+                                        $layoutIdentity = ConvertTo-SPSPageLayoutIdentity -LayoutValue $pageItem['PublishingPageLayout']
+                                        if ($null -eq $layoutIdentity) {
+                                            continue
+                                        }
+                                        $pagesWithLayout++
+                                        if ($publishingLayouts.ContainsKey($layoutIdentity.Key)) {
+                                            $publishingLayouts[$layoutIdentity.Key].PageCount++
+                                        }
+                                        else {
+                                            $publishingLayouts[$layoutIdentity.Key] = [PSCustomObject]@{ Name = $layoutIdentity.Name; PageCount = 1 }
+                                        }
+                                    }
+                                    $pagePosition = & $getBatchPosition $pageBatch
+                                    if ($pageScanCount -ge $maxPublishingPageScan -and $null -ne $pagePosition) {
+                                        $hasUnscannedPages = $true
+                                    }
+                                } while ($null -ne $pagePosition -and $pageScanCount -lt $maxPublishingPageScan)
+
+                                if ($hasUnscannedPages) {
+                                    $signals.CustomizationInventoryComplete = $false
+                                    Write-Warning -Message "Publishing page layout scan stopped on '$listTitle' in web '$($web.Url)' after $maxPublishingPageScan item(s). Increase LargeContentThresholds.MaxItemsForPublishingPageScanPerLibrary to scan more pages."
+                                }
+                                # A failed field read comes back as $null, so a library where no page reports a layout is suspect.
+                                if ($pageScanCount -gt 0 -and $pagesWithLayout -eq 0) {
+                                    $signals.CustomizationInventoryComplete = $false
+                                    Write-Warning -Message "No page layout could be read from the $pageScanCount page(s) scanned on '$listTitle' in web '$($web.Url)'; PublishingPageLayoutCount may be understated."
+                                }
+                            }
+                            catch {
+                                $signals.CustomizationInventoryComplete = $false
+                                Write-Warning -Message "Could not scan publishing pages on '$listTitle' in web '$($web.Url)': $($_.Exception.Message)"
+                            }
+                        }
                     }
                 }
                 catch {
@@ -702,5 +862,13 @@
     $signals.CheckedOutFileExamples = $checkedOutFileExamples -join '; '
     $signals.FileVersionExamples = $fileVersionExamples -join '; '
     $signals.AppInstanceExamples = $appInstanceExamples -join '; '
+    $signals.CustomizedPageExamples = $customizedPageExamples -join '; '
+    $signals.PublishingPageLayoutCount = $publishingLayouts.Count
+    $signals.PublishingPageLayoutExamples = @(
+        $publishingLayouts.Values |
+            Sort-Object -Property @{ Expression = { $_.PageCount }; Descending = $true }, @{ Expression = { $_.Name } } |
+            Select-Object -First 5 |
+            ForEach-Object { '{0} ({1})' -f $_.Name, $_.PageCount }
+    ) -join '; '
     return $signals
 }

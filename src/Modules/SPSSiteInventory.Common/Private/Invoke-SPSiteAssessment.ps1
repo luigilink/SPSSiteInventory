@@ -148,6 +148,13 @@
                     AppInstanceCount = $signals['AppInstanceCount']
                     AppWebCount = $signals['AppWebCount']
                     AppInstanceExamples = $signals['AppInstanceExamples']
+                    PublishingInfrastructureEnabled = $signals['PublishingInfrastructureEnabled']
+                    PublishingWebCount = $signals['PublishingWebCount']
+                    PublishingPageCount = $signals['PublishingPageCount']
+                    PublishingPageLayoutCount = $signals['PublishingPageLayoutCount']
+                    PublishingPageLayoutExamples = $signals['PublishingPageLayoutExamples']
+                    CustomizedPageCount = $signals['CustomizedPageCount']
+                    CustomizedPageExamples = $signals['CustomizedPageExamples']
                     InfoPathFormCount = $signals['InfoPathFormCount']
                     IrmEnabledListCount = $signals['IrmEnabledListCount']
                     IsLargeSite = $signals['IsLargeSite']
@@ -212,6 +219,13 @@
                     AppInstanceCount = $null
                     AppWebCount = $null
                     AppInstanceExamples = $null
+                    PublishingInfrastructureEnabled = $null
+                    PublishingWebCount = $null
+                    PublishingPageCount = $null
+                    PublishingPageLayoutCount = $null
+                    PublishingPageLayoutExamples = $null
+                    CustomizedPageCount = $null
+                    CustomizedPageExamples = $null
                     InfoPathFormCount = $null
                     IrmEnabledListCount = $null
                     IsLargeSite = $null

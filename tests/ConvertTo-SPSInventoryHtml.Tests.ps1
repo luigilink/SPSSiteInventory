@@ -14,6 +14,9 @@ BeforeAll {
             TemplateLanguageReviewRequired = $false; TemplateLanguageReason = ''
             Workflow2010RunningInstanceCount = 0; Workflow2013RunningInstanceCount = 0
             AppInstanceCount = 0; AppWebCount = 0; AppInstanceExamples = ''
+            PublishingInfrastructureEnabled = $false; PublishingWebCount = 0; PublishingPageCount = 0
+            PublishingPageLayoutCount = 0; PublishingPageLayoutExamples = ''
+            CustomizedPageCount = 0; CustomizedPageExamples = ''
             IsLargeSite = $false; LargeListCount = 0; LargeListExamples = ''
             LargeListViewCount = 0; LargeListViewExamples = ''
             CheckedOutFileCount = 0; CheckedOutFileExamples = ''
@@ -31,6 +34,9 @@ BeforeAll {
             TemplateLanguageReviewRequired = $true; TemplateLanguageReason = 'Template language LCID is not recognized.'
             Workflow2010RunningInstanceCount = 4; Workflow2013RunningInstanceCount = 2
             AppInstanceCount = 3; AppWebCount = 1; AppInstanceExamples = 'Contoso App (https://intranet/sites/legacy)'
+            PublishingInfrastructureEnabled = $true; PublishingWebCount = 2; PublishingPageCount = 40
+            PublishingPageLayoutCount = 3; PublishingPageLayoutExamples = 'ArticleLeft.aspx (30)'
+            CustomizedPageCount = 2; CustomizedPageExamples = '/sites/legacy/default.aspx'
             IsLargeSite = $true; LargeListCount = 2; LargeListExamples = 'Documents (7000); Records (5100)'
             LargeListViewCount = 1; LargeListViewExamples = 'Documents/All Documents (7000)'
             CheckedOutFileCount = 3; CheckedOutFileExamples = 'Documents (3)'
@@ -142,6 +148,19 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $html | Should -Match '>App instances <span class="arrow">'
         $html | Should -Match '>App webs <span class="arrow">'
         $html | Should -Match '>App instance examples <span class="arrow">'
+    }
+
+    It 'shows publishing and customized-page signals in summary cards and table columns' {
+        $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
+
+        $html | Should -Match '<div class="num">1</div><div class="lbl">Sites with publishing features</div>'
+        $html | Should -Match '<div class="num">1</div><div class="lbl">Sites with publishing pages</div>'
+        $html | Should -Match '<div class="num">1</div><div class="lbl">Sites with customized pages</div>'
+        foreach ($label in @('Publishing infrastructure', 'Publishing webs', 'Publishing pages', 'Page layouts in use', 'Page layout examples', 'Customized pages', 'Customized page examples')) {
+            $html | Should -Match ('>{0} <span class="arrow">' -f $label)
+        }
+        $html | Should -Match 'ArticleLeft\.aspx \(30\)'
+        $html | Should -Match '/sites/legacy/default\.aspx'
     }
 
     It 'keeps wave-zero groups distinct for unmapped and failed records in either input order' {
