@@ -9,7 +9,8 @@
     2. loads the SharePoint commands and the inventory settings;
     3. builds the farm-solution map (WSP -> full-trust code, features) to detect custom code;
     4. enumerates site collections (identity + volumetry);
-    5. collects the customization signals of each site;
+    5. collects the customization signals of each site and reads the Business Connectivity
+       Services (BCS) definitions of the farm;
     6. scores each site from 1 (Simple) to 4 (Blocking) and assigns a migration wave;
     7. exports the scored inventory to CSV, JSON and a self-contained HTML report, and the
        farm-solution map to its own CSV and JSON.
@@ -98,6 +99,7 @@ try {
     $scored = @($assessment.Inventory)
     $contentTypes = @($assessment.ContentTypes)
     $managedMetadataLists = @($assessment.ManagedMetadataLists)
+    $externalLists = @($assessment.ExternalLists)
     if (@($scored | Where-Object { $_.IsLockedSite }).Count -gt 0 -and
         @($settings.Scoring.BlockingSignals) -notcontains 'IsLockedSite') {
         Add-SPSInventoryEvent -Message 'Locked site collections were detected, but IsLockedSite is not in Scoring.BlockingSignals. Add it to classify lock states as migration blockers.' -Level Warning
@@ -128,14 +130,29 @@ try {
     }
     $scored = @(Group-SPSMigrationWave -InputObject $scored -MigrationWaves $waves)
 
+    # BCS definitions are farm-wide; a failure here must not stop the site report.
+    Add-SPSInventoryEvent -Message 'Reading Business Connectivity Services definitions.' -Level Information
+    $bcs = [PSCustomObject]@{ Applications = @(); Complete = $false; Warnings = @() }
+    try {
+        $bcs = Get-SPSBcsApplication -Inventory @($inventory)
+    }
+    catch {
+        Add-SPSInventoryEvent -Message "The BCS inventory failed: $($_.Exception.Message)" -Level Warning
+    }
+    foreach ($bcsWarning in @($bcs.Warnings)) {
+        Add-SPSInventoryEvent -Message $bcsWarning -Level Warning
+    }
+
     $solutionOutput = Export-SPSSolutionReport -InputObject @($solutionMap) -OutputFolder $settings.OutputFolder -BaseName ('SPSSiteInventory-' + $settings.EnvName)
-    $output = Export-SPSInventoryReport -InputObject @($scored) -OutputFolder $settings.OutputFolder -BaseName ('SPSSiteInventory-' + $settings.EnvName) -EnvName $settings.EnvName -SolutionMap @($solutionMap) -ContentTypes $contentTypes -ManagedMetadataLists $managedMetadataLists -SolutionJsonPath $solutionOutput.JsonPath
+    $output = Export-SPSInventoryReport -InputObject @($scored) -OutputFolder $settings.OutputFolder -BaseName ('SPSSiteInventory-' + $settings.EnvName) -EnvName $settings.EnvName -SolutionMap @($solutionMap) -ContentTypes $contentTypes -ManagedMetadataLists $managedMetadataLists -ExternalLists $externalLists -BcsApplications @($bcs.Applications) -BcsInventoryComplete ([bool]$bcs.Complete) -SolutionJsonPath $solutionOutput.JsonPath
 
     Add-SPSInventoryEvent -Message "Inventory complete. CSV: $($output.CsvPath) | JSON: $($output.JsonPath) | HTML: $($output.HtmlPath)" -Level Information
     Add-SPSInventoryEvent -Message "Report pack. Sites: $($output.SitesJsonPath) | Auth: $($output.AuthJsonPath) | Workflows: $($output.WorkflowsJsonPath) | Apps: $($output.AppsJsonPath) | Publishing: $($output.PublishingJsonPath) | Permissions: $($output.PermissionsJsonPath) | IRM/Locks: $($output.IrmLocksJsonPath) | Large content: $($output.LargeContentJsonPath) | Alerts: $($output.AlertsJsonPath) | Manifest: $($output.ManifestJsonPath)" -Level Information
     Add-SPSInventoryEvent -Message "Farm-solution report. CSV: $($solutionOutput.CsvPath) | JSON: $($solutionOutput.JsonPath)" -Level Information
     Add-SPSInventoryEvent -Message "Content-type report. CSV: $($output.ContentTypesCsvPath) | JSON: $($output.ContentTypesJsonPath)" -Level Information
     Add-SPSInventoryEvent -Message "Managed metadata report. CSV: $($output.ManagedMetadataCsvPath) | JSON: $($output.ManagedMetadataJsonPath)" -Level Information
+    Add-SPSInventoryEvent -Message "External list report. CSV: $($output.ExternalListsCsvPath) | JSON: $($output.ExternalListsJsonPath)" -Level Information
+    Add-SPSInventoryEvent -Message "BCS report. CSV: $($output.BcsCsvPath) | JSON: $($output.BcsJsonPath)" -Level Information
 }
 catch {
     Add-SPSInventoryEvent -Message "Inventory failed: $($_.Exception.Message)" -Level Error

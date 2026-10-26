@@ -62,6 +62,7 @@ Scoring = @{
         HtmlFileCount            = 0.1
         ManagedMetadataListCount = 0.1
         ManagedMetadataTermSetCount = 0.25
+        ExternalListCount        = 1.0
         IsUnsupportedSiteTemplate = 5.0
         TemplateLanguageReviewRequired = 0.5
         InfoPathFormCount        = 3.0
@@ -211,6 +212,25 @@ with their list. What they add is a dependency on the term store, so the lists s
 migrated close to the term store migration. The weights are deliberately small because
 many sites use a few such columns; raise them if your term store migration is a project
 of its own.
+
+External list signals follow the SMAT External List and BCS scans:
+
+- `ExternalListCount` — lists backed by a Business Connectivity Services (BCS) external
+  content type, which SharePoint flags as having an external data source. Their items stay
+  in the external system, so neither these lists nor the BCS applications behind them are
+  migrated.
+- `ExternalListExamples` — up to five lists with their entity.
+
+The binding of each list (LOB system instance, entity namespace and entity name) is read
+from the list definition, so neither the Business Data Connectivity service nor the
+external system is called; item counts and dates are not collected because the items are
+not stored in SharePoint. The BCS definitions themselves (LOB systems with their instances
+and entities) are read once for the farm by `Get-SPSBcsApplication` and are reported in
+their own file, not as a site signal. See [Usage](Usage#external-lists-and-bcs-applications).
+
+`ExternalListCount` is weighted but **not blocking**: a site with external lists can still
+be migrated, without those lists. Add `ExternalListCount` to `BlockingSignals` to treat every
+such site as a dedicated project.
 
 `EventReceivers` counts only **custom** event receivers (those registered from a
 non-Microsoft assembly). Out-of-the-box receivers on native lists are ignored, so a stock

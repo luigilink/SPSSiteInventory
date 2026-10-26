@@ -23,6 +23,7 @@ BeforeAll {
             EmailEnabledListCount = 0; EmailEnabledListExamples = ''
             HtmlFileCount = 0; HtmlFileExamples = ''
             ManagedMetadataListCount = 0; ManagedMetadataColumnCount = 0; ManagedMetadataTermSetCount = 0; ManagedMetadataExamples = ''
+            ExternalListCount = 0; ExternalListExamples = ''
             IsLargeSite = $false; LargeListCount = 0; LargeListExamples = ''
             LargeListViewCount = 0; LargeListViewExamples = ''
             CheckedOutFileCount = 0; CheckedOutFileExamples = ''
@@ -50,6 +51,7 @@ BeforeAll {
             HtmlFileCount = 4; HtmlFileExamples = '/sites/legacy/Docs/a.htm'
             ManagedMetadataListCount = 2; ManagedMetadataColumnCount = 3; ManagedMetadataTermSetCount = 2
             ManagedMetadataExamples = 'Contracts (Department, Region); Projects <Q&A> (Department)'
+            ExternalListCount = 2; ExternalListExamples = 'Customers (Contoso.Crm.Customer); Orders <SAP> (Contoso.Sap.Order)'
             IsLargeSite = $true; LargeListCount = 2; LargeListExamples = 'Documents (7000); Records (5100)'
             LargeListViewCount = 1; LargeListViewExamples = 'Documents/All Documents (7000)'
             CheckedOutFileCount = 3; CheckedOutFileExamples = 'Documents (3)'
@@ -161,6 +163,17 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         }
         $html | Should -Match 'Projects &lt;Q&amp;A&gt; \(Department\)'
         $html | Should -Not -Match 'Projects <Q&A>'
+    }
+
+    It 'shows external list signals in the summary card and table columns' {
+        $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
+
+        $html | Should -Match '<div class="num">1</div><div class="lbl">Sites with external lists</div>'
+        foreach ($label in @('External lists', 'External list examples')) {
+            $html | Should -Match ('>{0} <span class="arrow">' -f $label)
+        }
+        $html | Should -Match 'Orders &lt;SAP&gt; \(Contoso.Sap.Order\)'
+        $html | Should -Not -Match 'Orders <SAP>'
     }
 
     It 'renders a web application policies section grouped by web application' {
@@ -426,6 +439,8 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $html | Should -Not -Match 'href="#authentication"'
         $html | Should -Not -Match 'href="#content-types"'
         $html | Should -Not -Match 'href="#managed-metadata"'
+        $html | Should -Not -Match 'href="#external-lists"'
+        $html | Should -Not -Match 'href="#bcs-applications"'
     }
 
     It 'renders large-content columns in the main table' {
@@ -532,5 +547,82 @@ Describe 'ConvertTo-SPSInventoryHtml' {
 
         $html | Should -Not -Match 'id="managed-metadata"'
         $html | Should -Not -Match 'href="#managed-metadata"'
+    }
+
+    It 'renders encoded external list detail, guidance and coverage warnings' {
+        $sites = @(
+            [PSCustomObject]@{
+                Url = 'https://intranet/sites/team'; Category = 1
+                ExternalListCount = 1; CustomizationInventoryComplete = $false
+            },
+            [PSCustomObject]@{
+                InventoryScope = 'WebApplication'; Url = 'https://other'; WebAppUrl = 'https://other'
+                AssessmentStatus = 'Failed'
+            }
+        )
+        $lists = @([PSCustomObject]@{
+            SiteUrl = 'https://intranet/sites/team'; WebUrl = 'https://intranet/sites/team/sub'
+            ListTitle = 'Customers <CRM>'; ListUrl = '/sites/team/Lists/Customers?a=1&b=2'
+            LobSystemInstance = 'Crm & Billing'; EntityNamespace = 'Contoso.Crm'; Entity = 'Customer'
+        })
+
+        $html = ConvertTo-SPSInventoryHtml -InputObject $sites -ExternalLists $lists
+
+        $html | Should -Match '<h2 id="external-lists">External lists</h2>'
+        $html | Should -Match '<a href="#external-lists">External lists</a>'
+        $html | Should -Match '<strong>1</strong> external list\(s\)'
+        $html | Should -Match 'neither the lists nor the BCS applications behind them are migrated'
+        $html | Should -Match 'Plan a hybrid BCS configuration'
+        $html | Should -Match 'Coverage warning:</strong> 1 web application'
+        $html | Should -Match 'Partial collection:</strong> 1 site collection'
+        $html | Should -Match '(?s)<th>Site</th>.*<th>Web</th>.*<th>List</th>.*<th>List URL</th>.*<th>LOB system instance</th>.*<th>Entity namespace</th>.*<th>Entity</th>'
+        $html | Should -Match 'Customers &lt;CRM&gt;'
+        $html | Should -Match '/sites/team/Lists/Customers\?a=1&amp;b=2'
+        $html | Should -Match 'Crm &amp; Billing'
+        $html | Should -Not -Match 'Customers <CRM>'
+    }
+
+    It 'renders an explicit empty external list section when requested' {
+        $html = ConvertTo-SPSInventoryHtml -InputObject @() -ExternalLists @()
+
+        $html | Should -Match '<strong>0</strong> external list\(s\)'
+        $html | Should -Not -Match 'Coverage warning'
+        $html | Should -Not -Match 'Partial collection'
+    }
+
+    It 'renders encoded BCS applications with guidance' {
+        $applications = @([PSCustomObject]@{
+            WebApplicationUrls = 'https://intranet; https://extranet'; LobSystemName = 'Crm & <Billing>'
+            LobSystemType = 'Wcf'; LobSystemInstances = 'CrmProd; CrmDev'; EntityCount = 2
+            LobEntities = 'Contoso.Crm.Account; Contoso.Crm.Customer'
+        })
+
+        $html = ConvertTo-SPSInventoryHtml -InputObject @() -BcsApplications $applications
+
+        $html | Should -Match '<h2 id="bcs-applications">Business Connectivity Services applications</h2>'
+        $html | Should -Match '<a href="#bcs-applications">BCS applications</a>'
+        $html | Should -Match '<strong>1</strong> BCS LOB system\(s\)'
+        $html | Should -Match 'BCS applications are not migrated to SharePoint Online'
+        $html | Should -Match 'credentials and Secure Store targets are not read'
+        $html | Should -Match '(?s)<th>Web application</th>.*<th>LOB system</th>.*<th>Type</th>.*<th>Instances</th>.*<th>Entities</th>.*<th>Entity names</th>'
+        $html | Should -Match 'Crm &amp; &lt;Billing&gt;'
+        $html | Should -Match 'https://intranet; https://extranet'
+        $html | Should -Match '<td>2</td>'
+        $html | Should -Not -Match 'Crm & <Billing>'
+        $html | Should -Not -Match 'Partial collection'
+    }
+
+    It 'says that BCS applications may be missing when the BCS inventory is partial' {
+        $html = ConvertTo-SPSInventoryHtml -InputObject @() -BcsApplications @() -BcsInventoryComplete $false
+
+        $html | Should -Match '<strong>0</strong> BCS LOB system\(s\)'
+        $html | Should -Match 'Partial collection:</strong> some web applications or LOB systems could not be read'
+    }
+
+    It 'omits the external list and BCS sections when no rows are passed' {
+        $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
+
+        $html | Should -Not -Match 'id="external-lists"'
+        $html | Should -Not -Match 'id="bcs-applications"'
     }
 }

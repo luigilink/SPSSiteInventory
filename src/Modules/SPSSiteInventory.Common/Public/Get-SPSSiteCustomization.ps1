@@ -70,6 +70,14 @@
         Columns report; term set IDs are read from the field definitions, so the term
         store service is not called and term set names are not resolved.
 
+        ExternalListCount counts the external lists on the site: lists backed by a
+        Business Connectivity Services (BCS) external content type, whose items stay in
+        the external system. Neither those lists nor the BCS applications are migrated.
+        ExternalLists holds one row per list with the BCS binding SharePoint stores with
+        it (LOB system instance, entity namespace and entity name), like the SMAT
+        External List report. The binding is read from the list definition, so neither
+        the Business Data Connectivity service nor the external system is called.
+
         The returned hashtable is designed to be passed straight to
         Measure-SPSSiteComplexity. CustomizationInventoryComplete is false when a signal
         cannot be read; partial results are returned with warnings rather than aborting
@@ -181,6 +189,8 @@
         ManagedMetadataColumnCount = 0
         ManagedMetadataTermSetCount = 0
         ManagedMetadataExamples  = ''
+        ExternalListCount        = 0
+        ExternalListExamples     = ''
         InfoPathFormCount        = 0
         IrmEnabledListCount      = 0
         IsLargeSite              = $false
@@ -220,6 +230,8 @@
     $managedMetadataLists = [System.Collections.Generic.List[object]]::new()
     $managedMetadataExamples = [System.Collections.Generic.List[string]]::new()
     $managedMetadataTermSets = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $externalLists = [System.Collections.Generic.List[object]]::new()
+    $externalListExamples = [System.Collections.Generic.List[string]]::new()
     $publishingLayouts = [System.Collections.Generic.Dictionary[string, object]]::new([System.StringComparer]::OrdinalIgnoreCase)
 
     $largeListItemThreshold = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'LargeListItemCount' -DefaultValue 5000 -MinimumValue 1)
@@ -920,6 +932,20 @@
                             Write-Warning -Message "Could not read the managed metadata columns on list '$listTitle' in web '$($web.Url)': $($_.Exception.Message)"
                         }
 
+                        try {
+                            $externalListRecord = ConvertTo-SPSExternalListRecord -List $list -SiteUrl $Site.Url -WebUrl $web.Url
+                            if ($null -ne $externalListRecord) {
+                                $externalLists.Add($externalListRecord)
+                                if ($externalListExamples.Count -lt 5) {
+                                    $externalListExamples.Add(('{0} ({1}.{2})' -f $listTitle, $externalListRecord.EntityNamespace, $externalListRecord.Entity))
+                                }
+                            }
+                        }
+                        catch {
+                            $signals.CustomizationInventoryComplete = $false
+                            Write-Warning -Message "Could not read the external data source of list '$listTitle' in web '$($web.Url)': $($_.Exception.Message)"
+                        }
+
                         if ($ScanHtmlFile -and $isDocumentLibrary -and [string]$list.RootFolder.ServerRelativeUrl -notmatch '/_catalogs/') {
                             try {
                                 $htmlQuery = & $newPagedQuery -RowLimit 200 -QueryText '<Where><Or><Eq><FieldRef Name="File_x0020_Type" /><Value Type="Text">htm</Value></Eq><Eq><FieldRef Name="File_x0020_Type" /><Value Type="Text">html</Value></Eq></Or></Where>'
@@ -1052,6 +1078,9 @@
     $signals.ManagedMetadataTermSetCount = $managedMetadataTermSets.Count
     $signals.ManagedMetadataExamples = $managedMetadataExamples -join '; '
     $signals.ManagedMetadataLists = $managedMetadataLists.ToArray()
+    $signals.ExternalListCount = $externalLists.Count
+    $signals.ExternalListExamples = $externalListExamples -join '; '
+    $signals.ExternalLists = $externalLists.ToArray()
     $signals.PublishingPageLayoutCount = $publishingLayouts.Count
     $signals.PublishingPageLayoutExamples = @(
         $publishingLayouts.Values |

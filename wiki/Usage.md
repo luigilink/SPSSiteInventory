@@ -43,17 +43,20 @@ report pack, plus a dedicated farm-solution report, to the output folder:
 | `*-publishing-*.json` | Publishing and customized-page dataset (`PublishingInfrastructureEnabled`, `PublishingWebCount`, `PublishingPageCount`, `PublishingPageLayoutCount`/`PublishingPageLayoutExamples`, `CustomizedPageCount`/`CustomizedPageExamples`, status, category). |
 | `*-irm-locks-*.json` | Security/lock dataset (`IrmEnabledListCount`, `SiteLockState`, `IsLockedSite`). |
 | `*-large-content-*.json` | Large-content risk dataset (`IsLargeSite`, large lists/views, checked-out files, high file-version counts, plus examples). |
-| `*-alerts-*.json` | Normalized risk alerts extracted from site signals (partial/failed, FBA, template compatibility/language review, full-trust, workflows, apps, publishing, customized pages, custom permission levels, e-mail enabled lists, HTML files, managed metadata columns, web application policies, permissive browser file handling, InfoPath, IRM, lock, large content). Web application alerts are written once per web application. |
+| `*-alerts-*.json` | Normalized risk alerts extracted from site signals (partial/failed, FBA, template compatibility/language review, full-trust, workflows, apps, publishing, customized pages, custom permission levels, e-mail enabled lists, HTML files, managed metadata columns, external lists, BCS applications, web application policies, permissive browser file handling, InfoPath, IRM, lock, large content). Web application alerts are written once per web application. |
 | `*-solutions-*.csv` | Farm-solution (WSP) inventory for Excel; one row per solution, with the feature scopes/ids flattened. |
 | `*-solutions-*.json` | Farm-solution (WSP) inventory for automation, with the feature scopes/ids kept as arrays. |
 | `*-contenttypes-*.csv` / `*-contenttypes-*.json` | Content-type definitions and list bindings, including standard types. One row per web definition or list binding, not per item. |
 | `*-managedmetadata-*.csv` / `*-managedmetadata-*.json` | Managed metadata columns by list, following the SMAT Managed Metadata Columns report. One row per list or library with at least one visible managed metadata column. |
+| `*-externallists-*.csv` / `*-externallists-*.json` | External lists by list, following the SMAT External List report. One row per list backed by a Business Connectivity Services (BCS) external content type, with its BCS binding. |
+| `*-bcs-*.csv` / `*-bcs-*.json` | BCS LOB systems of the farm, following the SMAT BCS report. One row per LOB system, with its type, instances and entities. |
 
 The HTML report also includes configured authentication by web application/zone,
-a content-type detail section and a managed metadata section. Authentication errors
-stop the scan rather than silently producing Windows-only results. Unrecognized/federated
-providers are flagged for identity review; a missing provider identity leaves
-`HasFbaZone` unknown unless FBA was positively detected in another provider or zone.
+a content-type detail section, a managed metadata section, an external list section and a
+BCS application section. Authentication errors stop the scan rather than silently
+producing Windows-only results. Unrecognized/federated providers are flagged for identity
+review; a missing provider identity leaves `HasFbaZone` unknown unless FBA was positively
+detected in another provider or zone.
 
 ## Output fields
 
@@ -96,6 +99,7 @@ CSV/JSON rows describe site collections and any web-application enumeration fail
 | `HtmlFileCount` / `HtmlFileExamples` | `.htm`/`.html` files in document libraries and up to five examples. Collected only when the web application is Permissive, otherwise 0 |
 | `ManagedMetadataListCount` / `ManagedMetadataColumnCount` | Lists with at least one visible managed metadata column, and those columns counted once per list. Enterprise Keywords is included; hidden columns are not |
 | `ManagedMetadataTermSetCount` / `ManagedMetadataExamples` | Distinct term sets, by ID, that those columns use in the site collection, and up to five lists with their column names |
+| `ExternalListCount` / `ExternalListExamples` | Lists backed by a BCS external content type (not migrated) and up to five examples with their entity |
 | `BrowserFileHandling` | Web application setting, `Strict` or `Permissive`. SharePoint Online enforces Strict |
 | `WebAppPolicyCount` / `WebAppPolicyExamples` | Web application policies (all zones and each zone), including accounts SharePoint adds itself, and the first ten as `user: permission levels`. They are not migrated |
 | `CustomizedPageCount` / `CustomizedPageExamples` | Customized (unghosted) pages at the root of each web, ignoring System Account edits, and up to five server-relative URLs. List view and form pages are not scanned |
@@ -176,6 +180,38 @@ with their list, as long as the term sets they use are migrated too:
 Term sets appear as IDs because the inventory never queries the term store service. To
 find the name of a term set, match its ID with the **Unique Identifier** shown on the
 General tab of the term set in the Term Store Management Tool.
+
+### External lists and BCS applications
+
+The `*-externallists-*` files hold one row per external list: `SiteUrl`, `WebUrl`,
+`ListTitle`, `ListUrl` and the BCS binding SharePoint stores with the list,
+`LobSystemInstance`, `EntityNamespace` and `Entity`. The binding is read from the list
+definition, so neither the Business Data Connectivity (BDC) service nor the external
+system is called. Item counts and dates are not collected because the items are not stored
+in SharePoint, and the list creator that SMAT reports is not collected. A list whose
+binding cannot be read marks the site `Partial` with a warning and is left out of the
+files, so check `CustomizationInventoryComplete`.
+
+The `*-bcs-*` files hold one row per BCS LOB system defined in the farm, like the SMAT BCS
+report: `WebApplicationUrls`, `LobSystemName`, `LobSystemType` (`Database`, `WebService`,
+`Wcf`, `DotNetAssembly`, `Custom` or `OData`), `LobSystemInstances`, `EntityCount` and
+`LobEntities` (`namespace.name`, at most 20 names). A service context needs a site
+collection, so the first site collection of each web application is used; web applications
+that share a metadata store report the same LOB systems once, with every web application
+that sees them. Connection settings, credentials and Secure Store targets are not read, and
+the external systems are not contacted. A web application or LOB system that cannot be read
+is reported as a warning in the run log and marks the BCS report partial: the
+`BcsInventoryPartial` alert, `Summary.BcsInventoryComplete` in the manifest and a note in
+the HTML report say that BCS applications may be missing.
+
+BCS applications and external lists are not migrated. To plan the work:
+
+1. List the BCS applications in `*-bcs-*`, then find who uses them in `*-externallists-*`
+   by matching `LobSystemInstance` with `LobSystemInstances`.
+2. For each external system, decide between a hybrid BCS configuration, exposing the data
+   source so that SharePoint Online can reach it, or replacing the lists.
+3. Redeploy the updated BCS definitions to the target during the validation phase, and
+   check afterwards that the solutions that rely on them work.
 
 ### Migration categories
 

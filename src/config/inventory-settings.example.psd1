@@ -172,6 +172,11 @@
             # migrated separately from the sites. Weighted, not blocking.
             ManagedMetadataListCount = 0.1
             ManagedMetadataTermSetCount = 0.25
+            # External lists are backed by BCS external content types: their data stays in the
+            # external system and neither the lists nor the BCS applications are migrated.
+            # Weighted, not blocking: add 'ExternalListCount' to BlockingSignals to treat any
+            # site with external lists as a dedicated project.
+            ExternalListCount = 1.0
             # Unsupported site templates cannot be migrated directly to SPO.
             IsUnsupportedSiteTemplate = 5.0
             # Language mismatches or unknown language metadata require readiness review.
