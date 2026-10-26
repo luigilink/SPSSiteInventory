@@ -50,7 +50,9 @@
     # File-version counting scans document-library items. To keep runtime predictable,
     # MaxItemsForVersionScanPerLibrary caps per-library scanning; when hit, the scan is
     # marked partial and a warning is emitted. MaxItemsForPublishingPageScanPerLibrary
-    # applies the same cap to the page-layout scan of publishing Pages libraries.
+    # applies the same cap to the page-layout scan of publishing Pages libraries, and
+    # MaxItemsForHtmlFileScanPerLibrary to the .htm/.html file count (collected only in
+    # web applications that use Permissive browser file handling).
     # -------------------------------------------------------------------------------
     LargeContentThresholds = @{
         LargeSiteSizeGB = 100
@@ -60,6 +62,7 @@
         FileVersionCount = 50
         MaxItemsForVersionScanPerLibrary = 2000
         MaxItemsForPublishingPageScanPerLibrary = 2000
+        MaxItemsForHtmlFileScanPerLibrary = 2000
     }
 
     # -------------------------------------------------------------------------------
@@ -105,6 +108,21 @@
     }
 
     # -------------------------------------------------------------------------------
+    # Permission levels
+    #
+    # SharePoint gives Limited Access, Read, Contribute, Design, Full Control, Edit and
+    # Restricted Read a base type, so they are never reported as custom. The levels it
+    # provisions for features and site templates (View Only, Approve, Manage Hierarchy,
+    # Restricted Interfaces for Translation, Moderate, Records Center Web Service
+    # Submitters) are recognized by their English names. On a non-English farm, list the
+    # localized names here; they are added to the English ones. Otherwise those levels
+    # are reported as custom permission levels.
+    # -------------------------------------------------------------------------------
+    PermissionLevels = @{
+        BuiltInNames = @()
+    }
+
+    # -------------------------------------------------------------------------------
     # Scoring engine (consumed by Measure-SPSSiteComplexity)
     #
     # Category mapping:
@@ -142,6 +160,14 @@
             PublishingPageCount = 0.001
             # Customized (unghosted) pages are reverted to their default state on migration.
             CustomizedPageCount = 1.0
+            # Custom permission levels may not be carried over by migration tools and must
+            # be recreated or replaced. Not blocking; see PermissionLevels above.
+            CustomPermissionLevelCount = 0.5
+            # Incoming e-mail is not available in SharePoint Online.
+            EmailEnabledListCount = 0.5
+            # .htm/.html files prompt a download under the Strict browser file handling that
+            # SharePoint Online enforces. Counted only where a web application is Permissive.
+            HtmlFileCount = 0.1
             # Unsupported site templates cannot be migrated directly to SPO.
             IsUnsupportedSiteTemplate = 5.0
             # Language mismatches or unknown language metadata require readiness review.

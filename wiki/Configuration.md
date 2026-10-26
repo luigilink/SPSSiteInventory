@@ -17,6 +17,7 @@ and adjust it. No client-specific value ships in the repository.
 | `LogRetentionDays` | int | Days of run logs kept under the `Logs` folder. |
 | `LargeContentThresholds` | hashtable | Thresholds for large-content parity signals (large site/list/view, checked-out files, file versions). Optional; defaults apply when omitted. |
 | `TemplateParity` | hashtable | Template compatibility and language rules (supported/unsupported/review mapping, optional language allow-list). Optional; built-in defaults apply when omitted. |
+| `PermissionLevels` | hashtable | Permission-level names SharePoint provisions, used to tell custom permission levels apart (`BuiltInNames`, added to the built-in English names). Optional. |
 | `Scoring` | hashtable | The scoring engine configuration (see below). **Mandatory.** |
 | `MigrationWaves` | hashtable[] | The category-to-wave mapping (see below). Optional; a one-wave-per-category default applies when omitted. |
 
@@ -56,6 +57,9 @@ Scoring = @{
         PublishingPageLayoutCount = 0.5
         PublishingPageCount      = 0.001
         CustomizedPageCount      = 1.0
+        CustomPermissionLevelCount = 0.5
+        EmailEnabledListCount    = 0.5
+        HtmlFileCount            = 0.1
         IsUnsupportedSiteTemplate = 5.0
         TemplateLanguageReviewRequired = 0.5
         InfoPathFormCount        = 3.0
@@ -157,6 +161,32 @@ SMAT describes publishing sites as needing extensive remediation, not as unmigra
 Add `PublishingInfrastructureEnabled` to `BlockingSignals` to treat every publishing
 site as a dedicated project.
 
+Permission and policy signals follow the SMAT Custom Permission Level, Email Enabled
+Lists, Browser File Handling and Web Application Policies scans:
+
+- `CustomPermissionLevelCount` — distinct custom permission levels defined in the site
+  collection (the root web and any web with unique permission levels). A level is custom
+  when SharePoint gave it no base type and its name is not a provisioned one; see
+  [PermissionLevels section](#permissionlevels-section).
+- `EmailEnabledListCount` — lists with incoming e-mail enabled (an e-mail alias is set).
+  A list type that merely supports e-mail is not counted. SharePoint Online has no
+  incoming e-mail for lists, so messages sent to these lists stop arriving.
+- `HtmlFileCount` — `.htm` and `.html` files in document libraries (system catalogs under
+  `/_catalogs/` are skipped). It is collected only for site collections in a web
+  application whose browser file handling is **Permissive**, because SharePoint Online
+  enforces **Strict**: those files prompt a download instead of opening in the browser,
+  which breaks pages and Page Viewer web parts that rely on them. In a Strict web
+  application the value stays 0 without scanning. The count is capped per library by
+  `LargeContentThresholds.MaxItemsForHtmlFileScanPerLibrary`.
+- `BrowserFileHandling`, `WebAppPolicyCount` and `WebAppPolicyExamples` describe the
+  web application (the same values repeat on each of its site collections) and are not
+  scored: web application policies are not migrated to SharePoint Online, but they apply
+  to the whole web application, so they are reported as an alert and in the report's
+  web application section instead. The count includes accounts SharePoint adds itself,
+  such as the farm and search crawl accounts, so a count above zero is expected.
+
+None of these signals is blocking in the example configuration.
+
 `EventReceivers` counts only **custom** event receivers (those registered from a
 non-Microsoft assembly). Out-of-the-box receivers on native lists are ignored, so a stock
 site is not promoted just because SharePoint's own lists carry many built-in receivers.
@@ -244,6 +274,29 @@ Content types are inventoried for review, including standard definitions and lis
 bindings. They do not contribute to the default score. Names, groups and content-type
 ID prefixes alone do not reliably identify custom or non-portable definitions.
 
+## PermissionLevels section
+
+```powershell
+PermissionLevels = @{
+    # Localized names, on your farm, of the levels SharePoint provisions
+    BuiltInNames = @('<name of View Only>', '<name of Approve>')
+}
+```
+
+SharePoint gives Limited Access, Read, Contribute, Design, Full Control, Edit and
+Restricted Read a base type, so they are never custom, even when renamed. Other levels
+have no base type: the ones a user creates, and the ones SharePoint provisions for
+features and site templates. The provisioned levels are recognized by name, using these
+English names: View Only, Approve, Manage Hierarchy, Restricted Interfaces for
+Translation, Moderate and Records Center Web Service Submitters.
+
+Permission level names are localized, so on a farm that is not in English the
+provisioned levels have other names and would be reported as custom on almost every
+site collection. List those names in `BuiltInNames`; they are added to the English names.
+The scan logs a warning when half or more of the site collections report custom
+permission levels, which usually means the names are missing. The
+`CustomPermissionLevelExamples` field shows which levels were flagged.
+
 ## LargeContentThresholds section
 
 ```powershell
@@ -255,6 +308,7 @@ LargeContentThresholds = @{
     FileVersionCount = 50
     MaxItemsForVersionScanPerLibrary = 2000
     MaxItemsForPublishingPageScanPerLibrary = 2000
+    MaxItemsForHtmlFileScanPerLibrary = 2000
 }
 ```
 
@@ -269,6 +323,11 @@ LargeContentThresholds = @{
 - `MaxItemsForPublishingPageScanPerLibrary` — cap for the page-layout scan of each
   publishing Pages library. `PublishingPageCount` still uses the library item count, so
   only the layout summary is affected when the cap is reached.
+- `MaxItemsForHtmlFileScanPerLibrary` — cap for the `.htm`/`.html` file count of each
+  document library in Permissive web applications. When it is reached, the count is a
+  lower bound and the assessment is marked partial with a warning. The query filters on
+  the file type column, which is not indexed, so it asks SharePoint to override the list
+  view threshold; run the scan as the farm account.
 
 ## MigrationWaves section
 

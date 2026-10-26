@@ -4,6 +4,18 @@
 }
 
 Describe 'Export-SPSInventoryReport content types' {
+    BeforeAll {
+        # Windows PowerShell 5.1 does not unroll a JSON array in a pipeline, so count with foreach.
+        function Get-AlertCount {
+            param ($Alerts, [string]$Type, [string]$Url = '')
+            $count = 0
+            foreach ($alert in $Alerts) {
+                if ($alert.AlertType -eq $Type -and (-not $Url -or $alert.Url -eq $Url)) { $count++ }
+            }
+            return $count
+        }
+    }
+
     It 'writes aligned site CSV, JSON, HTML and content-type CSV/JSON' {
         $sites = @([PSCustomObject]@{
             Url = 'https://intranet/sites/team'; WebApp = 'Intranet'
@@ -24,6 +36,11 @@ Describe 'Export-SPSInventoryReport content types' {
             PublishingInfrastructureEnabled = $true; PublishingWebCount = 2; PublishingPageCount = 40
             PublishingPageLayoutCount = 3; PublishingPageLayoutExamples = 'ArticleLeft.aspx (30); WelcomeSplash.aspx (10)'
             CustomizedPageCount = 2; CustomizedPageExamples = '/sites/team/default.aspx; /sites/team/sub/default.aspx'
+            WebAppUrl = 'https://intranet'; BrowserFileHandling = 'Permissive'
+            WebAppPolicyCount = 3; WebAppPolicyExamples = 'CONTOSO\farm: Full Control'
+            CustomPermissionLevelCount = 2; CustomPermissionLevelExamples = 'Project Manager (https://intranet/sites/team)'
+            EmailEnabledListCount = 1; EmailEnabledListExamples = 'Invoices (/sites/team/Invoices)'
+            HtmlFileCount = 4; HtmlFileExamples = '/sites/team/Docs/a.htm'
             IrmEnabledListCount = 2; SiteLockState = 'ReadOnly'; IsLockedSite = $true
             IsLargeSite = $true
             LargeListCount = 1; LargeListExamples = 'Documents (7000)'
@@ -53,6 +70,7 @@ Describe 'Export-SPSInventoryReport content types' {
         Test-Path $output.WorkflowsJsonPath | Should -BeTrue
         Test-Path $output.AppsJsonPath | Should -BeTrue
         Test-Path $output.PublishingJsonPath | Should -BeTrue
+        Test-Path $output.PermissionsJsonPath | Should -BeTrue
         Test-Path $output.IrmLocksJsonPath | Should -BeTrue
         Test-Path $output.LargeContentJsonPath | Should -BeTrue
         Test-Path $output.AlertsJsonPath | Should -BeTrue
@@ -90,6 +108,24 @@ Describe 'Export-SPSInventoryReport content types' {
         $manifest.Files.SitesJson | Should -Be $output.SitesJsonPath
         $manifest.Files.AppsJson | Should -Be $output.AppsJsonPath
         $manifest.Files.PublishingJson | Should -Be $output.PublishingJsonPath
+        $manifest.Files.PermissionsJson | Should -Be $output.PermissionsJsonPath
+        $permissions = (Get-Content $output.PermissionsJsonPath -Raw | ConvertFrom-Json)[0]
+        $permissions.WebAppUrl | Should -Be 'https://intranet'
+        $permissions.BrowserFileHandling | Should -Be 'Permissive'
+        $permissions.WebAppPolicyCount | Should -Be 3
+        $permissions.WebAppPolicyExamples | Should -Be 'CONTOSO\farm: Full Control'
+        $permissions.CustomPermissionLevelCount | Should -Be 2
+        $permissions.CustomPermissionLevelExamples | Should -Be 'Project Manager (https://intranet/sites/team)'
+        $permissions.EmailEnabledListCount | Should -Be 1
+        $permissions.EmailEnabledListExamples | Should -Be 'Invoices (/sites/team/Invoices)'
+        $permissions.HtmlFileCount | Should -Be 4
+        $permissions.HtmlFileExamples | Should -Be '/sites/team/Docs/a.htm'
+        $firstRunAlerts = Get-Content $output.AlertsJsonPath -Raw | ConvertFrom-Json
+        Get-AlertCount -Alerts $firstRunAlerts -Type 'CustomPermissionLevels' -Url 'https://intranet/sites/team' | Should -Be 1
+        Get-AlertCount -Alerts $firstRunAlerts -Type 'EmailEnabledLists' -Url 'https://intranet/sites/team' | Should -Be 1
+        Get-AlertCount -Alerts $firstRunAlerts -Type 'HtmlFiles' -Url 'https://intranet/sites/team' | Should -Be 1
+        Get-AlertCount -Alerts $firstRunAlerts -Type 'WebApplicationPolicies' -Url 'https://intranet' | Should -Be 1
+        Get-AlertCount -Alerts $firstRunAlerts -Type 'PermissiveBrowserFileHandling' -Url 'https://intranet' | Should -Be 1
         $manifest.Files.LargeContentJson | Should -Be $output.LargeContentJsonPath
         $manifest.Files.ContentTypesJson | Should -Be $output.ContentTypesJsonPath
         $manifest.Summary.AlertCount | Should -BeGreaterThan 0
@@ -205,6 +241,55 @@ Describe 'Export-SPSInventoryReport content types' {
         $rows = Get-Content $output.PublishingJsonPath -Raw | ConvertFrom-Json
 
         ($alerts | Measure-Object).Count | Should -Be 0
+        @($rows).Count | Should -Be 2
+    }
+
+    It 'writes web application alerts once per web application, not once per site' {
+        $sites = @(
+            foreach ($name in @('a', 'b', 'c')) {
+                [PSCustomObject]@{
+                    InventoryScope = 'SiteCollection'; Url = "https://intranet/sites/$name"; WebApp = 'Intranet'; WebAppUrl = 'https://intranet'
+                    AssessmentStatus = 'Complete'; Category = 1
+                    BrowserFileHandling = 'Permissive'; WebAppPolicyCount = 3; WebAppPolicyExamples = 'CONTOSO\farm: Full Control'
+                }
+            }
+            [PSCustomObject]@{
+                InventoryScope = 'WebApplication'; Url = 'https://other'; WebApp = 'Other'; WebAppUrl = 'https://other'
+                AssessmentStatus = 'Failed'; Category = $null
+                BrowserFileHandling = 'Strict'; WebAppPolicyCount = 1; WebAppPolicyExamples = 'CONTOSO\farm: Full Control'
+            }
+        )
+
+        $output = Export-SPSInventoryReport -InputObject $sites -OutputFolder $TestDrive -BaseName 'PerWebApp'
+        $alerts = Get-Content $output.AlertsJsonPath -Raw | ConvertFrom-Json
+
+        Get-AlertCount -Alerts $alerts -Type 'WebApplicationPolicies' -Url 'https://intranet' | Should -Be 1
+        Get-AlertCount -Alerts $alerts -Type 'WebApplicationPolicies' -Url 'https://other' | Should -Be 1
+        Get-AlertCount -Alerts $alerts -Type 'PermissiveBrowserFileHandling' -Url 'https://intranet' | Should -Be 1
+        Get-AlertCount -Alerts $alerts -Type 'PermissiveBrowserFileHandling' -Url 'https://other' | Should -Be 0
+    }
+
+    It 'does not write permission or policy alerts when the signals are empty, Strict or absent' {
+        $records = @(
+            [PSCustomObject]@{
+                InventoryScope = 'SiteCollection'; Url = 'https://intranet/sites/plain'; WebApp = 'Intranet'; WebAppUrl = 'https://intranet'
+                AssessmentStatus = 'Complete'; Category = 1
+                BrowserFileHandling = 'Strict'; WebAppPolicyCount = 0
+                CustomPermissionLevelCount = 0; EmailEnabledListCount = 0; HtmlFileCount = 0
+            },
+            [PSCustomObject]@{
+                InventoryScope = 'SiteCollection'; Url = 'https://intranet/sites/legacy-row'; WebApp = 'Intranet'
+                AssessmentStatus = 'Complete'; Category = 1
+            }
+        )
+
+        $output = Export-SPSInventoryReport -InputObject $records -OutputFolder $TestDrive -BaseName 'NoPermissions'
+        $alerts = Get-Content $output.AlertsJsonPath -Raw | ConvertFrom-Json
+        $rows = Get-Content $output.PermissionsJsonPath -Raw | ConvertFrom-Json
+
+        foreach ($type in @('CustomPermissionLevels', 'EmailEnabledLists', 'HtmlFiles', 'WebApplicationPolicies', 'PermissiveBrowserFileHandling')) {
+            Get-AlertCount -Alerts $alerts -Type $type | Should -Be 0
+        }
         @($rows).Count | Should -Be 2
     }
 }

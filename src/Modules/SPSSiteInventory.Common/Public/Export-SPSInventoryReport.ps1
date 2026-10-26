@@ -23,6 +23,7 @@
         - `*-workflows-*.json`
         - `*-apps-*.json`
         - `*-publishing-*.json`
+        - `*-permissions-*.json`
         - `*-irm-locks-*.json`
         - `*-large-content-*.json`
         - `*-alerts-*.json`
@@ -110,6 +111,7 @@
     $workflowsJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-workflows-{1}.json' -f $BaseName, $timestamp)
     $appsJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-apps-{1}.json' -f $BaseName, $timestamp)
     $publishingJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-publishing-{1}.json' -f $BaseName, $timestamp)
+    $permissionsJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-permissions-{1}.json' -f $BaseName, $timestamp)
     $irmLocksJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-irm-locks-{1}.json' -f $BaseName, $timestamp)
     $largeContentJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-large-content-{1}.json' -f $BaseName, $timestamp)
     $alertsJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-alerts-{1}.json' -f $BaseName, $timestamp)
@@ -193,6 +195,26 @@
                 PublishingPageLayoutExamples = $record.PublishingPageLayoutExamples
                 CustomizedPageCount = $record.CustomizedPageCount
                 CustomizedPageExamples = $record.CustomizedPageExamples
+            }
+        }
+    )
+    $permissionRecords = @(
+        foreach ($record in $siteRecords) {
+            [PSCustomObject]@{
+                Url = $record.Url
+                WebApp = $record.WebApp
+                WebAppUrl = $record.WebAppUrl
+                AssessmentStatus = $record.AssessmentStatus
+                Category = $record.Category
+                BrowserFileHandling = $record.BrowserFileHandling
+                WebAppPolicyCount = $record.WebAppPolicyCount
+                WebAppPolicyExamples = $record.WebAppPolicyExamples
+                CustomPermissionLevelCount = $record.CustomPermissionLevelCount
+                CustomPermissionLevelExamples = $record.CustomPermissionLevelExamples
+                EmailEnabledListCount = $record.EmailEnabledListCount
+                EmailEnabledListExamples = $record.EmailEnabledListExamples
+                HtmlFileCount = $record.HtmlFileCount
+                HtmlFileExamples = $record.HtmlFileExamples
             }
         }
     )
@@ -317,6 +339,33 @@
                     Message = 'Customized pages are reverted to their default state during migration; owners must reapply customizations afterwards.'
                 })
         }
+        if ($scope -eq 'SiteCollection' -and [int]$record.CustomPermissionLevelCount -gt 0) {
+            $alerts.Add([PSCustomObject]@{
+                    AlertType = 'CustomPermissionLevels'
+                    Severity = 'Medium'
+                    Url = $record.Url
+                    Value = [int]$record.CustomPermissionLevelCount
+                    Message = 'Custom permission levels may not be carried over by migration tools; recreate them or move users to the built-in levels.'
+                })
+        }
+        if ($scope -eq 'SiteCollection' -and [int]$record.EmailEnabledListCount -gt 0) {
+            $alerts.Add([PSCustomObject]@{
+                    AlertType = 'EmailEnabledLists'
+                    Severity = 'Medium'
+                    Url = $record.Url
+                    Value = [int]$record.EmailEnabledListCount
+                    Message = 'Incoming e-mail is not available in SharePoint Online; messages sent to these lists will no longer arrive.'
+                })
+        }
+        if ($scope -eq 'SiteCollection' -and [int]$record.HtmlFileCount -gt 0) {
+            $alerts.Add([PSCustomObject]@{
+                    AlertType = 'HtmlFiles'
+                    Severity = 'Medium'
+                    Url = $record.Url
+                    Value = [int]$record.HtmlFileCount
+                    Message = 'HTML files open in the browser today but prompt a download under the Strict browser file handling SharePoint Online enforces.'
+                })
+        }
         if ($scope -eq 'SiteCollection' -and [bool]$record.IsUnsupportedSiteTemplate) {
             $alerts.Add([PSCustomObject]@{
                     AlertType = 'UnsupportedSiteTemplate'
@@ -436,11 +485,35 @@
         }
     }
 
+    # Policies and browser file handling belong to the web application, so alert once per web application.
+    foreach ($group in ($records | Where-Object { $_.WebAppUrl } | Group-Object -Property WebAppUrl)) {
+        $webAppRecord = $group.Group[0]
+        if ([int]$webAppRecord.WebAppPolicyCount -gt 0) {
+            $alerts.Add([PSCustomObject]@{
+                    AlertType = 'WebApplicationPolicies'
+                    Severity = 'Medium'
+                    Url = $webAppRecord.WebAppUrl
+                    Value = [int]$webAppRecord.WebAppPolicyCount
+                    Message = 'Web application policies are not migrated to SharePoint Online; replace them with site-collection permissions.'
+                })
+        }
+        if ([string]$webAppRecord.BrowserFileHandling -eq 'Permissive') {
+            $alerts.Add([PSCustomObject]@{
+                    AlertType = 'PermissiveBrowserFileHandling'
+                    Severity = 'Medium'
+                    Url = $webAppRecord.WebAppUrl
+                    Value = 'Permissive'
+                    Message = 'Permissive browser file handling is not available in SharePoint Online; .htm and .html files will prompt a download.'
+                })
+        }
+    }
+
     ConvertTo-Json -InputObject @($records) -Depth 6 | Set-Content -Path $sitesJsonPath -Encoding UTF8
     ConvertTo-Json -InputObject @($authRecords) -Depth 6 | Set-Content -Path $authJsonPath -Encoding UTF8
     ConvertTo-Json -InputObject @($workflowRecords) -Depth 6 | Set-Content -Path $workflowsJsonPath -Encoding UTF8
     ConvertTo-Json -InputObject @($appRecords) -Depth 6 | Set-Content -Path $appsJsonPath -Encoding UTF8
     ConvertTo-Json -InputObject @($publishingRecords) -Depth 6 | Set-Content -Path $publishingJsonPath -Encoding UTF8
+    ConvertTo-Json -InputObject @($permissionRecords) -Depth 6 | Set-Content -Path $permissionsJsonPath -Encoding UTF8
     ConvertTo-Json -InputObject @($irmLockRecords) -Depth 6 | Set-Content -Path $irmLocksJsonPath -Encoding UTF8
     ConvertTo-Json -InputObject @($largeContentRecords) -Depth 6 | Set-Content -Path $largeContentJsonPath -Encoding UTF8
     ConvertTo-Json -InputObject @($alerts.ToArray()) -Depth 6 | Set-Content -Path $alertsJsonPath -Encoding UTF8
@@ -510,6 +583,7 @@
             WorkflowsJson = $workflowsJsonPath
             AppsJson = $appsJsonPath
             PublishingJson = $publishingJsonPath
+            PermissionsJson = $permissionsJsonPath
             IrmLocksJson = $irmLocksJsonPath
             LargeContentJson = $largeContentJsonPath
             AlertsJson = $alertsJsonPath
@@ -529,6 +603,7 @@
         WorkflowsJsonPath = $workflowsJsonPath
         AppsJsonPath = $appsJsonPath
         PublishingJsonPath = $publishingJsonPath
+        PermissionsJsonPath = $permissionsJsonPath
         IrmLocksJsonPath = $irmLocksJsonPath
         LargeContentJsonPath = $largeContentJsonPath
         AlertsJsonPath = $alertsJsonPath

@@ -51,6 +51,17 @@
         them to their default state. Files last modified by the System Account are
         ignored, and list view and form pages are not scanned.
 
+        CustomPermissionLevelCount counts the distinct custom permission levels defined in
+        the site collection (the root web and any web with unique permission levels).
+        Levels SharePoint provisions are recognized by type and by name, see the
+        PermissionLevels parameter. EmailEnabledListCount counts lists with incoming
+        e-mail enabled (an e-mail alias is set), a feature SharePoint Online does not
+        offer. HtmlFileCount counts .htm and .html files in document libraries, but only
+        when ScanHtmlFile is set because they matter only where the web application uses
+        Permissive browser file handling; SharePoint Online enforces Strict, so those
+        files prompt a download instead of opening in the browser. System catalogs
+        (/_catalogs/) are skipped.
+
         The returned hashtable is designed to be passed straight to
         Measure-SPSSiteComplexity. CustomizationInventoryComplete is false when a signal
         cannot be read; partial results are returned with warnings rather than aborting
@@ -86,7 +97,19 @@
         LargeListItemCount, LargeListViewRowLimit, CheckedOutFileCount,
         FileVersionCount, and MaxItemsForVersionScanPerLibrary. Also reads
         MaxItemsForPublishingPageScanPerLibrary, which caps how many pages per Pages
-        library are read to count page layouts.
+        library are read to count page layouts, and MaxItemsForHtmlFileScanPerLibrary,
+        which caps how many .htm and .html files are counted per library.
+
+        .PARAMETER PermissionLevels
+        Optional permission-level settings. BuiltInNames lists permission level names to
+        treat as provisioned by SharePoint, in addition to the English names built in
+        (View Only, Approve, Manage Hierarchy, Restricted Interfaces for Translation,
+        Moderate, Records Center Web Service Submitters). Add the localized names on a
+        non-English farm, otherwise those levels are reported as custom.
+
+        .PARAMETER ScanHtmlFile
+        Counts .htm and .html files in document libraries. Set it for sites of a web
+        application whose browser file handling is Permissive.
 
         .EXAMPLE
         $map = Get-SPSFarmSolutionMap -CustomSolutionPrefix @('contoso')
@@ -114,7 +137,15 @@
 
         [Parameter()]
         [System.Collections.IDictionary]
-        $LargeContentThresholds = @{}
+        $LargeContentThresholds = @{},
+
+        [Parameter()]
+        [System.Collections.IDictionary]
+        $PermissionLevels = @{},
+
+        [Parameter()]
+        [System.Management.Automation.SwitchParameter]
+        $ScanHtmlFile
     )
 
     $signals = @{
@@ -132,6 +163,12 @@
         PublishingPageLayoutExamples = ''
         CustomizedPageCount      = 0
         CustomizedPageExamples   = ''
+        CustomPermissionLevelCount = 0
+        CustomPermissionLevelExamples = ''
+        EmailEnabledListCount    = 0
+        EmailEnabledListExamples = ''
+        HtmlFileCount            = 0
+        HtmlFileExamples         = ''
         InfoPathFormCount        = 0
         IrmEnabledListCount      = 0
         IsLargeSite              = $false
@@ -164,6 +201,10 @@
     $fileVersionExamples = [System.Collections.Generic.List[string]]::new()
     $appInstanceExamples = [System.Collections.Generic.List[string]]::new()
     $customizedPageExamples = [System.Collections.Generic.List[string]]::new()
+    $customPermissionLevels = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $customPermissionLevelExamples = [System.Collections.Generic.List[string]]::new()
+    $emailEnabledListExamples = [System.Collections.Generic.List[string]]::new()
+    $htmlFileExamples = [System.Collections.Generic.List[string]]::new()
     $publishingLayouts = [System.Collections.Generic.Dictionary[string, object]]::new([System.StringComparer]::OrdinalIgnoreCase)
 
     $largeListItemThreshold = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'LargeListItemCount' -DefaultValue 5000 -MinimumValue 1)
@@ -177,6 +218,15 @@
     $publishingInfrastructureFeatureId = 'f6924d36-2fa8-4f0b-b16d-06b7250180fa'
     $publishingWebFeatureId = '94c94ca6-b32f-4da9-a9e3-1f3d343d7ecb'
     $pagesLibraryTemplateId = 850
+    $maxHtmlFileScan = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'MaxItemsForHtmlFileScanPerLibrary' -DefaultValue 2000 -MinimumValue 1)
+    # Names SharePoint provisions with a None type, in English; PermissionLevels.BuiltInNames adds localized ones.
+    $builtInPermissionLevelNames = @(
+        'View Only', 'Approve', 'Manage Hierarchy', 'Restricted Interfaces for Translation',
+        'Moderate', 'Records Center Web Service Submitters'
+    )
+    if ($PermissionLevels.Contains('BuiltInNames') -and $null -ne $PermissionLevels['BuiltInNames']) {
+        $builtInPermissionLevelNames += @($PermissionLevels['BuiltInNames'] | ForEach-Object { [string]$_ })
+    }
     $setQueryProperty = {
         param([object]$QueryObject, [string]$PropertyName, [object]$Value)
         if ($null -ne $QueryObject.PSObject.Properties[$PropertyName]) {
@@ -429,6 +479,42 @@
                 catch {
                     $signals.CustomizationInventoryComplete = $false
                     Write-Warning -Message "Could not read customized pages at the root of '$($web.Url)': $($_.Exception.Message)"
+                }
+
+                try {
+                    $isRootWeb = $web.IsRootWeb
+                    $hasUniqueDefinitions = $web.HasUniqueRoleDefinitions
+                    if ($null -eq $isRootWeb -or $null -eq $hasUniqueDefinitions) {
+                        throw "The permission level ownership could not be read on '$($web.Url)'."
+                    }
+
+                    # A web that inherits its permission levels shares its parent's, so only owners are read.
+                    if ($isRootWeb -or $hasUniqueDefinitions) {
+                        $roleDefinitions = $web.RoleDefinitions
+                        if ($null -eq $roleDefinitions) {
+                            throw "The permission levels are unavailable on '$($web.Url)'."
+                        }
+                        foreach ($roleDefinition in $roleDefinitions) {
+                            try {
+                                if (-not (Test-SPSCustomPermissionLevel -RoleDefinition $roleDefinition -BuiltInName $builtInPermissionLevelNames)) {
+                                    continue
+                                }
+
+                                $levelName = [string]$roleDefinition.Name
+                                if ($customPermissionLevels.Add($levelName) -and $customPermissionLevelExamples.Count -lt 5) {
+                                    $customPermissionLevelExamples.Add(('{0} ({1})' -f $levelName, $web.Url))
+                                }
+                            }
+                            catch {
+                                $signals.CustomizationInventoryComplete = $false
+                                Write-Warning -Message "Could not classify a permission level on '$($web.Url)': $($_.Exception.Message)"
+                            }
+                        }
+                    }
+                }
+                catch {
+                    $signals.CustomizationInventoryComplete = $false
+                    Write-Warning -Message "Could not read the permission levels on '$($web.Url)': $($_.Exception.Message)"
                 }
 
                 # SharePoint 2010 platform: classic workflow associations at web and list scope.
@@ -782,6 +868,64 @@
                                 Write-Warning -Message "Could not scan publishing pages on '$listTitle' in web '$($web.Url)': $($_.Exception.Message)"
                             }
                         }
+
+                        try {
+                            # CanReceiveEmail only says the list type supports e-mail; the alias says it is enabled.
+                            if (-not [string]::IsNullOrWhiteSpace([string]$list.EmailAlias)) {
+                                $signals.EmailEnabledListCount++
+                                if ($emailEnabledListExamples.Count -lt 5) {
+                                    $emailEnabledListExamples.Add(('{0} ({1})' -f $listTitle, $list.RootFolder.ServerRelativeUrl))
+                                }
+                            }
+                        }
+                        catch {
+                            $signals.CustomizationInventoryComplete = $false
+                            Write-Warning -Message "Could not read the incoming e-mail setting on list '$listTitle' in web '$($web.Url)': $($_.Exception.Message)"
+                        }
+
+                        if ($ScanHtmlFile -and $isDocumentLibrary -and [string]$list.RootFolder.ServerRelativeUrl -notmatch '/_catalogs/') {
+                            try {
+                                $htmlQuery = & $newPagedQuery -RowLimit 200 -QueryText '<Where><Or><Eq><FieldRef Name="File_x0020_Type" /><Value Type="Text">htm</Value></Eq><Eq><FieldRef Name="File_x0020_Type" /><Value Type="Text">html</Value></Eq></Or></Where>'
+                                & $setQueryProperty $htmlQuery 'ViewFields' '<FieldRef Name="FileRef" />'
+                                & $setQueryProperty $htmlQuery 'ViewFieldsOnly' $true
+                                # The file type column is not indexed; an override lets farm administrators pass the list view threshold.
+                                & $setQueryProperty $htmlQuery 'QueryThrottleMode' 'Override'
+                                $htmlScanCount = 0
+                                $hasUnscannedHtml = $false
+                                $htmlPosition = $null
+                                do {
+                                    & $setQueryProperty $htmlQuery 'ListItemCollectionPosition' $htmlPosition
+                                    $htmlBatch = $list.GetItems($htmlQuery)
+                                    foreach ($htmlItem in (& $getBatchItems $htmlBatch)) {
+                                        if ($htmlScanCount -ge $maxHtmlFileScan) {
+                                            $hasUnscannedHtml = $true
+                                            break
+                                        }
+                                        $htmlScanCount++
+                                        $signals.HtmlFileCount++
+                                        if ($htmlFileExamples.Count -lt 5) {
+                                            $htmlIdentity = [string](& $getFileIdentity $htmlItem.File $htmlItem)
+                                            if (-not [string]::IsNullOrWhiteSpace($htmlIdentity)) {
+                                                $htmlFileExamples.Add($htmlIdentity)
+                                            }
+                                        }
+                                    }
+                                    $htmlPosition = & $getBatchPosition $htmlBatch
+                                    if ($htmlScanCount -ge $maxHtmlFileScan -and $null -ne $htmlPosition) {
+                                        $hasUnscannedHtml = $true
+                                    }
+                                } while ($null -ne $htmlPosition -and $htmlScanCount -lt $maxHtmlFileScan)
+
+                                if ($hasUnscannedHtml) {
+                                    $signals.CustomizationInventoryComplete = $false
+                                    Write-Warning -Message "HTML file scan stopped on '$listTitle' in web '$($web.Url)' after $maxHtmlFileScan file(s). Increase LargeContentThresholds.MaxItemsForHtmlFileScanPerLibrary to count more files."
+                                }
+                            }
+                            catch {
+                                $signals.CustomizationInventoryComplete = $false
+                                Write-Warning -Message "Could not scan HTML files on '$listTitle' in web '$($web.Url)': $($_.Exception.Message)"
+                            }
+                        }
                     }
                 }
                 catch {
@@ -863,6 +1007,10 @@
     $signals.FileVersionExamples = $fileVersionExamples -join '; '
     $signals.AppInstanceExamples = $appInstanceExamples -join '; '
     $signals.CustomizedPageExamples = $customizedPageExamples -join '; '
+    $signals.CustomPermissionLevelCount = $customPermissionLevels.Count
+    $signals.CustomPermissionLevelExamples = $customPermissionLevelExamples -join '; '
+    $signals.EmailEnabledListExamples = $emailEnabledListExamples -join '; '
+    $signals.HtmlFileExamples = $htmlFileExamples -join '; '
     $signals.PublishingPageLayoutCount = $publishingLayouts.Count
     $signals.PublishingPageLayoutExamples = @(
         $publishingLayouts.Values |

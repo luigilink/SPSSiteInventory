@@ -17,6 +17,11 @@ BeforeAll {
             PublishingInfrastructureEnabled = $false; PublishingWebCount = 0; PublishingPageCount = 0
             PublishingPageLayoutCount = 0; PublishingPageLayoutExamples = ''
             CustomizedPageCount = 0; CustomizedPageExamples = ''
+            WebAppUrl = 'https://intranet'; BrowserFileHandling = 'Strict'
+            WebAppPolicyCount = 2; WebAppPolicyExamples = 'CONTOSO\farm: Full Control; CONTOSO\crawl: Full Read'
+            CustomPermissionLevelCount = 0; CustomPermissionLevelExamples = ''
+            EmailEnabledListCount = 0; EmailEnabledListExamples = ''
+            HtmlFileCount = 0; HtmlFileExamples = ''
             IsLargeSite = $false; LargeListCount = 0; LargeListExamples = ''
             LargeListViewCount = 0; LargeListViewExamples = ''
             CheckedOutFileCount = 0; CheckedOutFileExamples = ''
@@ -37,6 +42,11 @@ BeforeAll {
             PublishingInfrastructureEnabled = $true; PublishingWebCount = 2; PublishingPageCount = 40
             PublishingPageLayoutCount = 3; PublishingPageLayoutExamples = 'ArticleLeft.aspx (30)'
             CustomizedPageCount = 2; CustomizedPageExamples = '/sites/legacy/default.aspx'
+            WebAppUrl = 'https://legacy'; BrowserFileHandling = 'Permissive'
+            WebAppPolicyCount = 3; WebAppPolicyExamples = 'CONTOSO\farm: Full Control; R&D <ops>: Full Read'
+            CustomPermissionLevelCount = 2; CustomPermissionLevelExamples = 'Project Manager (https://intranet/sites/legacy)'
+            EmailEnabledListCount = 1; EmailEnabledListExamples = 'Invoices (/sites/legacy/Invoices)'
+            HtmlFileCount = 4; HtmlFileExamples = '/sites/legacy/Docs/a.htm'
             IsLargeSite = $true; LargeListCount = 2; LargeListExamples = 'Documents (7000); Records (5100)'
             LargeListViewCount = 1; LargeListViewExamples = 'Documents/All Documents (7000)'
             CheckedOutFileCount = 3; CheckedOutFileExamples = 'Documents (3)'
@@ -124,6 +134,37 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $html | Should -Match 'Assessment failed: Access denied'
         $html | Should -Match 'Not assessed'
         $html | Should -Match 'data-category="0"'
+    }
+
+    It 'shows permission and policy signals in summary cards and table columns' {
+        $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
+
+        $html | Should -Match '<div class="num">1</div><div class="lbl">Sites with custom permission levels</div>'
+        $html | Should -Match '<div class="num">1</div><div class="lbl">Sites with e-mail enabled lists</div>'
+        $html | Should -Match '<div class="num">1</div><div class="lbl">Sites with HTML files</div>'
+        $html | Should -Match '<div class="num">1</div><div class="lbl">Sites in web applications with permissive browser file handling</div>'
+        foreach ($label in @('Custom permission levels', 'Custom permission level examples', 'E-mail enabled lists', 'E-mail enabled list examples', 'HTML files', 'HTML file examples', 'Browser file handling', 'Web application policies', 'Web application policy examples')) {
+            $html | Should -Match ('>{0} <span class="arrow">' -f $label)
+        }
+        $html | Should -Match 'Project Manager \(https://intranet/sites/legacy\)'
+    }
+
+    It 'renders a web application policies section grouped by web application' {
+        $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
+
+        $html | Should -Match '<h2 id="web-app-policies">Web application policies</h2>'
+        $html | Should -Match '<a href="#web-app-policies">Web application policies</a>'
+        $html | Should -Match '<td>https://legacy</td><td><span class="pill warn">Permissive</span></td><td class="num">3</td>'
+        $html | Should -Match '<td>https://intranet</td><td>Strict</td><td class="num">2</td>'
+        $html | Should -Match 'R&amp;D &lt;ops&gt;: Full Read'
+        $html | Should -Not -Match 'R&D <ops>'
+    }
+
+    It 'omits the web application policies section when no policy data was collected' {
+        $html = ConvertTo-SPSInventoryHtml -InputObject @([PSCustomObject]@{ Url = 'https://intranet/sites/a'; Category = 1; CategoryName = 'Simple'; Wave = 1; WaveName = 'Quick wins' })
+
+        $html | Should -Not -Match 'id="web-app-policies"'
+        $html | Should -Not -Match 'href="#web-app-policies"'
     }
 
     It 'renders the migration wave plan with per-wave counts and sizes' {
