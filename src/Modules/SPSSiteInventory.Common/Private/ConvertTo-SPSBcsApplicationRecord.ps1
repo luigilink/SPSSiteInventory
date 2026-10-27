@@ -6,7 +6,8 @@
         .DESCRIPTION
         A LOB system is the Business Connectivity Services (BCS) definition of an external
         system: its type, its instances (the connections that external lists use) and its
-        entities (the external content types). It is not migrated to SharePoint Online.
+        entities (the external content types). BCS is retired in SharePoint Online, so it
+        cannot be migrated there.
 
         The row holds the name, the system type, the instance names and the entity names
         written as namespace.name. Connection properties, credentials and Secure Store

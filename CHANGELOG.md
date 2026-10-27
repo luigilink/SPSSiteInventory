@@ -77,13 +77,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   type, detected through SharePoint's external data source flag) with a per-list
   `-externallists-*` CSV/JSON report that records the LOB system instance, entity namespace
   and entity of each list, and the new `Get-SPSBcsApplication`, which reads the Business
-  Data Connectivity metadata store (BCS scan) into a `-bcs-*` CSV/JSON report with the LOB
-  system type, instances and entities. They flow to scoring (weighted, not blocking),
-  CSV/JSON/HTML (external list and BCS sections), the manifest and dedicated alerts
-  (`ExternalLists`, `BcsApplication`, `BcsInventoryPartial`), with guidance to plan a hybrid
-  BCS configuration. Nothing is read from the external systems and no connection setting
-  or credential is collected. A list, LOB system or metadata store that cannot be read
-  marks the site or the BCS report partial. (#41)
+  Data Connectivity metadata store (BCS scan) through the default service context of each
+  web application into a `-bcs-*` CSV/JSON report with the LOB system type, instances and
+  entities. They flow to scoring (weighted, not blocking), CSV/JSON/HTML (external list and
+  BCS sections), the manifest and dedicated alerts (`ExternalLists`, `BcsApplication`,
+  `BcsInventoryPartial`), with guidance that BCS is retired in SharePoint Online and that
+  these scenarios need a replacement such as Power Apps. Nothing is read from the external
+  systems and no connection setting or credential is collected. A list, LOB system, web
+  application or metadata store that cannot be read marks the site or the BCS report
+  partial. (#41)
 - Zone-aware web application authentication inventory, including mixed Windows/FBA,
   membership/role provider names and explicit identity-review flags. The example
   configuration treats `HasFbaZone` as a SharePoint Online migration blocker.

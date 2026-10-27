@@ -4,79 +4,69 @@
         Lists the Business Connectivity Services (BCS) LOB systems defined in the farm.
 
         .DESCRIPTION
-        BCS applications are not migrated to SharePoint Online. The LOB systems, their
-        entities (external content types) and their instances (the connections that
-        external lists use) must be redeployed or replaced, for example with a hybrid BCS
-        configuration, and the solutions that rely on them tested afterwards. The function
-        reads the Business Data Connectivity metadata store and returns one row per LOB
-        system, like the SMAT BCS report: its name, type, instances and entities.
+        BCS is retired in SharePoint Online (30 September 2024), so BCS applications cannot
+        be migrated there: the LOB systems, their entities (external content types) and
+        their instances (the connections that external lists use) need a replacement, for
+        example with Power Apps. BCS is not retired in SharePoint Server Subscription
+        Edition. The function reads the Business Data Connectivity metadata
+        store and returns one row per LOB system, like the SMAT BCS report: its name, type,
+        instances and entities.
 
-        A service context needs a site collection, so the first site collection of each
-        web application in the inventory is used. Web applications that share a metadata
-        store return the same LOB systems; they are reported once, with every web
-        application that sees them. A web application or LOB system that cannot be read
-        adds a warning and marks the result incomplete, so a failure is never reported as
-        an empty store. No connection setting, credential or Secure Store target
-        application is read, and the external systems are not contacted.
+        Each web application is read through its own default service context, so a web
+        application without any site collection is read too. Web applications that share a
+        metadata store return the same LOB systems; they are reported once, with every web
+        application that sees them. A web application or LOB system that cannot be read adds
+        a warning and marks the result incomplete, so a failure is never reported as an
+        empty store. No connection setting, credential or Secure Store target application
+        is read, and the external systems are not contacted.
 
         The function is read-only.
 
-        .PARAMETER Inventory
-        The site records returned by Get-SPSSiteInventory. Web application failure rows
-        have no site collection to use, so the web application is reported as not read.
+        .PARAMETER WebApplicationUrl
+        Optional list of web application URLs to read, like the same parameter of
+        Get-SPSSiteInventory. When omitted, all content web applications are read.
 
         .OUTPUTS
         A PSCustomObject with Applications (one row per LOB system), Complete ($false when
         something could not be read) and Warnings (messages for the run log).
 
         .EXAMPLE
-        $bcs = Get-SPSBcsApplication -Inventory $inventory
+        $bcs = Get-SPSBcsApplication
         $bcs.Applications | Format-Table LobSystemName, LobSystemType, EntityCount
+
+        .EXAMPLE
+        Get-SPSBcsApplication -WebApplicationUrl 'https://intranet.contoso.com'
     #>
     [CmdletBinding()]
     [OutputType([System.Management.Automation.PSCustomObject])]
     param
     (
-        [Parameter(Mandatory = $true)]
-        [AllowEmptyCollection()]
-        [System.Object[]]
-        $Inventory
+        [Parameter()]
+        [System.String[]]
+        $WebApplicationUrl = @()
     )
 
     $warnings = [System.Collections.Generic.List[string]]::new()
     $complete = $true
 
-    $anchors = [ordered]@{}
-    $withoutSite = [System.Collections.Generic.List[string]]::new()
-    foreach ($record in $Inventory) {
-        if ($null -eq $record) {
-            continue
-        }
-        $webApplicationUrl = [string]$record.WebAppUrl
-        if ([string]::IsNullOrWhiteSpace($webApplicationUrl)) {
-            continue
-        }
-        if ([string]$record.InventoryScope -eq 'WebApplication' -or [string]::IsNullOrWhiteSpace([string]$record.Url)) {
-            if (-not $withoutSite.Contains($webApplicationUrl)) {
-                $withoutSite.Add($webApplicationUrl)
-            }
-            continue
-        }
-        if (-not $anchors.Contains($webApplicationUrl)) {
-            $anchors[$webApplicationUrl] = [string]$record.Url
-        }
+    $webApplications = if ($WebApplicationUrl.Count -gt 0) {
+        $WebApplicationUrl | ForEach-Object { Get-SPWebApplication -Identity $_ -ErrorAction Stop }
     }
-    foreach ($webApplicationUrl in $withoutSite) {
-        if (-not $anchors.Contains($webApplicationUrl)) {
-            $complete = $false
-            $warnings.Add("The BCS metadata store was not read for web application '$webApplicationUrl' because it has no site collection to use as a service context.")
-        }
+    else {
+        Get-SPWebApplication -ErrorAction Stop
     }
 
     $stores = [System.Collections.Generic.Dictionary[string, object]]::new()
-    foreach ($webApplicationUrl in @($anchors.Keys)) {
+    foreach ($webApplication in @($webApplications)) {
+        $webApplicationText = [string]$webApplication.Url
+        $isReadable = -not [string]::IsNullOrWhiteSpace($webApplicationText)
+        $label = if ($isReadable) { $webApplicationText } else { '(unknown web application)' }
         try {
-            $catalog = Get-SPBusinessDataCatalogMetadataObject -BdcObjectType Catalog -ServiceContext $anchors[$webApplicationUrl] -ErrorAction Stop
+            if (-not $isReadable) {
+                throw 'The web application URL could not be read.'
+            }
+            $serviceContext = Get-SPSWebApplicationServiceContext -WebApplication $webApplication
+            $catalog = Get-SPBusinessDataCatalogMetadataObject -BdcObjectType Catalog -ServiceContext $serviceContext -ErrorAction Stop
             if ($null -eq $catalog) {
                 throw 'The metadata store is unavailable.'
             }
@@ -85,7 +75,7 @@
                 throw 'The metadata store has no readable ID.'
             }
             if ($stores.ContainsKey($storeId)) {
-                $stores[$storeId].WebApplications.Add($webApplicationUrl)
+                $stores[$storeId].WebApplications.Add($label)
                 continue
             }
 
@@ -97,7 +87,7 @@
                 WebApplications = [System.Collections.Generic.List[string]]::new()
                 Rows            = [System.Collections.Generic.List[object]]::new()
             }
-            $store.WebApplications.Add($webApplicationUrl)
+            $store.WebApplications.Add($label)
             $stores[$storeId] = $store
             foreach ($lobSystem in $lobSystems) {
                 try {
@@ -105,13 +95,13 @@
                 }
                 catch {
                     $complete = $false
-                    $warnings.Add("A BCS LOB system could not be read for web application '$webApplicationUrl': $($_.Exception.Message)")
+                    $warnings.Add("A BCS LOB system could not be read for web application '$label': $($_.Exception.Message)")
                 }
             }
         }
         catch {
             $complete = $false
-            $warnings.Add("The BCS metadata store could not be read for web application '$webApplicationUrl': $($_.Exception.Message)")
+            $warnings.Add("The BCS metadata store could not be read for web application '$label': $($_.Exception.Message)")
         }
     }
 

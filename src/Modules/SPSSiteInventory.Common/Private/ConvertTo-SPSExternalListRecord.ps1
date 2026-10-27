@@ -5,9 +5,10 @@
 
         .DESCRIPTION
         An external list is backed by a Business Connectivity Services (BCS) external
-        content type: its items stay in the external system, so neither the list nor the
-        BCS definition behind it is migrated. SharePoint flags such a list as having an
-        external data source. Returns $null for any other list.
+        content type: its items stay in the external system. BCS is retired in SharePoint
+        Online, so neither the list nor the BCS definition behind it can be migrated there.
+        SharePoint flags such a list as having an external data source. Returns $null for
+        any other list.
 
         The row identifies the list and the BCS binding SharePoint stores with it: the
         LOB system instance, the entity namespace and the entity name. They are read from

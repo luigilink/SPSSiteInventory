@@ -217,8 +217,10 @@ External list signals follow the SMAT External List and BCS scans:
 
 - `ExternalListCount` — lists backed by a Business Connectivity Services (BCS) external
   content type, which SharePoint flags as having an external data source. Their items stay
-  in the external system, so neither these lists nor the BCS applications behind them are
-  migrated.
+  in the external system. BCS is retired in SharePoint Online (see
+  [Usage](Usage#external-lists-and-bcs-applications)), so these lists and the BCS
+  applications behind them cannot be migrated there; they need a replacement such as
+  Power Apps.
 - `ExternalListExamples` — up to five lists with their entity.
 
 The binding of each list (LOB system instance, entity namespace and entity name) is read

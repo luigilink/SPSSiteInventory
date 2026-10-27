@@ -72,7 +72,8 @@
 
         ExternalListCount counts the external lists on the site: lists backed by a
         Business Connectivity Services (BCS) external content type, whose items stay in
-        the external system. Neither those lists nor the BCS applications are migrated.
+        the external system. BCS is retired in SharePoint Online, so those lists and the
+        BCS applications behind them cannot be migrated there.
         ExternalLists holds one row per list with the BCS binding SharePoint stores with
         it (LOB system instance, entity namespace and entity name), like the SMAT
         External List report. The binding is read from the list definition, so neither

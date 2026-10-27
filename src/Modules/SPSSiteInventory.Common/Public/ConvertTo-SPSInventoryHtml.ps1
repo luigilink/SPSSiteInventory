@@ -626,7 +626,7 @@ td.muted, .muted { color: var(--muted); }
     if ($hasExternalListSection) {
         $incompleteSites = @($siteRecords | Where-Object { $_.CustomizationInventoryComplete -eq $false })
         [void]$sb.AppendLine('<h2 id="external-lists">External lists</h2>')
-        [void]$sb.AppendLine(('<p><strong>{0}</strong> external list(s). They are backed by Business Connectivity Services (BCS) external content types, so their items stay in the external system and neither the lists nor the BCS applications behind them are migrated. Plan a hybrid BCS configuration, or expose the data source so SharePoint Online can reach it, redeploy the definitions to the target and test the solutions that rely on them afterwards. Item counts and dates are not collected because the items are not stored in SharePoint.</p>' -f $ExternalLists.Count))
+        [void]$sb.AppendLine(('<p><strong>{0}</strong> external list(s). They are backed by Business Connectivity Services (BCS) external content types, so their items stay in the external system. Microsoft retired BCS in SharePoint Online on 30 September 2024, so these lists cannot be recreated there and there is no direct migration. Plan a replacement for each scenario, for example with Power Apps and its connectors (the on-premises data gateway reaches on-premises data). BCS is not retired in SharePoint Server Subscription Edition. Item counts and dates are not collected because the items are not stored in SharePoint.</p>' -f $ExternalLists.Count))
         if ($enumerationFailureCount -gt 0) {
             [void]$sb.AppendLine(('<p><strong>Coverage warning:</strong> {0} web application(s) had site collection enumeration failures; external list results do not cover those scopes.</p>' -f $enumerationFailureCount))
         }
@@ -660,7 +660,7 @@ td.muted, .muted { color: var(--muted); }
 
     if ($hasBcsSection) {
         [void]$sb.AppendLine('<h2 id="bcs-applications">Business Connectivity Services applications</h2>')
-        [void]$sb.AppendLine(('<p><strong>{0}</strong> BCS LOB system(s). BCS applications are not migrated to SharePoint Online: plan a hybrid BCS configuration or expose the data source, redeploy the definitions to the target during validation and test the solutions that rely on them. Instances are the connections external lists use; match them with the LOB system instance of the external lists. Connection settings, credentials and Secure Store targets are not read.</p>' -f $BcsApplications.Count))
+        [void]$sb.AppendLine(('<p><strong>{0}</strong> BCS LOB system(s). BCS is retired in SharePoint Online (30 September 2024), so BCS applications cannot be migrated there and need a replacement for each external system, for example Power Apps and its connectors. BCS is not retired in SharePoint Server Subscription Edition. Instances are the connections external lists use; match them with the LOB system instance of the external lists. Connection settings, credentials and Secure Store targets are not read.</p>' -f $BcsApplications.Count))
         if (-not $BcsInventoryComplete) {
             [void]$sb.AppendLine('<p><strong>Partial collection:</strong> some web applications or LOB systems could not be read, so BCS applications may be missing. Consult the run warnings.</p>')
         }

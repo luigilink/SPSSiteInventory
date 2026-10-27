@@ -467,6 +467,9 @@ Describe 'Export-SPSInventoryReport content types' {
         $alert = @($alerts | Where-Object { $_.AlertType -eq 'ExternalLists' })[0]
         $alert.Value | Should -Be 2
         $alert.Severity | Should -Be 'High'
+        $alert.Message | Should -Match 'retired in SharePoint Online'
+        $alert.Message | Should -Match 'Power Apps'
+        $alert.Message | Should -Not -Match 'hybrid'
         $html = Get-Content $output.HtmlPath -Raw
         $html | Should -Match '<h2 id="external-lists">External lists</h2>'
         $html | Should -Match 'Customers, &amp; Prospects'
@@ -559,6 +562,9 @@ Describe 'Export-SPSInventoryReport content types' {
         $first.Url | Should -Be 'https://intranet'
         $first.Value | Should -Be 'Crm, & Billing'
         $first.Severity | Should -Be 'Medium'
+        $first.Message | Should -Match 'retired in SharePoint Online'
+        $first.Message | Should -Match 'Power Apps'
+        $first.Message | Should -Not -Match 'hybrid'
         Get-AlertCount -Alerts $alerts -Type 'BcsInventoryPartial' | Should -Be 0
         $html = Get-Content $output.HtmlPath -Raw
         $html | Should -Match 'id="bcs-applications"'

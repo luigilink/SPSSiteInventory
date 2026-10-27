@@ -195,23 +195,28 @@ files, so check `CustomizationInventoryComplete`.
 The `*-bcs-*` files hold one row per BCS LOB system defined in the farm, like the SMAT BCS
 report: `WebApplicationUrls`, `LobSystemName`, `LobSystemType` (`Database`, `WebService`,
 `Wcf`, `DotNetAssembly`, `Custom` or `OData`), `LobSystemInstances`, `EntityCount` and
-`LobEntities` (`namespace.name`, at most 20 names). A service context needs a site
-collection, so the first site collection of each web application is used; web applications
-that share a metadata store report the same LOB systems once, with every web application
-that sees them. Connection settings, credentials and Secure Store targets are not read, and
-the external systems are not contacted. A web application or LOB system that cannot be read
+`LobEntities` (`namespace.name`, at most 20 names). Each web application is read through
+its own default service context, so a web application without any site collection is read
+too; web applications that share a metadata store report the same LOB systems once, with
+every web application that sees them. Connection settings, credentials and Secure Store
+targets are not read, and the external systems are not contacted. A web application or LOB system that cannot be read
 is reported as a warning in the run log and marks the BCS report partial: the
 `BcsInventoryPartial` alert, `Summary.BcsInventoryComplete` in the manifest and a note in
 the HTML report say that BCS applications may be missing.
 
-BCS applications and external lists are not migrated. To plan the work:
+Microsoft retired BCS in SharePoint Online (SharePoint in Microsoft 365) on 30 September
+2024: external lists, external columns, external content types and hybrid BCS solutions are
+no longer available there, and there is no direct migration. See
+[Business Connectivity Services (BCS) retirement in Microsoft 365](https://learn.microsoft.com/en-us/sharepoint/business-connectivity-services-retirement).
+To plan the work:
 
 1. List the BCS applications in `*-bcs-*`, then find who uses them in `*-externallists-*`
    by matching `LobSystemInstance` with `LobSystemInstances`.
-2. For each external system, decide between a hybrid BCS configuration, exposing the data
-   source so that SharePoint Online can reach it, or replacing the lists.
-3. Redeploy the updated BCS definitions to the target during the validation phase, and
-   check afterwards that the solutions that rely on them work.
+2. For each external system, plan a replacement of the scenario. Microsoft recommends
+   Power Apps, which reaches many data sources through connectors and on-premises data
+   through the on-premises data gateway.
+3. BCS is not retired in SharePoint Server Subscription Edition, so a target that stays
+   on-premises can keep using it.
 
 ### Migration categories
 

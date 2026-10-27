@@ -428,7 +428,7 @@
                     Severity = 'High'
                     Url = $record.Url
                     Value = [int]$record.ExternalListCount
-                    Message = 'External lists and the BCS applications behind them are not migrated; plan a hybrid BCS configuration or another way to reach the data, and test the lists afterwards.'
+                    Message = 'External lists depend on BCS, which Microsoft retired in SharePoint Online on 30 September 2024: they cannot be migrated, so plan a replacement such as Power Apps.'
                 })
         }
         if ($scope -eq 'SiteCollection' -and [bool]$record.IsUnsupportedSiteTemplate) {
@@ -580,7 +580,7 @@
                 Severity = 'Medium'
                 Url = ([string]$bcsApplication.WebApplicationUrls -split '; ')[0]
                 Value = [string]$bcsApplication.LobSystemName
-                Message = 'BCS applications are not migrated; plan a hybrid BCS configuration or expose the data source, then redeploy the definitions to the target and test the solutions that rely on them.'
+                Message = 'BCS is retired in SharePoint Online, so BCS applications cannot be migrated; plan a replacement such as Power Apps for the solutions that rely on them.'
             })
     }
     if ($PSBoundParameters.ContainsKey('BcsApplications') -and -not $BcsInventoryComplete) {

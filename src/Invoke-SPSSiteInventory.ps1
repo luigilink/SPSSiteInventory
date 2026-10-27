@@ -134,7 +134,7 @@ try {
     Add-SPSInventoryEvent -Message 'Reading Business Connectivity Services definitions.' -Level Information
     $bcs = [PSCustomObject]@{ Applications = @(); Complete = $false; Warnings = @() }
     try {
-        $bcs = Get-SPSBcsApplication -Inventory @($inventory)
+        $bcs = Get-SPSBcsApplication -WebApplicationUrl $settings.WebApplicationUrl
     }
     catch {
         Add-SPSInventoryEvent -Message "The BCS inventory failed: $($_.Exception.Message)" -Level Warning
