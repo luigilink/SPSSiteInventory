@@ -474,7 +474,7 @@
             WebApplicationFailures = @($records | Where-Object { $_.InventoryScope -eq 'WebApplication' }).Count
             PartialAssessments = @($siteRecords | Where-Object { $_.AssessmentStatus -eq 'Partial' }).Count
             FailedAssessments = @($siteRecords | Where-Object { $_.AssessmentStatus -eq 'Failed' }).Count
-            TotalContentGB = [math]::Round($totalSizeGb, 2)
+            TotalContentGB = [math]::Round($totalSizeGb, 4)
             AlertCount = @($alerts).Count
             BcsInventoryComplete = if ($PSBoundParameters.ContainsKey('BcsApplications')) { $BcsInventoryComplete } else { $null }
         }

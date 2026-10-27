@@ -317,6 +317,44 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $html | Should -Match '/sites/legacy/default\.aspx'
     }
 
+    It 'shows the total of small site collections, not 0 GB' {
+        $records = foreach ($suffix in 1..20) {
+            [PSCustomObject]@{
+                InventoryScope = 'SiteCollection'; Url = "https://intranet/sites/small$suffix"
+                AssessmentStatus = 'Complete'; Category = 1; CategoryName = 'Simple'
+                SizeGB = 0.0029; Wave = 1; WaveName = 'Quick wins'
+            }
+        }
+
+        $html = ConvertTo-SPSInventoryHtml -InputObject @($records)
+
+        $html | Should -Match '<strong>0\.06 GB</strong> total content'
+        $html | Should -Match '<td class="num">20</td><td class="num">0\.06</td>'
+    }
+
+    It 'says that the content is under 0.01 GB when it is not zero but very small' {
+        $record = [PSCustomObject]@{
+            InventoryScope = 'SiteCollection'; Url = 'https://intranet/sites/tiny'
+            AssessmentStatus = 'Complete'; Category = 1; CategoryName = 'Simple'
+            SizeGB = 0.0004; Wave = 1; WaveName = 'Quick wins'
+        }
+
+        $html = ConvertTo-SPSInventoryHtml -InputObject @($record)
+
+        $html | Should -Match '<strong>&lt; 0\.01 GB</strong> total content'
+    }
+
+    It 'shows 0 GB when the size of every site collection is unknown or zero' {
+        $records = @(
+            [PSCustomObject]@{ InventoryScope = 'SiteCollection'; Url = 'https://intranet/sites/a'; AssessmentStatus = 'Complete'; Category = 1; CategoryName = 'Simple'; SizeGB = 0; Wave = 1; WaveName = 'Quick wins' },
+            [PSCustomObject]@{ InventoryScope = 'SiteCollection'; Url = 'https://intranet/sites/b'; AssessmentStatus = 'Partial'; Category = 1; CategoryName = 'Simple'; SizeGB = $null; Wave = 1; WaveName = 'Quick wins' }
+        )
+
+        $html = ConvertTo-SPSInventoryHtml -InputObject $records
+
+        $html | Should -Match '<strong>0 GB</strong> total content'
+    }
+
     It 'keeps wave-zero groups distinct for unmapped and failed records in either input order' {
         $unassigned = [PSCustomObject]@{
             Url = 'https://intranet/sites/unmapped'; Category = 5; CategoryName = 'Other'
