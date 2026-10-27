@@ -245,12 +245,13 @@ SharePoint alert signals follow the SMAT Alerts scan:
 
 - `SharePointAlertCount` — the alerts ("Alert Me" subscriptions) that users set up on the
   site collection: every user's alerts, in every web. Migration tools do not migrate them,
-  so users have to set them up again after the migration. The count is exact.
+  and SharePoint Online retired SharePoint Alerts from July 2026, so each notification has to
+  be rebuilt with a SharePoint rule or a Power Automate flow. The count is exact.
 
 The signal is reported but **not scored and not blocking** in the example configuration:
-the content migrates, and recreating alerts is a matter of telling the users, not of
-rebuilding anything. Add `SharePointAlertCount` to `Scoring.Weights` if you want sites with
-many alerts to weigh more. The alert raised for it has the `Low` severity (see
+the content migrates, and each notification is replaced on its own, so it does not change
+how the site is migrated. Add `SharePointAlertCount` to `Scoring.Weights` if you want sites
+with many alerts to weigh more. The alert raised for it has the `Medium` severity (see
 [Alerts](Alerts)). The per-alert detail goes to the `*-sharepointalerts-*` CSV/JSON files
 (see [Usage](Usage#sharepoint-alerts)); they hold the login names of the alert owners, which
 is personal data.

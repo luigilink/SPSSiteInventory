@@ -682,7 +682,7 @@ Describe 'ConvertTo-SPSInventoryHtml' {
             1..3 | ForEach-Object { [PSCustomObject]@{ AlertType = 'CheckedOutFiles'; Severity = 'Medium'; Url = "https://intranet/sites/$_"; Value = 1; Message = 'site specific'; Remediation = 'Ask the users to <check in> their files & retry.'; Reference = $learn } }
             1..2 | ForEach-Object { [PSCustomObject]@{ AlertType = 'InfoPath'; Severity = 'High'; Url = "https://intranet/sites/hr$_"; Value = 1; Message = 'site specific'; Remediation = 'Rebuild the forms.'; Reference = '' } }
             [PSCustomObject]@{ AlertType = 'FileVersions'; Severity = 'Medium'; Url = 'https://intranet/sites/x'; Value = 1; Message = 'site specific'; Remediation = 'Decide on the versions.'; Reference = '' }
-            1..2 | ForEach-Object { [PSCustomObject]@{ AlertType = 'AlertSubscriptions'; Severity = 'Low'; Url = "https://intranet/sites/al$_"; Value = 3; Message = 'site specific'; Remediation = 'Tell the users.'; Reference = '' } }
+            1..2 | ForEach-Object { [PSCustomObject]@{ AlertType = 'InformationOnly'; Severity = 'Low'; Url = "https://intranet/sites/al$_"; Value = 3; Message = 'Pass this on to the users.'; Remediation = 'Tell the users.'; Reference = '' } }
         )
 
         $html = ConvertTo-SPSInventoryHtml -InputObject @() -Alert $alerts
@@ -691,9 +691,9 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $html | Should -Match '<a href="#alerts">Alerts</a>'
         $html | Should -Match '<strong>8</strong> alert\(s\) of <strong>4</strong> type\(s\): <strong>2</strong> high, <strong>4</strong> medium and <strong>2</strong> low'
         $html | Should -Match '(?s)<table class="alerts">.*<th>Severity</th><th>Alert</th><th class="num">Affected</th><th>What it means</th><th>What to do</th><th>Reference</th>'
-        $html | Should -Match '(?s)<td>InfoPath</td>.*<td>CheckedOutFiles</td>.*<td>FileVersions</td>.*<td>AlertSubscriptions</td>'
-        $html | Should -Match '<span class="pill no">Low</span></td><td>AlertSubscriptions</td><td class="num">2</td>'
-        $html | Should -Match 'Users have SharePoint alerts \(Alert Me subscriptions\) on this site; migration tools do not migrate them\.'
+        $html | Should -Match '(?s)<td>InfoPath</td>.*<td>CheckedOutFiles</td>.*<td>FileVersions</td>.*<td>InformationOnly</td>'
+        $html | Should -Match '<span class="pill no">Low</span></td><td>InformationOnly</td><td class="num">2</td>'
+        $html | Should -Match 'Pass this on to the users\.'
         $html | Should -Match '<span class="pill yes">High</span></td><td>InfoPath</td><td class="num">2</td>'
         $html | Should -Match '<span class="pill warn">Medium</span></td><td>CheckedOutFiles</td><td class="num">3</td>'
         $html | Should -Match 'Checked-out files were detected and should be checked in before migration\.'
