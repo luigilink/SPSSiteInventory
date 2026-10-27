@@ -55,4 +55,4 @@ The scan is read-only. On a large farm it can take a while (it enumerates every 
 
 ## 6. Review the output
 
-Open the CSV in Excel and sort by `Category` and `Score`. Category 1 sites are your quick wins; category 4 sites need a dedicated plan. See [Usage](Usage) for how to read and act on the report.
+Open the CSV in Excel and sort by `Category` and `Score`. Category 1 sites are your quick wins; category 4 sites need a dedicated plan. A text cell that Excel could read as a formula starts with a quote: that is deliberate (see [Usage](Usage#csv-files-and-spreadsheet-formulas)). See [Usage](Usage) for how to read and act on the report.

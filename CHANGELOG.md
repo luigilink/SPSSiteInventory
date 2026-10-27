@@ -137,6 +137,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   HTML sections complement the per-site summary; standard types are not automatically
   classified as custom or blocking. (#26)
 
+### Security
+
+- The CSV reports now neutralize spreadsheet formulas (CSV injection, CWE-1236). Titles of
+  sites, lists, content types and alerts, CAML filters and other text typed by the users of the
+  farm reach the CSV files, and a spreadsheet reads a cell that starts with `=`, `+`, `-` or `@`
+  (or a tab, a carriage return, a line feed, or the full-width form of `=`, `+`, `-` and `@`) as
+  a formula, which could run on the machine of the administrator who opens the file. Every CSV the toolkit writes (the inventory, alerts,
+  content types, managed metadata, external lists, SharePoint alerts, BCS and farm solutions
+  files) now puts a single quote in front of such a text cell, as OWASP recommends, through one
+  shared helper. Numbers, including negative ones, booleans and dates are not touched. The JSON
+  files and the HTML report keep the original text. A script that parses a CSV must remove the
+  leading quote. (#64)
+
 ## [1.1.0] - 2026-09-21
 
 ### Added
