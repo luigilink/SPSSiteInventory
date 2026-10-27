@@ -47,3 +47,4 @@ Export-SPSInventoryReport     -> CSV + JSON
 - [Getting Started](Getting-Started)
 - [Configuration](Configuration)
 - [Usage](Usage)
+- [Alerts and remediation](Alerts)

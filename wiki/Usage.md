@@ -43,7 +43,7 @@ report pack, plus a dedicated farm-solution report, to the output folder:
 | `*-publishing-*.json` | Publishing and customized-page dataset (`PublishingInfrastructureEnabled`, `PublishingWebCount`, `PublishingPageCount`, `PublishingPageLayoutCount`/`PublishingPageLayoutExamples`, `CustomizedPageCount`/`CustomizedPageExamples`, status, category). |
 | `*-irm-locks-*.json` | Security/lock dataset (`IrmEnabledListCount`, `SiteLockState`, `IsLockedSite`). |
 | `*-large-content-*.json` | Large-content risk dataset (`IsLargeSite`, large lists/views, checked-out files, high file-version counts, plus examples). |
-| `*-alerts-*.json` | Normalized risk alerts extracted from site signals (partial/failed, FBA, template compatibility/language review, full-trust, workflows, apps, publishing, customized pages, custom permission levels, e-mail enabled lists, HTML files, managed metadata columns, external lists, BCS applications, web application policies, permissive browser file handling, InfoPath, IRM, lock, large content). Web application alerts are written once per web application. |
+| `*-alerts-*.csv` / `*-alerts-*.json` | Normalized risk alerts extracted from the site signals, each with its severity, an explanation and a remediation hint (and the Microsoft Learn page behind it). One alert per site collection and signal; web application and BCS alerts are written once per web application and per LOB system. The CSV is for Excel, the JSON for automation. The alert types and their advice are listed in [Alerts and remediation](Alerts). |
 | `*-solutions-*.csv` | Farm-solution (WSP) inventory for Excel; one row per solution, with the feature scopes/ids flattened. |
 | `*-solutions-*.json` | Farm-solution (WSP) inventory for automation, with the feature scopes/ids kept as arrays. |
 | `*-contenttypes-*.csv` / `*-contenttypes-*.json` | Content-type definitions and list bindings, including standard types. One row per web definition or list binding, not per item. |
@@ -52,8 +52,9 @@ report pack, plus a dedicated farm-solution report, to the output folder:
 | `*-bcs-*.csv` / `*-bcs-*.json` | BCS LOB systems of the farm, following the SMAT BCS report. One row per LOB system, with its type, instances and entities. |
 
 The HTML report also includes configured authentication by web application/zone,
-a content-type detail section, a managed metadata section, an external list section and a
-BCS application section. Authentication errors stop the scan rather than silently
+an alerts section that groups the alerts by type with what to do about each, a content-type
+detail section, a managed metadata section, an external list section and a BCS application
+section. Authentication errors stop the scan rather than silently
 producing Windows-only results. Unrecognized/federated providers are flagged for identity
 review; a missing provider identity leaves `HasFbaZone` unknown unless FBA was positively
 detected in another provider or zone.

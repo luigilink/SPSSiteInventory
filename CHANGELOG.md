@@ -89,6 +89,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   systems and no connection setting or credential is collected. A list, LOB system, web
   application or metadata store that cannot be read marks the site or the BCS report
   partial, and an external list whose binding cannot be read is still counted. (#41)
+- Added an alert remediation catalog. Every risk alert now carries a remediation hint and
+  a Microsoft Learn reference taken from one catalog (`Get-SPSAlertCatalog`), so the same
+  signal always gives the same severity, explanation and advice. The alerts are written to
+  a new `-alerts-*.csv` next to the JSON, listed in the manifest, and the HTML report gains
+  an "Alerts and remediation" section that groups them by type with the number of sites or
+  web applications concerned. The alert logic moves out of `Export-SPSInventoryReport`
+  into `Get-SPSInventoryAlert` with tests that every alert type is cataloged and documented
+  in the new [Alerts and remediation](wiki/Alerts.md) wiki page. (#45)
 - Zone-aware web application authentication inventory, including mixed Windows/FBA,
   membership/role provider names and explicit identity-review flags. The example
   configuration treats `HasFbaZone` as a SharePoint Online migration blocker.
