@@ -101,7 +101,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `-permissions-*.json` report-pack dataset and dedicated alerts. A new `PermissionLevels`
   setting adds localized names of the permission levels SharePoint provisions, and
   `LargeContentThresholds.MaxItemsForHtmlFileScanPerLibrary` caps the HTML file count.
-  A failed policy read marks the site records partial instead of reporting no policies. (#43)
+  `Restricted Read`, which the publishing features provision without a base type, is one of
+  the built-in names, so a publishing site is not reported as having a custom permission
+  level. A failed policy read marks the site records partial instead of reporting no policies.
+  (#43, #98)
 - Added the subsite readiness analysis. Subsites are supported in SharePoint Online, but modern
   SharePoint favors one site collection per unit of work, connected by hub sites, so a large or
   deep hierarchy is a restructuring topic to plan, never a blocker. Each site gets

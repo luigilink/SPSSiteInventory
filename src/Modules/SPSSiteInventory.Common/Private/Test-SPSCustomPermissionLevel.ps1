@@ -4,11 +4,11 @@
         Tells whether a permission level (role definition) is custom.
 
         .DESCRIPTION
-        SharePoint gives Limited Access, Read, Contribute, Design, Full Control, Edit and
-        Restricted Read a base type (SPRoleType). A role definition whose Type is None was
-        either created by a user or provisioned by SharePoint for a feature or site
-        template (View Only, Approve, Manage Hierarchy, Restricted Interfaces for
-        Translation, Moderate, Records Center Web Service Submitters). The provisioned
+        SharePoint gives Limited Access, Read, Contribute, Design, Full Control and Edit a
+        base type (SPRoleType). A role definition whose Type is None was either created by
+        a user or provisioned by SharePoint for a feature or site template (View Only,
+        Approve, Manage Hierarchy, Restricted Read, Restricted Interfaces for Translation,
+        Moderate, Records Center Web Service Submitters). The provisioned
         levels are told apart from custom ones by name, using BuiltInName. Names are
         localized, so on a non-English farm the localized names must be added to the
         settings, otherwise those provisioned levels are reported as custom.

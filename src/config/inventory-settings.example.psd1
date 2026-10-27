@@ -115,9 +115,9 @@
     # -------------------------------------------------------------------------------
     # Permission levels
     #
-    # SharePoint gives Limited Access, Read, Contribute, Design, Full Control, Edit and
-    # Restricted Read a base type, so they are never reported as custom. The levels it
-    # provisions for features and site templates (View Only, Approve, Manage Hierarchy,
+    # SharePoint gives Limited Access, Read, Contribute, Design, Full Control and Edit a
+    # base type, so they are never reported as custom. The levels it provisions for
+    # features and site templates (View Only, Approve, Manage Hierarchy, Restricted Read,
     # Restricted Interfaces for Translation, Moderate, Records Center Web Service
     # Submitters) are recognized by their English names. On a non-English farm, list the
     # localized names here; they are added to the English ones. Otherwise those levels

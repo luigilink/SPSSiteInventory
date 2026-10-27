@@ -1061,6 +1061,27 @@ Describe 'Get-SPSSiteCustomization content types' {
         $configured.CustomPermissionLevelExamples | Should -Match '^Gestionnaire projet'
     }
 
+    It 'does not report the levels that the publishing features provision as custom' {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.RoleDefinitions = @(
+            (Get-TestRole -Name 'Restricted Read')
+            (Get-TestRole -Name 'Approve')
+            (Get-TestRole -Name 'Manage Hierarchy')
+            (Get-TestRole -Name 'Auditor')
+        )
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site
+
+        $signals.CustomPermissionLevelCount | Should -Be 1
+        $signals.CustomPermissionLevelExamples | Should -Match '^Auditor'
+    }
+
     It 'reports no custom permission levels when only base and provisioned levels exist' {
         $web = Get-TestWeb -Definitions @() -Bindings @()
         $web.RoleDefinitions = @((Get-TestRole -Name 'Contribute' -Type 'Contributor'), (Get-TestRole -Name 'Manage Hierarchy'))
