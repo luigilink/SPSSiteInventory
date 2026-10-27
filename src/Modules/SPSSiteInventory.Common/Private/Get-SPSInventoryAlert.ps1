@@ -147,6 +147,9 @@
         if ($scope -eq 'SiteCollection' -and [int]$record.FileVersionCount -gt 0) {
             $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'FileVersions' -Url $($record.Url) -Value $([int]$record.FileVersionCount)))
         }
+        if ($scope -eq 'SiteCollection' -and [int]$record.SubsiteCount -gt 0) {
+            $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'Subsites' -Url $($record.Url) -Value $([int]$record.SubsiteCount)))
+        }
     }
 
     # Policies and browser file handling belong to the web application, so alert once per web application.

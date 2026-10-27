@@ -72,6 +72,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   setting adds localized names of the permission levels SharePoint provisions, and
   `LargeContentThresholds.MaxItemsForHtmlFileScanPerLibrary` caps the HTML file count.
   A failed policy read marks the site records partial instead of reporting no policies. (#43)
+- Added the subsite readiness analysis. Subsites are supported in SharePoint Online, but modern
+  SharePoint favors one site collection per unit of work, connected by hub sites, so a large or
+  deep hierarchy is a restructuring topic to plan, never a blocker. Each site gets
+  `SubsiteCount` (the webs below the root web, app webs left out), `MaxSubsiteDepth` (the deepest
+  level, 1 = directly below the root web) and `SubsiteExamples` (up to five of the deepest
+  subsites), in the CSV/JSON/HTML outputs, with a summary card in the HTML report. They are
+  weighted lightly in the example configuration (`SubsiteCount = 0.05`, `MaxSubsiteDepth = 0.25`)
+  and are not blocking, and a new `Low` alert, `Subsites`, carries the restructuring guidance
+  with its Microsoft Learn reference. A web that cannot be placed below its site collection marks
+  the site partial. The HTML column `Sub-webs`, which counts every web of the site collection,
+  the root web included, is renamed `Webs`. (#33)
 - Added SMAT managed metadata parity: `ManagedMetadataListCount`,
   `ManagedMetadataColumnCount`, `ManagedMetadataTermSetCount` and `ManagedMetadataExamples`
   (Managed Metadata Columns). A managed metadata column is a visible `TaxonomyFieldType`

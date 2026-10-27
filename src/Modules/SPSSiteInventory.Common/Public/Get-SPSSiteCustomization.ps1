@@ -95,6 +95,16 @@
         collection partial. The login name of the owner of each alert is personal data:
         SharePointAlertSettings can turn it off, and the owners are then not looked up.
 
+        SubsiteCount counts the webs below the root web of the site collection, MaxSubsiteDepth
+        is the deepest level (1 for a web directly below the root web, 2 for one more level,
+        and so on) and SubsiteExamples lists up to five of the deepest subsites. Subsites are
+        supported in SharePoint Online, but modern SharePoint favors one site collection per
+        unit of work connected by hub sites, so a large or deep hierarchy is a restructuring
+        topic to plan, not a blocker: the signals are weighted, never blocking by default.
+        The app webs created by add-ins are not subsites and are left out (see AppWebCount).
+        A web whose URL cannot be placed below the site collection marks the collection
+        partial.
+
         The returned hashtable is designed to be passed straight to
         Measure-SPSSiteComplexity. CustomizationInventoryComplete is false when a signal
         cannot be read; partial results are returned with warnings rather than aborting
@@ -237,6 +247,9 @@
         CustomMasterPage         = $false
         UniquePermissionsCount   = 0
         EventReceivers           = 0
+        SubsiteCount             = 0
+        MaxSubsiteDepth          = 0
+        SubsiteExamples          = ''
         UsesCustomFarmFeature    = $false
         UsesFullTrustCode        = $false
         CustomizationInventoryComplete = $true
@@ -255,6 +268,7 @@
     $customPermissionLevels = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     $customPermissionLevelExamples = [System.Collections.Generic.List[string]]::new()
     $emailEnabledListExamples = [System.Collections.Generic.List[string]]::new()
+    $subsites = [System.Collections.Generic.List[object]]::new()
     $htmlFileExamples = [System.Collections.Generic.List[string]]::new()
     $managedMetadataLists = [System.Collections.Generic.List[object]]::new()
     $managedMetadataExamples = [System.Collections.Generic.List[string]]::new()
@@ -464,6 +478,22 @@
                 catch {
                     $signals.CustomizationInventoryComplete = $false
                     Write-Warning -Message "Could not read app-web state on '$($web.Url)': $($_.Exception.Message)"
+                }
+
+                try {
+                    if (-not $isAppWeb) {
+                        $webPlace = Get-SPSWebDepth -SiteUrl $Site.Url -WebUrl $web.Url
+                        if ($null -eq $webPlace) {
+                            throw "The web is not below site collection '$($Site.Url)'."
+                        }
+                        if ($webPlace.Depth -gt 0) {
+                            $subsites.Add($webPlace)
+                        }
+                    }
+                }
+                catch {
+                    $signals.CustomizationInventoryComplete = $false
+                    Write-Warning -Message "Could not place web '$($web.Url)' in the structure of the site collection: $($_.Exception.Message)"
                 }
 
                 try {
@@ -1155,6 +1185,16 @@
         Write-Warning -Message "$($unreadableAlertCount - $maxAlertWarnings) more alert(s) could not be read on site '$($Site.Url)'; only the first $maxAlertWarnings are reported."
     }
 
+    $signals.SubsiteCount = $subsites.Count
+    if ($subsites.Count -gt 0) {
+        $signals.MaxSubsiteDepth = [System.Int32](($subsites | Measure-Object -Property Depth -Maximum).Maximum)
+    }
+    $signals.SubsiteExamples = @(
+        $subsites |
+            Sort-Object -Property @{ Expression = { $_.Depth }; Descending = $true }, @{ Expression = { $_.RelativeUrl } } |
+            Select-Object -First 5 |
+            ForEach-Object { '{0} (level {1})' -f $_.RelativeUrl, $_.Depth }
+    ) -join '; '
     $signals.ContentTypeCount = $contentTypeIds.Count
     $signals.ContentTypes = $contentTypes.ToArray()
     $signals.LargeListExamples = $largeListExamples -join '; '

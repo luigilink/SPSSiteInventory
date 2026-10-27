@@ -59,6 +59,9 @@ Describe 'Invoke-SPSiteAssessment' {
                     ExternalLists = @([PSCustomObject]@{ ListTitle = 'Customers' }, [PSCustomObject]@{ ListTitle = 'Orders' })
                     SharePointAlertCount = 3
                     SharePointAlerts = @([PSCustomObject]@{ Title = 'Alert A' }, [PSCustomObject]@{ Title = 'Alert B' })
+                    SubsiteCount = 3
+                    MaxSubsiteDepth = 2
+                    SubsiteExamples = 'payroll/2026 (level 2); payroll (level 1)'
                     InfoPathFormCount = 0
                     IrmEnabledListCount = 0
                     IsLargeSite = $false
@@ -111,6 +114,9 @@ Describe 'Invoke-SPSiteAssessment' {
             $result.Inventory[0].CustomPermissionLevelExamples | Should -Be 'Project Manager (https://intranet/sites/first)'
             $result.Inventory[0].EmailEnabledListCount | Should -Be 1
             $result.Inventory[0].EmailEnabledListExamples | Should -Be 'Invoices (/sites/first/Invoices)'
+            $result.Inventory[0].SubsiteCount | Should -Be 3
+            $result.Inventory[0].MaxSubsiteDepth | Should -Be 2
+            $result.Inventory[0].SubsiteExamples | Should -Be 'payroll/2026 (level 2); payroll (level 1)'
             $result.Inventory[0].HtmlFileCount | Should -Be 4
             $result.Inventory[0].HtmlFileExamples | Should -Be '/sites/first/Docs/a.htm'
             $result.Inventory[0].ManagedMetadataListCount | Should -Be 2
@@ -144,6 +150,9 @@ Describe 'Invoke-SPSiteAssessment' {
             $result.Inventory[1].CustomPermissionLevelExamples | Should -BeNullOrEmpty
             $result.Inventory[1].EmailEnabledListCount | Should -BeNullOrEmpty
             $result.Inventory[1].EmailEnabledListExamples | Should -BeNullOrEmpty
+            $result.Inventory[1].SubsiteCount | Should -BeNullOrEmpty
+            $result.Inventory[1].MaxSubsiteDepth | Should -BeNullOrEmpty
+            $result.Inventory[1].SubsiteExamples | Should -BeNullOrEmpty
             $result.Inventory[1].HtmlFileCount | Should -BeNullOrEmpty
             $result.Inventory[1].HtmlFileExamples | Should -BeNullOrEmpty
             $result.Inventory[1].ManagedMetadataListCount | Should -BeNullOrEmpty

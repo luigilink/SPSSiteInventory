@@ -162,6 +162,9 @@
                     TemplateLanguageReason = $item.TemplateLanguageReason
                     SizeGB = $item.SizeGB
                     SubWebCount = $item.SubWebCount
+                    SubsiteCount = $signals['SubsiteCount']
+                    MaxSubsiteDepth = $signals['MaxSubsiteDepth']
+                    SubsiteExamples = $signals['SubsiteExamples']
                     LastModified = $item.LastModified
                     SiteInventoryComplete = $siteInventoryComplete
                     SiteInventoryWarnings = $item.SiteInventoryWarnings
@@ -250,6 +253,9 @@
                     TemplateLanguageReason = $item.TemplateLanguageReason
                     SizeGB = $item.SizeGB
                     SubWebCount = $item.SubWebCount
+                    SubsiteCount = $null
+                    MaxSubsiteDepth = $null
+                    SubsiteExamples = $null
                     LastModified = $item.LastModified
                     SiteInventoryComplete = $siteInventoryComplete
                     SiteInventoryWarnings = $item.SiteInventoryWarnings

@@ -112,7 +112,8 @@ CSV/JSON rows describe site collections and any web-application enumeration fail
 | `TemplateLanguageLcid` / `TemplateLanguageTag` / `TemplateLanguageName` | Root-web language metadata used for template-language parity checks |
 | `TemplateLanguageReviewRequired` / `TemplateLanguageReason` | Language metadata is missing/unrecognized or outside configured allow-list and needs review |
 | `SizeGB` | Storage used, in GB |
-| `SubWebCount` | Number of sub-webs |
+| `SubWebCount` | Number of webs in the site collection, the root web included |
+| `SubsiteCount` / `MaxSubsiteDepth` / `SubsiteExamples` | Webs below the root web (app webs left out), the deepest level of that hierarchy (1 = directly below the root web) and up to five of the deepest subsites as `path (level n)`. SharePoint Online supports subsites, but modern SharePoint favors flat site collections connected by hub sites: weighted lightly, never blocking |
 | `LastModified` | Last item modified date (dormancy signal) |
 | `InventoryScope` | `SiteCollection` for site rows or `WebApplication` for enumeration failure rows |
 | `SiteInventoryComplete` / `SiteInventoryWarnings` | Whether identity, size and root-web metadata were collected; warning text describes missing data |
