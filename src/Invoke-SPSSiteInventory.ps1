@@ -108,6 +108,10 @@ try {
         @($settings.Scoring.BlockingSignals) -notcontains 'IrmEnabledListCount') {
         Add-SPSInventoryEvent -Message 'IRM-enabled lists were detected, but IrmEnabledListCount is not in Scoring.BlockingSignals. Add it to classify IRM-protected lists as migration blockers.' -Level Warning
     }
+    if (@($scored | Where-Object { [int]$_.ExternalListCount -gt 0 }).Count -gt 0 -and
+        @($settings.Scoring.BlockingSignals) -notcontains 'ExternalListCount') {
+        Add-SPSInventoryEvent -Message 'External lists were detected, but ExternalListCount is not in Scoring.BlockingSignals. Add it to classify external lists, which cannot be recreated in SharePoint Online because BCS is retired there, as migration blockers.' -Level Warning
+    }
     $assessedSites = @($scored | Where-Object { $_.InventoryScope -ne 'WebApplication' -and $_.AssessmentStatus -ne 'Failed' })
     if ($assessedSites.Count -gt 0 -and
         @($assessedSites | Where-Object { [int]$_.CustomPermissionLevelCount -gt 0 }).Count -ge ($assessedSites.Count / 2)) {

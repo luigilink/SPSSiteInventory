@@ -41,6 +41,29 @@ Describe 'Get-SPSInventorySetting' {
 }
 
 Describe 'Example settings file' {
+    BeforeAll {
+        $repoRoot = Split-Path -Path $PSScriptRoot -Parent
+        $script:ExamplePath = Join-Path $repoRoot 'src/config/inventory-settings.example.psd1'
+    }
+
+    It 'treats external lists as a weighted migration blocker because BCS is retired in SharePoint Online' {
+        $settings = Import-PowerShellDataFile -Path $script:ExamplePath
+
+        $settings.Scoring.BlockingSignals | Should -Contain 'ExternalListCount'
+        $settings.Scoring.Weights.ExternalListCount | Should -BeGreaterThan 0
+    }
+
+    It 'classifies a site with an external list as Blocking and a site without one as Simple' {
+        $settings = Import-PowerShellDataFile -Path $script:ExamplePath
+
+        $with = Measure-SPSSiteComplexity -Signals @{ ExternalListCount = 1 } -Scoring $settings.Scoring
+        $without = Measure-SPSSiteComplexity -Signals @{ ExternalListCount = 0 } -Scoring $settings.Scoring
+
+        $with.Category | Should -Be 4
+        $with.Reasons | Should -Contain 'blocking: ExternalListCount'
+        $without.Category | Should -Be 1
+    }
+
     It 'the shipped example is a valid settings file' {
         $repoRoot = Split-Path -Path $PSScriptRoot -Parent
         $example  = Join-Path $repoRoot 'src/config/inventory-settings.example.psd1'

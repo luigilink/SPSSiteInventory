@@ -79,10 +79,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and entity of each list, and the new `Get-SPSBcsApplication`, which reads the Business
   Data Connectivity metadata store (BCS scan) through the default service context of each
   web application into a `-bcs-*` CSV/JSON report with the LOB system type, instances and
-  entities. They flow to scoring (weighted, not blocking), CSV/JSON/HTML (external list and
-  BCS sections), the manifest and dedicated alerts (`ExternalLists`, `BcsApplication`,
-  `BcsInventoryPartial`), with guidance that BCS is retired in SharePoint Online and that
-  these scenarios need a replacement such as Power Apps. Nothing is read from the external
+  entities. They flow to scoring, CSV/JSON/HTML (external list and BCS sections), the
+  manifest and dedicated alerts (`ExternalLists`, `BcsApplication`, `BcsInventoryPartial`),
+  with guidance that BCS is retired in SharePoint Online and that these scenarios need a
+  replacement such as Power Apps. The example configuration weights `ExternalListCount` and
+  treats it as a migration blocker like InfoPath; the run warns when external lists are
+  found and an existing configuration does not list it in `Scoring.BlockingSignals`. Nothing is read from the external
   systems and no connection setting or credential is collected. A list, LOB system, web
   application or metadata store that cannot be read marks the site or the BCS report
   partial. (#41)

@@ -218,6 +218,11 @@ To plan the work:
 3. BCS is not retired in SharePoint Server Subscription Edition, so a target that stays
    on-premises can keep using it.
 
+In the example configuration a site with external lists is classed **Blocking** (category
+4), like a site with InfoPath forms, because the scenario has to be rebuilt. The site
+collection itself can still be migrated without those lists. Remove `ExternalListCount`
+from `BlockingSignals` to treat it as remediation instead.
+
 ### Migration categories
 
 - **Category 1 (Simple)** — lift & shift candidates. Group them into the first migration waves.
