@@ -6,10 +6,11 @@
         .DESCRIPTION
         A SharePoint alert is an "Alert Me" subscription: a user asks to be notified when a
         list, a list item or a custom object changes. Migration tools do not migrate alerts,
-        so users have to recreate them in the destination; this row gives the administrator
-        what is needed to tell them where (site, list or item), what for (event type) and
-        how (frequency, delivery channel, status). It matches the columns of the SMAT
-        alerts report.
+        and SharePoint Online retired them from July 2026, so each notification has to be
+        replaced, for example with a SharePoint rule or a Power Automate flow; this row gives
+        the administrator what is needed to plan that: where (site, list or item), what for
+        (event type), how (frequency, delivery channel, status) and for whom (the owner). It
+        matches the columns of the SMAT alerts report.
 
         Some SPAlert properties are only defined for some alert types, and SharePoint
         throws for the others: ListUrl and ListID for a custom alert, ItemID unless the

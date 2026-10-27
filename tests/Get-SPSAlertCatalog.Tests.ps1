@@ -79,6 +79,22 @@ Describe 'Get-SPSAlertCatalog' {
         $script:Catalog['AppWebs'].Remediation | Should -Match 'preserve'
     }
 
+    It 'does not tell users to set up their SharePoint alerts again in SharePoint Online, where they are retired' {
+        $entry = $script:Catalog['AlertSubscriptions']
+
+        $entry.Severity | Should -Be 'Medium'
+        $entry.Severity | Should -Be $script:Catalog['EmailEnabledLists'].Severity
+        $entry.Message | Should -Match 'retired SharePoint Alerts from July 2026'
+        $entry.Remediation | Should -Match 'retired SharePoint Alerts from July 2026'
+        $entry.Remediation | Should -Match 'cannot be recreated there and existing ones stop working'
+        $entry.Remediation | Should -Match 'SharePoint rule or a Power Automate flow'
+        $entry.Remediation | Should -Match 'template for each classic alert scenario'
+        $entry.Remediation | Should -Match 'only applies to a target that still supports them'
+        $entry.Remediation | Should -Not -Match 'set up their alerts again'
+        $entry.Message | Should -Not -Match 'migration tools do not migrate them\.$'
+        $entry.Reference | Should -Match 'troubleshoot/sharepoint/sites/no-alert-notifications$'
+    }
+
     It 'replaces InfoPath browser forms instead of offering to repair them for SharePoint Online' {
         $remediation = $script:Catalog['InfoPath'].Remediation
 

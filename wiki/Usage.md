@@ -102,7 +102,7 @@ CSV/JSON rows describe site collections and any web-application enumeration fail
 | `ManagedMetadataListCount` / `ManagedMetadataColumnCount` | Lists with at least one visible managed metadata column, and those columns counted once per list. Enterprise Keywords is included; hidden columns are not |
 | `ManagedMetadataTermSetCount` / `ManagedMetadataExamples` | Distinct term sets, by ID, that those columns use in the site collection, and up to five lists with their column names |
 | `ExternalListCount` / `ExternalListExamples` | Lists backed by a BCS external content type (not migrated) and up to five examples with their entity |
-| `SharePointAlertCount` | SharePoint alerts ("Alert Me" subscriptions) of every user, in every web of the site collection. Migration tools do not migrate them. Exact even when the rows are capped |
+| `SharePointAlertCount` | SharePoint alerts ("Alert Me" subscriptions) of every user, in every web of the site collection. Migration tools do not migrate them and SharePoint Online retired them from July 2026. Exact even when the rows are capped |
 | `BrowserFileHandling` | Web application setting, `Strict` or `Permissive`. SharePoint Online enforces Strict |
 | `WebAppPolicyCount` / `WebAppPolicyExamples` | Web application policies (all zones and each zone), including accounts SharePoint adds itself, and the first ten as `user: permission levels`. They are not migrated |
 | `CustomizedPageCount` / `CustomizedPageExamples` | Customized (unghosted) pages at the root of each web, ignoring System Account edits, and up to five server-relative URLs. List view and form pages are not scanned |
@@ -235,10 +235,13 @@ from `BlockingSignals` to treat it as remediation instead.
 ### SharePoint alerts
 
 A SharePoint alert is an "Alert Me" subscription: a user asks to be notified when a list,
-a list item or a custom object changes. Migration tools do not migrate them, so each user
-has to set up the alerts again in the destination. The `*-sharepointalerts-*` files give
-you what you need to tell them what to recreate, like the SMAT Alerts report. They hold
-one row per alert, for every user of every web:
+a list item or a custom object changes. Migration tools do not migrate them, and Microsoft
+retired SharePoint Alerts in SharePoint Online from July 2026: new alerts cannot be created
+and existing ones stop working (see
+[SharePoint Alerts retirement](https://support.microsoft.com/en-us/sharepoint/admin/sharepoint-alerts-retirement)).
+The notifications that users rely on have to be rebuilt with SharePoint rules or Power
+Automate. The `*-sharepointalerts-*` files give you what you need to plan that, like the SMAT
+Alerts report. They hold one row per alert, for every user of every web:
 
 | Field | Description |
 | --- | --- |
@@ -256,7 +259,7 @@ one row per alert, for every user of every web:
 `UserLoginName` is personal data, which is why these files are not part of the HTML report:
 handle them like any export that names users. It is empty when the owner is a system alert
 or no longer exists in the site. The HTML report shows the number of sites with alerts, the
-`SharePointAlertCount` column and the `AlertSubscriptions` alert, which has the `Low`
+`SharePointAlertCount` column and the `AlertSubscriptions` alert, which has the `Medium`
 severity.
 
 The rows are capped per site collection by `LargeContentThresholds.MaxAlertRowsPerSite`
@@ -268,11 +271,17 @@ a site that cannot be read and count the others.
 To plan the work:
 
 1. Group the rows of `*-sharepointalerts-*` by `SiteUrl` to see which sites have the most
-   alerts, and by `UserLoginName` to tell each owner which alerts to recreate.
-2. Look at `Status`: an alert that is `Off` is not active today, so ask its owner before
-   recreating it. An alert without a `UserLoginName` has nobody to tell.
-3. Communicate before and after the migration, as the Microsoft guidance recommends: see
-   [Migration Assessment Scan: Alerts](https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-alerts).
+   alerts, and by `UserLoginName` to see which users rely on notifications.
+2. Look at `Status`: an alert that is `Off` is not active today, so ask its owner whether the
+   notification is still needed before replacing it. An alert without a `UserLoginName` has
+   nobody to ask.
+3. Rebuild each notification that is still needed with a SharePoint rule or a Power Automate
+   flow. Microsoft publishes a Power Automate template for each classic alert scenario (see
+   the [retirement page](https://support.microsoft.com/en-us/sharepoint/admin/sharepoint-alerts-retirement)).
+   Recreating an alert only applies to a target that still supports them.
+4. Tell the users before and after the migration. The
+   [Migration Assessment Scan: Alerts](https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-alerts)
+   page describes the SMAT report that these files follow; it predates the retirement.
 
 ### Migration categories
 

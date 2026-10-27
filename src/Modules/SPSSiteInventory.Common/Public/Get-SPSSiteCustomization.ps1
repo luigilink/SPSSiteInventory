@@ -82,8 +82,10 @@
         signal; its row is left out and the collection is marked partial.
 
         SharePointAlertCount counts the alerts on the site: the "Alert Me" subscriptions
-        of every user, in every web. Migration tools do not migrate them, so users have
-        to recreate them; the count is informational and is not scored by default.
+        of every user, in every web. Migration tools do not migrate them and SharePoint
+        Online retired them from July 2026, so each notification has to be replaced (a
+        SharePoint rule or a Power Automate flow); the count is informational and is not
+        scored by default.
         SharePointAlerts holds one row per alert, like the SMAT Alerts report: where it
         applies (web, list or item), what triggers it, how often it is sent, its status
         and its owner. The rows are capped per site (MaxAlertRowsPerSite) while the count

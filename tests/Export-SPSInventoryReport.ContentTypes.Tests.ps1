@@ -528,7 +528,7 @@ Describe 'Export-SPSInventoryReport content types' {
         Get-AlertCount -Alerts $alerts -Type 'ExternalLists' | Should -Be 0
     }
 
-    It 'writes the SharePoint alerts CSV and JSON, manifest entries and one low alert per site, without the rows in the HTML' {
+    It 'writes the SharePoint alerts CSV and JSON, manifest entries and one alert per site, without the rows in the HTML' {
         $sites = @([PSCustomObject]@{
             InventoryScope = 'SiteCollection'; Url = 'https://intranet/sites/team'; WebApp = 'Intranet'
             AssessmentStatus = 'Complete'; Category = 1; SharePointAlertCount = 2
@@ -571,8 +571,9 @@ Describe 'Export-SPSInventoryReport content types' {
         Get-AlertCount -Alerts $alerts -Type 'AlertSubscriptions' -Url 'https://intranet/sites/team' | Should -Be 1
         $alert = @($alerts | Where-Object { $_.AlertType -eq 'AlertSubscriptions' })[0]
         $alert.Value | Should -Be 2
-        $alert.Severity | Should -Be 'Low'
-        $alert.Reference | Should -Be 'https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-alerts'
+        $alert.Severity | Should -Be 'Medium'
+        $alert.Message | Should -Match 'SharePoint Online retired SharePoint Alerts from July 2026'
+        $alert.Reference | Should -Be 'https://learn.microsoft.com/en-us/troubleshoot/sharepoint/sites/no-alert-notifications'
         $html = Get-Content $output.HtmlPath -Raw
         $html | Should -Match 'Sites with SharePoint alerts'
         $html | Should -Not -Match 'anna'

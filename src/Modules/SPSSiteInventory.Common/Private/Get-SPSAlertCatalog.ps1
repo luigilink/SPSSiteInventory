@@ -11,6 +11,7 @@
         - Severity: High, Medium or Low. High is for findings that block or break a
           migration, Medium for findings that need a plan or a check, and Low for
           information to pass on, such as telling users what the migration does not carry.
+          No entry is Low today, but the report and the tests still support it.
         - Message: what was detected and why it matters. Alerts whose message depends on the
           record, such as the template reasons, replace it with their own text.
         - Remediation: the next step, written from the guidance of the SharePoint Migration
@@ -130,10 +131,10 @@
             Reference   = 'https://learn.microsoft.com/en-us/sharepoint/business-connectivity-services-retirement'
         }
         AlertSubscriptions = @{
-            Severity    = 'Low'
-            Message     = 'Users have SharePoint alerts (Alert Me subscriptions) on this site; migration tools do not migrate them.'
-            Remediation = 'Tell the users, before and after the migration, that they must set up their alerts again. The SharePoint alerts CSV and JSON files list each alert with its owner, so that you can give every owner the alerts to recreate.'
-            Reference   = 'https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-alerts'
+            Severity    = 'Medium'
+            Message     = 'Users have SharePoint alerts (Alert Me subscriptions) on this site; they are not migrated and SharePoint Online retired SharePoint Alerts from July 2026, so each one needs a replacement.'
+            Remediation = 'Plan a replacement before the cutover: SharePoint Online retired SharePoint Alerts from July 2026, so they cannot be recreated there and existing ones stop working. Use the SharePoint alerts CSV and JSON files to see who is notified of what, rebuild each notification that is still needed with a SharePoint rule or a Power Automate flow (Microsoft publishes a template for each classic alert scenario) and tell the users. Recreating an alert only applies to a target that still supports them.'
+            Reference   = 'https://learn.microsoft.com/en-us/troubleshoot/sharepoint/sites/no-alert-notifications'
         }
         UnsupportedSiteTemplate = @{
             Severity    = 'High'
