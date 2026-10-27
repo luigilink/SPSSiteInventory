@@ -18,6 +18,7 @@ and adjust it. No client-specific value ships in the repository.
 | `LargeContentThresholds` | hashtable | Thresholds for large-content parity signals (large site/list/view, checked-out files, file versions). Optional; defaults apply when omitted. |
 | `TemplateParity` | hashtable | Template compatibility and language rules (supported/unsupported/review mapping, optional language allow-list). Optional; built-in defaults apply when omitted. |
 | `PermissionLevels` | hashtable | Permission-level names SharePoint provisions, used to tell custom permission levels apart (`BuiltInNames`, added to the built-in English names). Optional. |
+| `Scope` | hashtable | Which site collections are scanned (`IncludePersonalSites` and `IncludeSiteMasters`, both default `$false`). Optional. |
 | `SharePointAlerts` | hashtable | Options of the SharePoint alerts report (`IncludeUserLogin`, default `$true`). Optional. |
 | `Scoring` | hashtable | The scoring engine configuration (see below). **Mandatory.** |
 | `MigrationWaves` | hashtable[] | The category-to-wave mapping (see below). Optional; a one-wave-per-category default applies when omitted. |
@@ -408,6 +409,49 @@ site collection. List those names in `BuiltInNames`; they are added to the Engli
 The scan logs a warning when half or more of the site collections report custom
 permission levels, which usually means the names are missing. The
 `CustomPermissionLevelExamples` field shows which levels were flagged.
+
+## Scope section
+
+```powershell
+Scope = @{
+    # Keep the personal sites (My Sites) in the inventory (default $false)
+    IncludePersonalSites = $false
+    # Keep the site masters in the inventory (default $false)
+    IncludeSiteMasters = $false
+}
+```
+
+Personal sites and site masters are not sites to migrate, so the scan leaves them out by
+default, also when the section is missing. On a farm with a User Profile Service they are
+often most of the site collections: they bury the sites that matter and make the reports
+large.
+
+- **Personal sites** (My Sites, `/personal/<user>`) belong to the OneDrive migration. A site
+  collection is a personal site when the template of its root web is `SPSPERS`, whatever
+  the configuration (`SPSPERS#0`, `SPSPERS#10`, ...). The template needs no User Profile
+  Service application, so personal sites whose profile is gone are found too. Set
+  `IncludePersonalSites` to `$true` to keep them.
+- **Site masters** are hidden site collections that SharePoint creates itself to speed up the
+  creation of personal sites. Their host name is `sitemaster-` followed by a GUID, for
+  example `https://sitemaster-f5e4136f-1537-43de-a8af-d47447211c44`, and they have the
+  personal site template too, usually locked with `NoAdditions`. They are recognized by the
+  host name, before the site is opened. Set `IncludeSiteMasters` to `$true` to keep them. A
+  site master follows `IncludeSiteMasters` only, never `IncludePersonalSites`.
+
+The My Site host (template `SPSMSITEHOST`, at the root of the My Site web application) is a
+real site and always stays in the scan. A site collection whose root web cannot be read is
+not recognized as a personal site and stays too.
+
+A site collection that is left out gets no record and no warning. The scan logs how many were
+left out of each kind, the HTML summary says so, and the manifest has `Summary.ExcludedPersonalSites`
+and `Summary.ExcludedSiteMasters` (see [Usage](Usage#site-collections-left-out-of-the-inventory)).
+
+Version 1.x scanned every site collection. To restore that scope, set both options to `$true`;
+the scan then reports as many site collections as 1.x did. A settings file from 1.x has no
+`Scope` section, so a scan with it reports fewer site collections than before.
+
+Each option must be `$true` or `$false`. Anything else, such as the string `'false'`, is
+rejected when the settings file is loaded, before any site collection is read.
 
 ## SharePointAlerts section
 

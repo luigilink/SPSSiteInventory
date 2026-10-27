@@ -128,6 +128,23 @@
     }
 
     # -------------------------------------------------------------------------------
+    # Scope
+    #
+    # Personal sites (My Sites, template SPSPERS) belong to the OneDrive migration, and site
+    # masters are the hidden site collections that SharePoint creates itself to speed up the
+    # creation of personal sites (host name sitemaster- followed by a GUID). Neither is a
+    # site to migrate, so both are left out of the inventory by default, also when this
+    # section is missing. The My Site host (SPSMSITEHOST) is a real site and always stays.
+    # Set an option to $true to keep that kind of site collection; set both to $true to
+    # scan what version 1.x scanned. The values must be $true or $false. The report and the
+    # log say how many site collections were left out.
+    # -------------------------------------------------------------------------------
+    Scope = @{
+        IncludePersonalSites = $false
+        IncludeSiteMasters = $false
+    }
+
+    # -------------------------------------------------------------------------------
     # SharePoint alerts
     #
     # The SharePoint alerts report lists the "Alert Me" subscriptions of the users, with

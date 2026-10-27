@@ -9,6 +9,8 @@
         missing or when the mandatory Scoring section is absent, so the orchestrator does
         not run with an incomplete configuration. The optional SharePointAlerts section is
         validated too: it must be a hashtable and IncludeUserLogin must be $true or $false.
+        So is the optional Scope section: IncludePersonalSites and IncludeSiteMasters must
+        be $true or $false.
 
         .PARAMETER Path
         Full path to the settings .psd1 file.
@@ -41,6 +43,18 @@
         }
         try {
             $null = Get-SPSSharePointAlertOption -Settings $settings['SharePointAlerts']
+        }
+        catch {
+            throw "Inventory settings file '$Path': $($_.Exception.Message)"
+        }
+    }
+
+    if ($settings.ContainsKey('Scope')) {
+        if ($settings['Scope'] -isnot [System.Collections.IDictionary]) {
+            throw "Inventory settings file '$Path': the 'Scope' section must be a hashtable."
+        }
+        try {
+            $null = Get-SPSScopeOption -Settings $settings['Scope']
         }
         catch {
             throw "Inventory settings file '$Path': $($_.Exception.Message)"

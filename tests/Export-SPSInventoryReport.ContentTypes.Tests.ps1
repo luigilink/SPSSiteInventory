@@ -760,4 +760,47 @@ Describe 'Export-SPSInventoryReport content types' {
         (Get-Content $output.ManifestJsonPath -Raw | ConvertFrom-Json).Summary.AlertCount | Should -Be 0
         (Get-Content $output.HtmlPath -Raw) | Should -Match '<strong>0</strong> alert\(s\) of <strong>0</strong> type\(s\)'
     }
+
+    It 'writes the counts of the personal sites and site masters left out in the manifest and in the HTML summary' {
+        $sites = @([PSCustomObject]@{ Url = 'https://intranet/sites/team'; InventoryScope = 'SiteCollection'; Category = 1 })
+
+        $output = Export-SPSInventoryReport -InputObject $sites -OutputFolder $TestDrive -BaseName 'Scope' -ExcludedPersonalSiteCount 109 -ExcludedSiteMasterCount 10
+
+        $manifest = Get-Content $output.ManifestJsonPath -Raw | ConvertFrom-Json
+        $manifest.ReportPackVersion | Should -Be '1.0'
+        $manifest.Summary.ExcludedPersonalSites | Should -Be 109
+        $manifest.Summary.ExcludedSiteMasters | Should -Be 10
+        $raw = Get-Content $output.ManifestJsonPath -Raw
+        $raw | Should -Match '"ExcludedPersonalSites":\s*109\b'
+        $raw | Should -Match '"ExcludedSiteMasters":\s*10\b'
+        $manifest.Summary.SiteCollections | Should -Be 1
+        (Get-Content $output.HtmlPath -Raw) | Should -Match '<strong>109</strong> personal site\(s\) and <strong>10</strong> site master\(s\) were left out of this inventory'
+    }
+
+    It 'always writes the counts in the manifest, as 0 when callers omit them, and keeps the HTML summary free of the line' {
+        $sites = @([PSCustomObject]@{ Url = 'https://intranet/sites/team'; InventoryScope = 'SiteCollection'; Category = 1 })
+
+        $output = Export-SPSInventoryReport -InputObject $sites -OutputFolder $TestDrive -BaseName 'NoScope'
+
+        $manifest = Get-Content $output.ManifestJsonPath -Raw | ConvertFrom-Json
+        $manifest.ReportPackVersion | Should -Be '1.0'
+        $manifest.Summary.PSObject.Properties.Name | Should -Contain 'ExcludedPersonalSites'
+        $manifest.Summary.PSObject.Properties.Name | Should -Contain 'ExcludedSiteMasters'
+        $manifest.Summary.ExcludedPersonalSites | Should -Be 0
+        $manifest.Summary.ExcludedSiteMasters | Should -Be 0
+        (Get-Content $output.HtmlPath -Raw) | Should -Not -Match 'left out of this inventory'
+    }
+
+    It 'says that only one kind was left out when the other count is 0' {
+        $sites = @([PSCustomObject]@{ Url = 'https://intranet/sites/team'; InventoryScope = 'SiteCollection'; Category = 1 })
+
+        $output = Export-SPSInventoryReport -InputObject $sites -OutputFolder $TestDrive -BaseName 'OneKind' -ExcludedSiteMasterCount 4
+
+        $manifest = Get-Content $output.ManifestJsonPath -Raw | ConvertFrom-Json
+        $manifest.Summary.ExcludedPersonalSites | Should -Be 0
+        $manifest.Summary.ExcludedSiteMasters | Should -Be 4
+        $html = Get-Content $output.HtmlPath -Raw
+        $html | Should -Match '<strong>4</strong> site master\(s\) were left out of this inventory'
+        $html | Should -Not -Match 'personal site\(s\)'
+    }
 }

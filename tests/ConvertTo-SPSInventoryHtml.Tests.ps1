@@ -804,4 +804,34 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $omitted | Should -Not -Match 'id="alerts"'
         $omitted | Should -Not -Match 'href="#alerts"'
     }
+
+    It 'says how many personal sites and site masters were left out, right under the site collection total' {
+        $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample -ExcludedPersonalSiteCount 109 -ExcludedSiteMasterCount 10
+
+        $html | Should -Match '<div class="summary-total"><strong>109</strong> personal site\(s\) and <strong>10</strong> site master\(s\) were left out of this inventory \(Scope in the settings\)</div>'
+        $html | Should -Match '(?s)site collection\(s\).*?</div>\s*<div class="summary-total"><strong>109</strong> personal site'
+        $html | Should -Match '<strong>\d+</strong> site collection\(s\)'
+    }
+
+    It 'reads well when only personal sites were left out' {
+        $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample -ExcludedPersonalSiteCount 3
+
+        $html | Should -Match '<div class="summary-total"><strong>3</strong> personal site\(s\) were left out of this inventory \(Scope in the settings\)</div>'
+        $html | Should -Not -Match 'site master'
+    }
+
+    It 'reads well when only site masters were left out' {
+        $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample -ExcludedSiteMasterCount 10
+
+        $html | Should -Match '<div class="summary-total"><strong>10</strong> site master\(s\) were left out of this inventory \(Scope in the settings\)</div>'
+        $html | Should -Not -Match 'personal site'
+    }
+
+    It 'does not mention the Scope when nothing was left out' {
+        $default = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
+        $zero = ConvertTo-SPSInventoryHtml -InputObject $script:Sample -ExcludedPersonalSiteCount 0 -ExcludedSiteMasterCount 0
+
+        $default | Should -Not -Match 'left out of this inventory'
+        $zero | Should -Not -Match 'left out of this inventory'
+    }
 }

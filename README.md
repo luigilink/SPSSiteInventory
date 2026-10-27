@@ -18,7 +18,7 @@ Microsoft's assessment tooling has shifted: **SMAT reaches end of support on 1 O
 
 ## What it collects
 
-- Site identity and volumetry (URL, template, size, sub-webs, last activity)
+- Site identity and volumetry (URL, template, size, sub-webs, last activity). Personal sites (My Sites) and site masters are left out by default, because they are not sites to migrate; the `Scope` settings bring them back
 - Customization and readiness signals: 2010 vs 2013 workflows (including running-instance coverage), site-template compatibility (unsupported/review), template-language review flags, InfoPath forms, IRM-enabled lists, large-site/list/view/file-volume risks (large lists/views, checked-out files, high file-version counts), managed metadata columns and the term sets they use, external lists and BCS applications, SharePoint alerts (Alert Me subscriptions), site lock state, sandbox solutions, custom master pages, event receivers, unique permissions, subsite structure (count and depth)
 - Correlation between **farm solutions (WSP)** and the sites that activate their features, including **full-trust code** detection (assemblies deployed to the GAC), CAS policy, deployment reach and features per solution
 - A **complexity score and category** per site, plus a **migration wave** proposal (configurable category-to-wave mapping)
