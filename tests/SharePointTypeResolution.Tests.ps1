@@ -48,3 +48,103 @@ Describe 'The SharePoint types of the toolkit' {
         @(& $script:FindGetTypeCall $fine) | Should -HaveCount 0
     }
 }
+
+# Each run is a separate PowerShell process: the stub type of the SharePoint query stays out of the other tests, which
+# rely on the object that the scan builds when the type is not loaded.
+Describe 'The paged queries of the customization scan' {
+    BeforeAll {
+        $script:ModulePath = Join-Path (Split-Path -Path $PSScriptRoot -Parent) 'src/Modules/SPSSiteInventory.Common/SPSSiteInventory.Common.psd1'
+        $script:ChildScript = Join-Path $TestDrive 'query-child.ps1'
+        Set-Content -Path $script:ChildScript -Encoding UTF8 -Value @'
+param ([System.String] $ModulePath, [switch] $LoadSharePointStub)
+$ErrorActionPreference = 'Stop'
+if ($LoadSharePointStub) {
+    $source = 'namespace Microsoft.SharePoint { public class SPQuery { public uint RowLimit { get; set; } public string ViewAttributes { get; set; } public string Query { get; set; } public object ListItemCollectionPosition { get; set; } public string QueryThrottleMode { get; set; } } }'
+    Add-Type -TypeDefinition $source
+}
+Import-Module -Name $ModulePath -Force
+$list = [PSCustomObject]@{
+    Title = 'Documents'
+    RootFolder = [PSCustomObject]@{ ServerRelativeUrl = '/sites/team/Documents'; Properties = @{} }
+    ContentTypes = @()
+    WorkflowAssociations = @()
+    EventReceivers = @()
+    IrmEnabled = $false
+    ItemCount = 0
+    Views = @()
+    CheckedOutFiles = @()
+    EnableVersioning = $false
+    Items = @()
+    BaseTemplate = 101
+    Fields = @()
+    HasExternalDataSource = $false
+}
+$list | Add-Member -NotePropertyName Seen -NotePropertyValue ([System.Collections.Generic.List[object]]::new())
+$list | Add-Member -MemberType ScriptMethod -Name GetItems -Value {
+    param ($Query)
+    $this.Seen.Add([PSCustomObject]@{ Type = $Query.GetType().FullName; RowLimit = [string]$Query.RowLimit; ViewAttributes = [string]$Query.ViewAttributes; Query = [string]$Query.Query })
+    return [PSCustomObject]@{ Items = @(); ListItemCollectionPosition = $null }
+}
+$web = [PSCustomObject]@{
+    Url = 'https://intranet.contoso.com/sites/team'
+    ContentTypes = @()
+    Lists = @($list)
+    WorkflowAssociations = @()
+    HasUniqueRoleAssignments = $false
+    CustomMasterUrl = ''
+    Features = @()
+    Files = @()
+    IsRootWeb = $true
+    HasUniqueRoleDefinitions = $true
+    RoleDefinitions = @()
+    Alerts = @()
+}
+$web | Add-Member -MemberType ScriptMethod -Name Dispose -Value { }
+$site = [PSCustomObject]@{ Url = 'https://intranet.contoso.com/sites/team'; Features = @(); Solutions = @(); AllWebs = @($web) }
+$null = Get-SPSSiteCustomization -Site $site -WarningAction SilentlyContinue
+foreach ($entry in $list.Seen) {
+    ConvertTo-Json -InputObject $entry -Compress
+}
+'@
+
+        function Invoke-QueryChild {
+            param ([switch] $LoadStub)
+
+            $shell = (Get-Process -Id $PID).Path
+            $arguments = @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', $script:ChildScript, '-ModulePath', $script:ModulePath)
+            if ($LoadStub) {
+                $arguments += '-LoadSharePointStub'
+            }
+            $output = @(& $shell @arguments 2>&1 | ForEach-Object { [System.String]$_ })
+            $exitCode = $LASTEXITCODE
+            $entry = @($output | Where-Object { $_ -like '{*' } | ForEach-Object { ConvertFrom-Json -InputObject $_ })
+
+            [PSCustomObject]@{ ExitCode = $exitCode; Entry = $entry; Text = ($output -join [System.Environment]::NewLine) }
+        }
+    }
+
+    It 'hands a SharePoint query object to GetItems when the SharePoint type is loaded' {
+        $result = Invoke-QueryChild -LoadStub
+
+        $result.ExitCode | Should -Be 0 -Because $result.Text
+        $result.Entry.Count | Should -BeGreaterThan 1
+        foreach ($entry in $result.Entry) {
+            $entry.Type | Should -Be 'Microsoft.SharePoint.SPQuery'
+            $entry.RowLimit | Should -Be '200'
+            $entry.ViewAttributes | Should -Be "Scope='RecursiveAll'"
+        }
+        @($result.Entry | Where-Object { $_.Query -match 'CheckoutUser' }) | Should -HaveCount 1
+    }
+
+    It 'still builds a plain query object on a host without the SharePoint type' {
+        $result = Invoke-QueryChild
+
+        $result.ExitCode | Should -Be 0 -Because $result.Text
+        $result.Entry.Count | Should -BeGreaterThan 1
+        foreach ($entry in $result.Entry) {
+            $entry.Type | Should -Be 'System.Management.Automation.PSCustomObject'
+            $entry.RowLimit | Should -Be '200'
+            $entry.ViewAttributes | Should -Be "Scope='RecursiveAll'"
+        }
+    }
+}
