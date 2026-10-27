@@ -11,7 +11,6 @@
         - Severity: High, Medium or Low. High is for findings that block or break a
           migration, Medium for findings that need a plan or a check, and Low for
           information to pass on, such as telling users what the migration does not carry.
-          No entry is Low today, but the report and the tests still support it.
         - Message: what was detected and why it matters. Alerts whose message depends on the
           record, such as the template reasons, replace it with their own text.
         - Remediation: the next step, written from the guidance of the SharePoint Migration

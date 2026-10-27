@@ -20,7 +20,7 @@ Each alert has these fields:
 | Field | Description |
 | --- | --- |
 | `AlertType` | The kind of alert, from the table below. |
-| `Severity` | `High` for a finding that blocks or breaks a migration, `Medium` for one that needs a plan or a check, `Low` for information to pass on (no alert below has this severity today). |
+| `Severity` | `High` for a finding that blocks or breaks a migration, `Medium` for one that needs a plan or a check, `Low` for information to pass on. |
 | `Url` | The site collection or web application the alert is about. Empty for farm-wide alerts. |
 | `Value` | What raised the alert: a count, a state, a template or a LOB system name. |
 | `Message` | What was detected and why it matters. For the template alerts it is the reason of the mapping. |
