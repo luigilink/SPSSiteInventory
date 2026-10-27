@@ -173,6 +173,10 @@
     $totalSize = [math]::Round($totalSize, 2)
     $riskCards = @(
         [PSCustomObject]@{ Label = 'Sites with full-trust code'; Count = @($siteRecords | Where-Object { $_.UsesFullTrustCode }).Count }
+        [PSCustomObject]@{ Label = 'Sites with custom farm features'; Count = @($siteRecords | Where-Object { $_.UsesCustomFarmFeature }).Count }
+        [PSCustomObject]@{ Label = 'Sites with sandbox solutions'; Count = @($siteRecords | Where-Object { [int]$_.SandboxSolutions -gt 0 }).Count }
+        [PSCustomObject]@{ Label = 'Sites with a custom master page'; Count = @($siteRecords | Where-Object { $_.CustomMasterPage }).Count }
+        [PSCustomObject]@{ Label = 'Sites with custom event receivers'; Count = @($siteRecords | Where-Object { [int]$_.EventReceivers -gt 0 }).Count }
         [PSCustomObject]@{ Label = 'Sites with FBA configured'; Count = @($siteRecords | Where-Object { $_.HasFbaZone }).Count }
         [PSCustomObject]@{ Label = 'Sites with unsupported templates'; Count = @($siteRecords | Where-Object { $_.IsUnsupportedSiteTemplate }).Count }
         [PSCustomObject]@{ Label = 'Sites with template compatibility review'; Count = @($siteRecords | Where-Object { -not [bool]$_.IsUnsupportedSiteTemplate -and [string]$_.TemplateCompatibility -eq 'Review' }).Count }
@@ -833,6 +837,11 @@ td.muted, .muted { color: var(--muted); }
         @{ Key = 'ContentTypeCount'; Label = 'Content types (unique web IDs)'; Class = 'num'; Type = 'num' }
         @{ Key = 'ListContentTypeBindingCount'; Label = 'List content-type bindings'; Class = 'num'; Type = 'num' }
         @{ Key = 'ContentTypeInventoryComplete'; Label = 'Content types complete'; Class = ''; Type = 'text' }
+        @{ Key = 'UsesCustomFarmFeature'; Label = 'Custom farm feature'; Class = ''; Type = 'text' }
+        @{ Key = 'SandboxSolutions'; Label = 'Sandbox solutions'; Class = 'num'; Type = 'num' }
+        @{ Key = 'CustomMasterPage'; Label = 'Custom master page'; Class = ''; Type = 'text' }
+        @{ Key = 'EventReceivers'; Label = 'Custom event receivers'; Class = 'num'; Type = 'num' }
+        @{ Key = 'UniquePermissionsCount'; Label = 'Unique permission assignments'; Class = 'num'; Type = 'num' }
         @{ Key = 'Wave'; Label = 'Wave'; Class = 'num'; Type = 'num' }
         @{ Key = 'Score'; Label = 'Score'; Class = 'num'; Type = 'num' }
     )

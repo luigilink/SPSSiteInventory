@@ -185,6 +185,30 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $html | Should -Match '<td class="num">1234</td>'
     }
 
+    It 'shows the classic customization signals in summary cards and table columns, and counts only the sites that have them' {
+        # The four cards count 1, 2, 3 and 4 sites, so that a card that reads the wrong field is noticed.
+        $records = @(
+            [PSCustomObject]@{ Url = 'https://intranet/sites/a'; Category = 2; CategoryName = 'Moderate'; Wave = 2; WaveName = 'Light remediation'; UsesCustomFarmFeature = $true; SandboxSolutions = 1; CustomMasterPage = $true; EventReceivers = 3; UniquePermissionsCount = 9 }
+            [PSCustomObject]@{ Url = 'https://intranet/sites/b'; Category = 1; CategoryName = 'Simple'; Wave = 1; WaveName = 'Quick wins'; UsesCustomFarmFeature = $false; SandboxSolutions = 1; CustomMasterPage = $true; EventReceivers = 1; UniquePermissionsCount = 4 }
+            [PSCustomObject]@{ Url = 'https://intranet/sites/c'; Category = 1; CategoryName = 'Simple'; Wave = 1; WaveName = 'Quick wins'; UsesCustomFarmFeature = $false; SandboxSolutions = 1; CustomMasterPage = $false; EventReceivers = 1; UniquePermissionsCount = 4 }
+            [PSCustomObject]@{ Url = 'https://intranet/sites/d'; Category = 1; CategoryName = 'Simple'; Wave = 1; WaveName = 'Quick wins'; UsesCustomFarmFeature = $false; SandboxSolutions = 0; CustomMasterPage = $false; EventReceivers = 1; UniquePermissionsCount = 4 }
+            [PSCustomObject]@{ Url = 'https://intranet/sites/e'; Category = 1; CategoryName = 'Simple'; Wave = 1; WaveName = 'Quick wins' }
+        )
+
+        $html = ConvertTo-SPSInventoryHtml -InputObject $records
+
+        $html | Should -Match '<div class="num">1</div><div class="lbl">Sites with custom farm features</div>'
+        $html | Should -Match '<div class="num">2</div><div class="lbl">Sites with a custom master page</div>'
+        $html | Should -Match '<div class="num">3</div><div class="lbl">Sites with sandbox solutions</div>'
+        $html | Should -Match '<div class="num">4</div><div class="lbl">Sites with custom event receivers</div>'
+        $html | Should -Match '>Custom farm feature <span class="arrow">'
+        $html | Should -Match '>Sandbox solutions <span class="arrow">'
+        $html | Should -Match '>Custom master page <span class="arrow">'
+        $html | Should -Match '>Custom event receivers <span class="arrow">'
+        $html | Should -Match '>Unique permission assignments <span class="arrow">'
+        $html | Should -Match '<td class="num">9</td>'
+    }
+
     It 'counts the sites that have SharePoint alerts, not the sites with other signals' {
         $records = @(
             [PSCustomObject]@{ Url = 'https://intranet/sites/a'; Category = 1; CategoryName = 'Simple'; Wave = 1; WaveName = 'Quick wins'; SharePointAlertCount = 3; ExternalListCount = 0 }

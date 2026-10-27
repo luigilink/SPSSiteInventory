@@ -74,6 +74,11 @@ Describe 'Invoke-SPSiteAssessment' {
                     HasNoAccessLock = $true
                     SiteLockState = 'NoAccess'
                     UsesFullTrustCode = $false
+                    UsesCustomFarmFeature = $true
+                    SandboxSolutions = 2
+                    CustomMasterPage = $true
+                    EventReceivers = 3
+                    UniquePermissionsCount = 9
                     ContentTypeCount = 0
                     ListContentTypeBindingCount = 0
                     ContentTypeInventoryComplete = $true
@@ -124,6 +129,11 @@ Describe 'Invoke-SPSiteAssessment' {
             $result.Inventory[0].IsLockedSite | Should -BeTrue
             $result.Inventory[0].HasNoAccessLock | Should -BeTrue
             $result.Inventory[0].SiteLockState | Should -Be 'NoAccess'
+            $result.Inventory[0].UsesCustomFarmFeature | Should -BeTrue
+            $result.Inventory[0].SandboxSolutions | Should -Be 2
+            $result.Inventory[0].CustomMasterPage | Should -BeTrue
+            $result.Inventory[0].EventReceivers | Should -Be 3
+            $result.Inventory[0].UniquePermissionsCount | Should -Be 9
             $result.Inventory[1].AssessmentStatus | Should -Be 'Failed'
             $result.Inventory[1].Category | Should -BeNullOrEmpty
             $result.Inventory[1].Score | Should -BeNullOrEmpty
@@ -157,6 +167,11 @@ Describe 'Invoke-SPSiteAssessment' {
             $result.Inventory[1].IsLockedSite | Should -BeNullOrEmpty
             $result.Inventory[1].HasNoAccessLock | Should -BeNullOrEmpty
             $result.Inventory[1].SiteLockState | Should -BeNullOrEmpty
+            $result.Inventory[1].UsesCustomFarmFeature | Should -BeNullOrEmpty
+            $result.Inventory[1].SandboxSolutions | Should -BeNullOrEmpty
+            $result.Inventory[1].CustomMasterPage | Should -BeNullOrEmpty
+            $result.Inventory[1].EventReceivers | Should -BeNullOrEmpty
+            $result.Inventory[1].UniquePermissionsCount | Should -BeNullOrEmpty
             $result.Inventory[2].AssessmentStatus | Should -Be 'Complete'
             @($result.ContentTypes).Count | Should -Be 0
             @($result.ManagedMetadataLists).Count | Should -Be 2
