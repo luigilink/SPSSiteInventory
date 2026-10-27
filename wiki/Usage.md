@@ -156,7 +156,7 @@ CSV/JSON rows describe site collections and any web-application enumeration fail
 | `ListContentTypeBindingCount` | Number of content-type bindings across the collection's lists, not the number of distinct designs |
 | `ContentTypeInventoryComplete` | False means partial collection: review warnings before interpreting counts or missing definitions |
 | `AssessmentStatus` | `Complete`, `Partial` (score may omit unreadable inputs), or `Failed` (not scored) |
-| `AssessmentWarnings` | Collection/assessment failures associated with this record; also shown in the HTML report |
+| `AssessmentWarnings` | Collection/assessment failures associated with this record; also shown in the HTML report. Warnings of the same kind in one site collection, which differ only by the names between quotes of their subject (list titles, web URLs), are written once: the first one in full followed by ` [+N similar]`, where N is the number of other occurrences. Warnings that differ by anything else (the reason, a number) stay separate. The same grouped text appears in `Reasons`; the assessment status does not change |
 | `Category` | Complexity category 1–4 |
 | `CategoryName` | Simple / Moderate / Complex / Blocking |
 | `Wave` | Proposed migration wave number (from the category-to-wave mapping) |

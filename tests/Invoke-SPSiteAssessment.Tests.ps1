@@ -331,6 +331,233 @@ Describe 'Invoke-SPSiteAssessment' {
         }
     }
 
+    It 'groups the repeated collector warnings of a site into one entry' {
+        InModuleScope SPSSiteInventory.Common {
+            Mock Get-SPSite {
+                $site = [PSCustomObject]@{ Url = $Identity }
+                $site | Add-Member -MemberType ScriptMethod -Name Dispose -Value { }
+                $site
+            }
+            Mock Get-SPSSiteCustomization {
+                1..30 | ForEach-Object {
+                    Write-Warning -Message "Could not read checked-out files on 'list$_' in web '$($Site.Url)': Cannot find an overload for ""GetItems"" and the argument count: ""1""."
+                }
+                @{
+                    Workflow2010Count = 0
+                    Workflow2010RunningInstanceCount = 0
+                    Workflow2013Count = 0
+                    Workflow2013RunningInstanceCount = 0
+                    AppInstanceCount = 0
+                    AppWebCount = 0
+                    AppInstanceExamples = ''
+                    PublishingInfrastructureEnabled = $false
+                    PublishingWebCount = 0
+                    PublishingPageCount = 0
+                    PublishingPageLayoutCount = 0
+                    PublishingPageLayoutExamples = ''
+                    CustomizedPageCount = 0
+                    CustomizedPageExamples = ''
+                    CustomPermissionLevelCount = 0
+                    CustomPermissionLevelExamples = ''
+                    EmailEnabledListCount = 0
+                    EmailEnabledListExamples = ''
+                    HtmlFileCount = 0
+                    HtmlFileExamples = ''
+                    InfoPathFormCount = 0
+                    IrmEnabledListCount = 0
+                    IsLargeSite = $false
+                    LargeListCount = 0
+                    LargeListExamples = ''
+                    LargeListViewCount = 0
+                    LargeListViewExamples = ''
+                    CheckedOutFileCount = 0
+                    CheckedOutFileExamples = ''
+                    FileVersionCount = 0
+                    FileVersionExamples = ''
+                    IsLockedSite = $false
+                    SiteLockState = 'Unlock'
+                    UsesFullTrustCode = $false
+                    ContentTypeCount = 0
+                    ListContentTypeBindingCount = 0
+                    ContentTypeInventoryComplete = $false
+                    CustomizationInventoryComplete = $false
+                    ContentTypes = @()
+                }
+            }
+            Mock Add-SPSInventoryEvent { }
+            Mock Write-Progress { }
+
+            $inventory = @(
+                [PSCustomObject]@{
+                    Url = 'https://intranet/sites/warning'; Title = 'Warning'
+                    SiteInventoryComplete = $true; SiteInventoryWarnings = ''
+                }
+            )
+            $scoring = @{ Weights = @{}; Thresholds = @{}; BlockingSignals = @() }
+            $result = Invoke-SPSiteAssessment -Inventory $inventory -Scoring $scoring
+
+            $result.Inventory[0].AssessmentStatus | Should -Be 'Partial'
+            $expected = "Could not read checked-out files on 'list1' in web 'https://intranet/sites/warning': Cannot find an overload for ""GetItems"" and the argument count: ""1"". [+29 similar]"
+            $result.Inventory[0].AssessmentWarnings | Should -Match ([regex]::Escape($expected))
+            ([regex]::Matches($result.Inventory[0].AssessmentWarnings, 'Could not read checked-out files')).Count | Should -Be 1
+            $result.Inventory[0].AssessmentWarnings | Should -Be ($expected + '; Customization inventory partial; some signals may be missing.; Content-type inventory partial; content-type counts may be incomplete.')
+            $result.Inventory[0].Reasons | Should -Match ([regex]::Escape($expected))
+            ([regex]::Matches($result.Inventory[0].Reasons, 'Could not read checked-out files')).Count | Should -Be 1
+        }
+    }
+
+    It 'keeps distinct collector failures of a site as separate entries' {
+        InModuleScope SPSSiteInventory.Common {
+            Mock Get-SPSite {
+                $site = [PSCustomObject]@{ Url = $Identity }
+                $site | Add-Member -MemberType ScriptMethod -Name Dispose -Value { }
+                $site
+            }
+            Mock Get-SPSSiteCustomization {
+                Write-Warning -Message "Could not read checked-out files on 'a' in web '$($Site.Url)': Access denied"
+                Write-Warning -Message "Could not read checked-out files on 'b' in web '$($Site.Url)': Access denied"
+                Write-Warning -Message "Could not read file versions on 'a' in web '$($Site.Url)': Access denied"
+                Write-Warning -Message "Could not read checked-out files on 'c' in web '$($Site.Url)': The server is busy"
+                @{
+                    Workflow2010Count = 0
+                    Workflow2010RunningInstanceCount = 0
+                    Workflow2013Count = 0
+                    Workflow2013RunningInstanceCount = 0
+                    AppInstanceCount = 0
+                    AppWebCount = 0
+                    AppInstanceExamples = ''
+                    PublishingInfrastructureEnabled = $false
+                    PublishingWebCount = 0
+                    PublishingPageCount = 0
+                    PublishingPageLayoutCount = 0
+                    PublishingPageLayoutExamples = ''
+                    CustomizedPageCount = 0
+                    CustomizedPageExamples = ''
+                    CustomPermissionLevelCount = 0
+                    CustomPermissionLevelExamples = ''
+                    EmailEnabledListCount = 0
+                    EmailEnabledListExamples = ''
+                    HtmlFileCount = 0
+                    HtmlFileExamples = ''
+                    InfoPathFormCount = 0
+                    IrmEnabledListCount = 0
+                    IsLargeSite = $false
+                    LargeListCount = 0
+                    LargeListExamples = ''
+                    LargeListViewCount = 0
+                    LargeListViewExamples = ''
+                    CheckedOutFileCount = 0
+                    CheckedOutFileExamples = ''
+                    FileVersionCount = 0
+                    FileVersionExamples = ''
+                    IsLockedSite = $false
+                    SiteLockState = 'Unlock'
+                    UsesFullTrustCode = $false
+                    ContentTypeCount = 0
+                    ListContentTypeBindingCount = 0
+                    ContentTypeInventoryComplete = $false
+                    CustomizationInventoryComplete = $false
+                    ContentTypes = @()
+                }
+            }
+            Mock Add-SPSInventoryEvent { }
+            Mock Write-Progress { }
+
+            $inventory = @(
+                [PSCustomObject]@{
+                    Url = 'https://intranet/sites/warning'; Title = 'Warning'
+                    SiteInventoryComplete = $true; SiteInventoryWarnings = ''
+                }
+            )
+            $scoring = @{ Weights = @{}; Thresholds = @{}; BlockingSignals = @() }
+            $result = Invoke-SPSiteAssessment -Inventory $inventory -Scoring $scoring
+
+            $result.Inventory[0].AssessmentStatus | Should -Be 'Partial'
+            $result.Inventory[0].AssessmentWarnings | Should -Be ((@(
+                "Could not read checked-out files on 'a' in web 'https://intranet/sites/warning': Access denied [+1 similar]"
+                "Could not read file versions on 'a' in web 'https://intranet/sites/warning': Access denied"
+                "Could not read checked-out files on 'c' in web 'https://intranet/sites/warning': The server is busy"
+                'Customization inventory partial; some signals may be missing.'
+                'Content-type inventory partial; content-type counts may be incomplete.'
+            )) -join '; ')
+        }
+    }
+
+    It 'groups the repeated warnings in the record of a failed assessment' {
+        InModuleScope SPSSiteInventory.Common {
+            Mock Get-SPSite {
+                $site = [PSCustomObject]@{ Url = $Identity }
+                $site | Add-Member -MemberType ScriptMethod -Name Dispose -Value { }
+                $site
+            }
+            Mock Get-SPSSiteCustomization {
+                1..30 | ForEach-Object {
+                    Write-Warning -Message "Could not read checked-out files on 'list$_' in web '$($Site.Url)': Cannot find an overload for ""GetItems"" and the argument count: ""1""."
+                }
+                @{
+                    Workflow2010Count = 0
+                    Workflow2010RunningInstanceCount = 0
+                    Workflow2013Count = 0
+                    Workflow2013RunningInstanceCount = 0
+                    AppInstanceCount = 0
+                    AppWebCount = 0
+                    AppInstanceExamples = ''
+                    PublishingInfrastructureEnabled = $false
+                    PublishingWebCount = 0
+                    PublishingPageCount = 0
+                    PublishingPageLayoutCount = 0
+                    PublishingPageLayoutExamples = ''
+                    CustomizedPageCount = 0
+                    CustomizedPageExamples = ''
+                    CustomPermissionLevelCount = 0
+                    CustomPermissionLevelExamples = ''
+                    EmailEnabledListCount = 0
+                    EmailEnabledListExamples = ''
+                    HtmlFileCount = 0
+                    HtmlFileExamples = ''
+                    InfoPathFormCount = 0
+                    IrmEnabledListCount = 0
+                    IsLargeSite = $false
+                    LargeListCount = 0
+                    LargeListExamples = ''
+                    LargeListViewCount = 0
+                    LargeListViewExamples = ''
+                    CheckedOutFileCount = 0
+                    CheckedOutFileExamples = ''
+                    FileVersionCount = 0
+                    FileVersionExamples = ''
+                    IsLockedSite = $false
+                    SiteLockState = 'Unlock'
+                    UsesFullTrustCode = $false
+                    ContentTypeCount = 0
+                    ListContentTypeBindingCount = 0
+                    ContentTypeInventoryComplete = $false
+                    CustomizationInventoryComplete = $false
+                    ContentTypes = @()
+                }
+            }
+            Mock Add-SPSInventoryEvent { }
+            Mock Measure-SPSSiteComplexity { throw 'Scoring failed' }
+            Mock Write-Progress { }
+
+            $inventory = @(
+                [PSCustomObject]@{
+                    Url = 'https://intranet/sites/warning'; Title = 'Warning'
+                    SiteInventoryComplete = $true; SiteInventoryWarnings = ''
+                }
+            )
+            $scoring = @{ Weights = @{}; Thresholds = @{}; BlockingSignals = @() }
+            $result = Invoke-SPSiteAssessment -Inventory $inventory -Scoring $scoring
+
+            $failed = $result.Inventory[0]
+            $failed.AssessmentStatus | Should -Be 'Failed'
+            $failed.AssessmentWarnings | Should -Match ([regex]::Escape("Could not read checked-out files on 'list1' in web 'https://intranet/sites/warning': Cannot find an overload for ""GetItems"" and the argument count: ""1"". [+29 similar]"))
+            ([regex]::Matches($failed.AssessmentWarnings, 'Could not read checked-out files')).Count | Should -Be 1
+            $failed.AssessmentWarnings | Should -Match 'Assessment failed: Scoring failed'
+            $failed.Reasons | Should -Be $failed.AssessmentWarnings
+        }
+    }
+
     It 'flags large sites from configured size thresholds during assessment' {
         InModuleScope SPSSiteInventory.Common {
             Mock Get-SPSite {

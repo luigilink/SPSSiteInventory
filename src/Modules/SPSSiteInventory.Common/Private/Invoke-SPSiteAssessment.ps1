@@ -134,7 +134,8 @@
                 }
 
                 $assessmentStatus = if ($siteInventoryComplete -and $customizationComplete -and $contentTypeComplete) { 'Complete' } else { 'Partial' }
-                $reasons = @($result.Reasons) + @($siteWarnings.ToArray())
+                $groupedWarnings = @(Group-SPSAssessmentWarning -Warning $siteWarnings.ToArray())
+                $reasons = @($result.Reasons) + $groupedWarnings
                 $scored.Add([PSCustomObject]@{
                     InventoryScope = $inventoryScope
                     Url = $item.Url
@@ -171,7 +172,7 @@
                     CustomizationInventoryComplete = $customizationComplete
                     ContentTypeInventoryComplete = $contentTypeComplete
                     AssessmentStatus = $assessmentStatus
-                    AssessmentWarnings = $siteWarnings -join '; '
+                    AssessmentWarnings = $groupedWarnings -join '; '
                     Workflow2010Count = $signals['Workflow2010Count']
                     Workflow2010RunningInstanceCount = $signals['Workflow2010RunningInstanceCount']
                     Workflow2013Count = $signals['Workflow2013Count']
@@ -230,6 +231,7 @@
             catch {
                 $errorMessage = $_.Exception.Message
                 $siteWarnings.Add("Assessment failed: $errorMessage")
+                $groupedWarnings = @(Group-SPSAssessmentWarning -Warning $siteWarnings.ToArray())
                 $null = Add-SPSInventoryEvent -Message "Assessment failed for '$($item.Url)'; continuing with the next site. $errorMessage" -Level Warning
                 $scored.Add([PSCustomObject]@{
                     InventoryScope = $inventoryScope
@@ -267,7 +269,7 @@
                     CustomizationInventoryComplete = $false
                     ContentTypeInventoryComplete = $false
                     AssessmentStatus = 'Failed'
-                    AssessmentWarnings = $siteWarnings -join '; '
+                    AssessmentWarnings = $groupedWarnings -join '; '
                     Workflow2010Count = $null
                     Workflow2010RunningInstanceCount = $null
                     Workflow2013Count = $null
@@ -320,7 +322,7 @@
                     Category = $null
                     CategoryName = 'Not assessed'
                     Score = $null
-                    Reasons = $siteWarnings -join '; '
+                    Reasons = $groupedWarnings -join '; '
                 })
             }
             finally {
