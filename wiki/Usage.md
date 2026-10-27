@@ -11,7 +11,7 @@ The orchestrator:
 1. starts a transcript and prints a banner;
 2. loads the SharePoint commands and your settings;
 3. builds the farm-solution map (custom-code detection);
-4. reads configured authentication across all zones, then enumerates site collections;
+4. reads configured authentication across all zones, then enumerates site collections (personal sites and site masters are left out unless the `Scope` settings keep them);
 5. collects customization signals, content-type definitions and list bindings, and scores each site;
 6. exports CSV, JSON and a self-contained HTML report to the configured output folder.
 
@@ -51,6 +51,22 @@ report pack, plus a dedicated farm-solution report, to the output folder:
 | `*-externallists-*.csv` / `*-externallists-*.json` | External lists by list, following the SMAT External List report. One row per list backed by a Business Connectivity Services (BCS) external content type, with its BCS binding. |
 | `*-bcs-*.csv` / `*-bcs-*.json` | BCS LOB systems of the farm, following the SMAT BCS report. One row per LOB system, with its type, instances and entities. |
 | `*-sharepointalerts-*.csv` / `*-sharepointalerts-*.json` | SharePoint alerts ("Alert Me" subscriptions) by alert, following the SMAT Alerts report. One row per alert, with where it applies, what triggers it, how often it is sent and who owns it. Not the risk alerts of `*-alerts-*`. They contain the login names of the owners, unless `SharePointAlerts.IncludeUserLogin` is `$false`, so they are not part of the HTML report. |
+
+### Site collections left out of the inventory
+
+Personal sites and site masters are left out by default (see the `Scope` section of
+[Configuration](Configuration#scope-section)). They get no record in any file. The inventory
+says how many were left out:
+
+- the HTML summary box shows a line such as "109 personal site(s) and 10 site master(s) were
+  left out of this inventory (Scope in the settings)", only when something was left out;
+- the manifest has `Summary.ExcludedPersonalSites` and `Summary.ExcludedSiteMasters`, two
+  integers that are always present (0 when nothing was left out or when both kinds are
+  included);
+- the log of the scan has an `Information` line with the same counts and the settings to change.
+
+`Summary.SiteCollections` counts the site collections of the report, so it does not include
+the ones that were left out. The new manifest fields are additive: `ReportPackVersion` stays `1.0`.
 
 ### CSV files and spreadsheet formulas
 

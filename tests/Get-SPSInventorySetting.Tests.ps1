@@ -70,6 +70,58 @@ Describe 'Get-SPSInventorySetting' {
         { Get-SPSInventorySetting -Path $path } | Should -Throw -ExpectedMessage "*alerts-array.psd1*'SharePointAlerts' section must be a hashtable*"
     }
 
+    It 'accepts a Scope section that keeps both kinds of site collections, or no section at all' {
+        $path = Join-Path $TestDrive 'scope-on.psd1'
+        @'
+@{
+    Scoring = @{ Weights = @{}; Thresholds = @{ Moderate = 1.0; Complex = 6.0 }; BlockingSignals = @() }
+    Scope = @{ IncludePersonalSites = $true; IncludeSiteMasters = $true }
+}
+'@ | Set-Content -Path $path -Encoding UTF8
+
+        $settings = Get-SPSInventorySetting -Path $path
+
+        $settings.Scope.IncludePersonalSites | Should -BeTrue
+        $settings.Scope.IncludeSiteMasters | Should -BeTrue
+
+        $without = Join-Path $TestDrive 'scope-absent.psd1'
+        @'
+@{
+    Scoring = @{ Weights = @{}; Thresholds = @{ Moderate = 1.0; Complex = 6.0 }; BlockingSignals = @() }
+}
+'@ | Set-Content -Path $without -Encoding UTF8
+
+        (Get-SPSInventorySetting -Path $without).ContainsKey('Scope') | Should -BeFalse
+    }
+
+    It 'rejects a Scope option that is not a boolean, naming the file, before any site is read' -ForEach @(
+        @{ Name = 'IncludePersonalSites'; Literal = "'false'" }
+        @{ Name = 'IncludeSiteMasters'; Literal = '0' }
+        @{ Name = 'IncludeSiteMasters'; Literal = "'yes'" }
+    ) {
+        $path = Join-Path $TestDrive 'scope-invalid.psd1'
+        @"
+@{
+    Scoring = @{ Weights = @{}; Thresholds = @{ Moderate = 1.0; Complex = 6.0 }; BlockingSignals = @() }
+    Scope = @{ $Name = $Literal }
+}
+"@ | Set-Content -Path $path -Encoding UTF8
+
+        { Get-SPSInventorySetting -Path $path } | Should -Throw -ExpectedMessage "*scope-invalid.psd1*Scope.$Name must be `$true or `$false*"
+    }
+
+    It 'rejects a Scope section that is not a hashtable' {
+        $path = Join-Path $TestDrive 'scope-array.psd1'
+        @'
+@{
+    Scoring = @{ Weights = @{}; Thresholds = @{ Moderate = 1.0; Complex = 6.0 }; BlockingSignals = @() }
+    Scope = @('IncludePersonalSites')
+}
+'@ | Set-Content -Path $path -Encoding UTF8
+
+        { Get-SPSInventorySetting -Path $path } | Should -Throw -ExpectedMessage "*scope-array.psd1*'Scope' section must be a hashtable*"
+    }
+
     It 'throws when the mandatory Scoring section is missing' {
         $path = Join-Path $TestDrive 'no-scoring.psd1'
         "@{ EnvName = 'TEST' }" | Set-Content -Path $path -Encoding UTF8
@@ -147,5 +199,15 @@ Describe 'Example settings file' {
         $settings = Get-SPSInventorySetting -Path $script:ExamplePath
 
         $settings.SharePointAlerts.IncludeUserLogin | Should -BeTrue
+    }
+
+    It 'has a Scope section that leaves out personal sites and site masters' {
+        $settings = Get-SPSInventorySetting -Path $script:ExamplePath
+
+        $settings.Scope | Should -BeOfType [hashtable]
+        $settings.Scope.Keys | Should -Contain 'IncludePersonalSites'
+        $settings.Scope.Keys | Should -Contain 'IncludeSiteMasters'
+        $settings.Scope.IncludePersonalSites | Should -BeFalse
+        $settings.Scope.IncludeSiteMasters | Should -BeFalse
     }
 }

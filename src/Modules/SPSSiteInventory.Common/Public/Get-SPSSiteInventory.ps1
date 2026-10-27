@@ -23,12 +23,29 @@
         not stop collection: the policy fields stay empty and the site records are marked
         partial, so an unreadable setting is never reported as no policies.
 
+        Personal sites (My Sites, template SPSPERS) and site masters (the hidden site
+        collections that SharePoint creates to speed up the creation of personal sites, with
+        a host name of sitemaster- followed by a GUID) are not sites to migrate, so they are
+        left out by default: they get no record and no warning. A site master is skipped
+        before it is opened, a personal site as soon as the template of its root web is read.
+        The My Site host (SPSMSITEHOST) stays in the scan.
+
         Requires the SharePoint commands (see Import-SPSSharePointCommand) and to run as
         the farm account on a farm server.
 
         .PARAMETER WebApplicationUrl
         Optional list of web application URLs to limit the scan. When omitted, all
         content web applications are scanned.
+
+        .PARAMETER IncludePersonalSite
+        Keeps the personal sites in the scan.
+
+        .PARAMETER IncludeSiteMaster
+        Keeps the site masters in the scan.
+
+        .PARAMETER Exclusion
+        Optional dictionary that the function fills with the number of site collections that
+        it left out: PersonalSites and SiteMasters, both set to 0 when the scan starts.
 
         .EXAMPLE
         Get-SPSSiteInventory
@@ -46,8 +63,23 @@
 
         [Parameter()]
         [System.Collections.IDictionary]
-        $TemplateParity = @{}
+        $TemplateParity = @{},
+
+        [Parameter()]
+        [System.Management.Automation.SwitchParameter]
+        $IncludePersonalSite,
+
+        [Parameter()]
+        [System.Management.Automation.SwitchParameter]
+        $IncludeSiteMaster,
+
+        [Parameter()]
+        [System.Collections.IDictionary]
+        $Exclusion = @{}
     )
+
+    $Exclusion['PersonalSites'] = 0
+    $Exclusion['SiteMasters'] = 0
 
     $webApps = if ($WebApplicationUrl.Count -gt 0) {
         $WebApplicationUrl | ForEach-Object { Get-SPWebApplication -Identity $_ -ErrorAction Stop }
@@ -161,6 +193,18 @@
                     Add-SPSInventoryEvent -Message "Enumerating site collections in '$($webApp.Url)' ($progressStatus)." -Level Information | Out-Host
                 }
 
+                $exclusionReason = Get-SPSSiteExclusionReason -Url $siteUrl -IncludePersonalSite ([bool]$IncludePersonalSite) -IncludeSiteMaster ([bool]$IncludeSiteMaster)
+                if ($exclusionReason -eq 'SiteMaster') {
+                    $Exclusion['SiteMasters'] = [int]$Exclusion['SiteMasters'] + 1
+                    try {
+                        $site.Dispose()
+                    }
+                    catch {
+                        $null = Add-SPSInventoryEvent -Message "Site collection disposal failed for '$siteUrl': $($_.Exception.Message)" -Level Warning
+                    }
+                    continue
+                }
+
                 $rootWeb = $null
                 $record = [ordered]@{
                     InventoryScope = 'SiteCollection'
@@ -202,6 +246,11 @@
                         }
                         $record.Title = $rootWeb.Title
                         $record.Template = '{0}#{1}' -f $rootWeb.WebTemplate, $rootWeb.Configuration
+                        $exclusionReason = Get-SPSSiteExclusionReason -Url $siteUrl -Template $record.Template -IncludePersonalSite ([bool]$IncludePersonalSite) -IncludeSiteMaster ([bool]$IncludeSiteMaster)
+                        if ($exclusionReason -eq 'PersonalSite') {
+                            $Exclusion['PersonalSites'] = [int]$Exclusion['PersonalSites'] + 1
+                            continue
+                        }
                         $record.LastModified = $rootWeb.LastItemModifiedDate
                         try {
                             $record.TemplateLanguageLcid = [int]$rootWeb.Language

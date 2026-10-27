@@ -195,6 +195,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   completeness. Dedicated `-contenttypes-` CSV/JSON files and authentication/content-type
   HTML sections complement the per-site summary; standard types are not automatically
   classified as custom or blocking. (#26)
+- Personal sites (My Sites, template `SPSPERS`) and site masters (hidden site collections
+  whose host name is `sitemaster-` followed by a GUID) are now left out of the inventory by
+  default: they are not sites to migrate and they buried the other site collections. A new
+  optional `Scope` section of the settings, with `IncludePersonalSites` and
+  `IncludeSiteMasters` (both `$false` by default, also when the section is missing), brings
+  them back; setting both to `$true` restores the scope of 1.x. A site master is skipped
+  before it is opened, a personal site as soon as the template of its root web is read, and the
+  My Site host (`SPSMSITEHOST`) stays in the scan. The HTML summary, the log and the manifest
+  (`Summary.ExcludedPersonalSites` and `Summary.ExcludedSiteMasters`) say how many were left
+  out. (#85)
 
 ### Security
 

@@ -72,6 +72,12 @@
         Whether the BCS inventory could be read in full. When false, the BCS section says
         that BCS applications may be missing.
 
+        .PARAMETER ExcludedPersonalSiteCount
+        Number of personal sites that the scan left out. When above 0, the summary box says so.
+
+        .PARAMETER ExcludedSiteMasterCount
+        Number of site masters that the scan left out. When above 0, the summary box says so.
+
         .EXAMPLE
         $html = ConvertTo-SPSInventoryHtml -InputObject $scored -EnvName 'PROD'
         Set-Content -Path report.html -Value $html -Encoding UTF8
@@ -133,7 +139,15 @@
 
         [Parameter()]
         [System.Boolean]
-        $BcsInventoryComplete = $true
+        $BcsInventoryComplete = $true,
+
+        [Parameter()]
+        [System.Int32]
+        $ExcludedPersonalSiteCount = 0,
+
+        [Parameter()]
+        [System.Int32]
+        $ExcludedSiteMasterCount = 0
     )
 
     # Category metadata: name and accent colour for each complexity level. A plain
@@ -414,6 +428,16 @@ td.muted, .muted { color: var(--muted); }
     # Summary box.
     [void]$sb.AppendLine('<div class="summary" id="summary">')
     [void]$sb.AppendLine(('<div class="summary-total"><strong>{0}</strong> site collection(s) &middot; <strong>{1} GB</strong> total content &middot; <strong>{2}</strong> partial &middot; <strong>{3}</strong> failed</div>' -f $total, (ConvertTo-SPSHtmlText -Value $totalSizeText), $partialCount, $failedCount))
+    $excludedParts = @()
+    if ($ExcludedPersonalSiteCount -gt 0) {
+        $excludedParts += '<strong>{0}</strong> personal site(s)' -f $ExcludedPersonalSiteCount
+    }
+    if ($ExcludedSiteMasterCount -gt 0) {
+        $excludedParts += '<strong>{0}</strong> site master(s)' -f $ExcludedSiteMasterCount
+    }
+    if ($excludedParts.Count -gt 0) {
+        [void]$sb.AppendLine(('<div class="summary-total">{0} were left out of this inventory (Scope in the settings)</div>' -f ($excludedParts -join ' and ')))
+    }
     if ($enumerationFailureCount -gt 0) {
         [void]$sb.AppendLine(('<div class="summary-total"><strong>{0}</strong> web application enumeration failure(s)</div>' -f $enumerationFailureCount))
     }

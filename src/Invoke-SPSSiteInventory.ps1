@@ -69,7 +69,31 @@ try {
     else {
         @{}
     }
-    $inventory = @(Get-SPSSiteInventory -WebApplicationUrl $settings.WebApplicationUrl -TemplateParity $templateParity)
+    $scopeSettings = if ($settings.ContainsKey('Scope')) {
+        $settings.Scope
+    }
+    else {
+        @{}
+    }
+    $scopeOption = & $commonModule {
+        param ($ScopeSettings)
+        Get-SPSScopeOption -Settings $ScopeSettings
+    } $scopeSettings
+    $exclusion = @{ PersonalSites = 0; SiteMasters = 0 }
+    $inventory = @(Get-SPSSiteInventory -WebApplicationUrl $settings.WebApplicationUrl -TemplateParity $templateParity -IncludePersonalSite:$scopeOption.IncludePersonalSites -IncludeSiteMaster:$scopeOption.IncludeSiteMasters -Exclusion $exclusion)
+    if ($exclusion.PersonalSites -gt 0 -or $exclusion.SiteMasters -gt 0) {
+        $leftOut = @()
+        $includeSetting = @()
+        if ($exclusion.PersonalSites -gt 0) {
+            $leftOut += '{0} personal site(s)' -f $exclusion.PersonalSites
+            $includeSetting += 'Scope.IncludePersonalSites'
+        }
+        if ($exclusion.SiteMasters -gt 0) {
+            $leftOut += '{0} site master(s)' -f $exclusion.SiteMasters
+            $includeSetting += 'Scope.IncludeSiteMasters'
+        }
+        Add-SPSInventoryEvent -Message ('Left out {0}: they are not sites to migrate. Set {1} to $true in the settings to include them.' -f ($leftOut -join ' and '), ($includeSetting -join ' and ')) -Level Information
+    }
     if (@($inventory | Where-Object { $_.HasFbaZone }).Count -gt 0 -and
         @($settings.Scoring.BlockingSignals) -notcontains 'HasFbaZone') {
         Add-SPSInventoryEvent -Message 'FBA is configured, but HasFbaZone is not in Scoring.BlockingSignals. Add it to your settings to classify FBA as a SharePoint Online migration blocker.' -Level Warning
@@ -160,7 +184,7 @@ try {
     }
 
     $solutionOutput = Export-SPSSolutionReport -InputObject @($solutionMap) -OutputFolder $settings.OutputFolder -BaseName ('SPSSiteInventory-' + $settings.EnvName)
-    $output = Export-SPSInventoryReport -InputObject @($scored) -OutputFolder $settings.OutputFolder -BaseName ('SPSSiteInventory-' + $settings.EnvName) -EnvName $settings.EnvName -SolutionMap @($solutionMap) -ContentTypes $contentTypes -ManagedMetadataLists $managedMetadataLists -ExternalLists $externalLists -SharePointAlerts $sharePointAlerts -BcsApplications @($bcs.Applications) -BcsInventoryComplete ([bool]$bcs.Complete) -SolutionJsonPath $solutionOutput.JsonPath
+    $output = Export-SPSInventoryReport -InputObject @($scored) -OutputFolder $settings.OutputFolder -BaseName ('SPSSiteInventory-' + $settings.EnvName) -EnvName $settings.EnvName -SolutionMap @($solutionMap) -ContentTypes $contentTypes -ManagedMetadataLists $managedMetadataLists -ExternalLists $externalLists -SharePointAlerts $sharePointAlerts -BcsApplications @($bcs.Applications) -BcsInventoryComplete ([bool]$bcs.Complete) -SolutionJsonPath $solutionOutput.JsonPath -ExcludedPersonalSiteCount ([int]$exclusion.PersonalSites) -ExcludedSiteMasterCount ([int]$exclusion.SiteMasters)
 
     Add-SPSInventoryEvent -Message "Inventory complete. CSV: $($output.CsvPath) | JSON: $($output.JsonPath) | HTML: $($output.HtmlPath)" -Level Information
     Add-SPSInventoryEvent -Message "Report pack. Sites: $($output.SitesJsonPath) | Auth: $($output.AuthJsonPath) | Workflows: $($output.WorkflowsJsonPath) | Apps: $($output.AppsJsonPath) | Publishing: $($output.PublishingJsonPath) | Permissions: $($output.PermissionsJsonPath) | IRM/Locks: $($output.IrmLocksJsonPath) | Large content: $($output.LargeContentJsonPath) | Alerts: $($output.AlertsJsonPath) | Alerts CSV: $($output.AlertsCsvPath) | Manifest: $($output.ManifestJsonPath)" -Level Information
