@@ -660,7 +660,7 @@ td.muted, .muted { color: var(--muted); }
     if ($hasManagedMetadataSection) {
         $incompleteSites = @($siteRecords | Where-Object { $_.CustomizationInventoryComplete -eq $false })
         [void]$sb.AppendLine('<h2 id="managed-metadata">Managed metadata columns by list</h2>')
-        [void]$sb.AppendLine(('<p><strong>{0}</strong> list(s) with managed metadata columns. These columns take their values from the term store: they usually migrate with the list, but the term sets they use must be migrated too. Plan the term store migration together with these lists, and verify afterwards that items can be created and edited. Hidden columns are not listed, and term sets are shown by ID, not by name; resolve them in the Term Store Management Tool.</p>' -f $ManagedMetadataLists.Count))
+        [void]$sb.AppendLine(('<p><strong>{0}</strong> list(s) with managed metadata columns. These columns take their values from the term store: they usually migrate with the list, but the term sets they use must be migrated too. Plan the term store migration together with these lists, and verify afterwards that items can be created and edited. Hidden columns and hidden lists, such as the newsfeed list, are not listed, and term sets are shown by ID, not by name; resolve them in the Term Store Management Tool.</p>' -f $ManagedMetadataLists.Count))
         if ($enumerationFailureCount -gt 0) {
             [void]$sb.AppendLine(('<p><strong>Coverage warning:</strong> {0} web application(s) had site collection enumeration failures; managed metadata results do not cover those scopes.</p>' -f $enumerationFailureCount))
         }

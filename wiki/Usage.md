@@ -131,7 +131,7 @@ CSV/JSON rows describe site collections and any web-application enumeration fail
 | `CustomPermissionLevelCount` / `CustomPermissionLevelExamples` | Distinct custom permission levels in the site collection and up to five examples with the web that defines them. Provisioned levels are recognized by type and by name (`PermissionLevels.BuiltInNames`) |
 | `EmailEnabledListCount` / `EmailEnabledListExamples` | Lists with incoming e-mail enabled and up to five examples (title and list URL) |
 | `HtmlFileCount` / `HtmlFileExamples` | `.htm`/`.html` files in document libraries and up to five examples. Collected only when the web application is Permissive, otherwise 0 |
-| `ManagedMetadataListCount` / `ManagedMetadataColumnCount` | Lists with at least one visible managed metadata column, and those columns counted once per list. Enterprise Keywords is included; hidden columns are not |
+| `ManagedMetadataListCount` / `ManagedMetadataColumnCount` | Lists with at least one visible managed metadata column, and those columns counted once per list. Enterprise Keywords is included; hidden columns and hidden lists (the newsfeed list of every site) are not |
 | `ManagedMetadataTermSetCount` / `ManagedMetadataExamples` | Distinct term sets, by ID, that those columns use in the site collection, and up to five lists with their column names |
 | `ExternalListCount` / `ExternalListExamples` | Lists backed by a BCS external content type (not migrated) and up to five examples with their entity |
 | `SharePointAlertCount` | SharePoint alerts ("Alert Me" subscriptions) of every user, in every web of the site collection. Migration tools do not migrate them and SharePoint Online retired them from July 2026. Exact even when the rows are capped |
