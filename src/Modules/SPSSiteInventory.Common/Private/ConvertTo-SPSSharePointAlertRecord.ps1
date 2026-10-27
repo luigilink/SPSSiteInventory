@@ -23,10 +23,13 @@
         its row with an empty list URL (the list ID still identifies it).
 
         UserLoginName is the account that owns the alert. It is personal data, so it is
-        only written to the alert CSV and JSON files. It is empty when the owner is a
-        system alert or no longer exists in the site. Resolving an owner is a query, so
-        the caller can pass a cache shared by the alerts of a site collection, where user
-        IDs are unique: each owner is then resolved once, even when it cannot be found.
+        only written to the alert CSV and JSON files, and the caller can leave it out:
+        with IncludeUserLogin set to $false the owner is not looked up at all and the
+        column stays empty (UserId stays, it only is a number local to the site collection).
+        It is also empty when the owner is a system alert or no longer exists in the site.
+        Resolving an owner is a query, so the caller can pass a cache shared by the alerts
+        of a site collection, where user IDs are unique: each owner is then resolved once,
+        even when it cannot be found.
 
         Private because it is an implementation detail of Get-SPSSiteCustomization.
 
@@ -38,6 +41,9 @@
 
         .PARAMETER WebUrl
         URL of the web that owns the alert.
+
+        .PARAMETER IncludeUserLogin
+        Whether to resolve the login name of the owner. Defaults to $true.
 
         .PARAMETER UserLoginCache
         Optional hashtable that maps the user ID of an owner to its login name. It is
@@ -61,6 +67,10 @@
         [Parameter(Mandatory = $true)]
         [System.String]
         $WebUrl,
+
+        [Parameter()]
+        [System.Boolean]
+        $IncludeUserLogin = $true,
 
         [Parameter()]
         [System.Collections.Hashtable]
@@ -109,7 +119,7 @@
     }
 
     $userLoginName = ''
-    if ($userId -ne 0) {
+    if ($IncludeUserLogin -and $userId -ne 0) {
         if ($null -ne $UserLoginCache -and $UserLoginCache.ContainsKey($userId)) {
             $userLoginName = [string]$UserLoginCache[$userId]
         }

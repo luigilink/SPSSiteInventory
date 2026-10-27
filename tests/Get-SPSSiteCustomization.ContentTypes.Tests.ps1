@@ -2413,6 +2413,67 @@ Describe 'Get-SPSSiteCustomization content types' {
         @($warnings | Where-Object { $_ -match '3 more alert\(s\) could not be read on site' }) | Should -HaveCount 1
     }
 
+    It 'leaves the alert owner logins out and never looks the owners up when the setting turns them off' {
+        $global:SPSTestUserLookups = 0
+        $makeAlert = {
+            param ([string]$Title, [int]$UserId)
+            $alert = Get-TestAlert -Title $Title -UserId $UserId
+            $alert.PSObject.Properties.Remove('User')
+            $alert | Add-Member -MemberType ScriptProperty -Name User -Value { $global:SPSTestUserLookups++; [PSCustomObject]@{ LoginName = "i:0#.w|contoso\user$($this.UserId)" } }
+            $alert
+        }
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Alerts = @((& $makeAlert 'A' 7), (& $makeAlert 'B' 8))
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -SharePointAlertSettings @{ IncludeUserLogin = $false }
+
+        $signals.SharePointAlertCount | Should -Be 2
+        $signals.SharePointAlerts | Should -HaveCount 2
+        $global:SPSTestUserLookups | Should -Be 0
+        $signals.SharePointAlerts[0].UserLoginName | Should -Be ''
+        $signals.SharePointAlerts[1].UserLoginName | Should -Be ''
+        $signals.SharePointAlerts[0].UserId | Should -Be 7
+        $signals.SharePointAlerts[1].UserId | Should -Be 8
+        $signals.CustomizationInventoryComplete | Should -BeTrue
+        Remove-Variable -Name SPSTestUserLookups -Scope Global
+    }
+
+    It 'collects the alert owner logins when the setting is true or absent' {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Alerts = @((Get-TestAlert -Title 'A' -UserId 7))
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $explicit = Get-SPSSiteCustomization -Site $site -SharePointAlertSettings @{ IncludeUserLogin = $true }
+        $default = Get-SPSSiteCustomization -Site $site
+
+        $explicit.SharePointAlerts[0].UserLoginName | Should -Be 'i:0#.w|contoso\user7'
+        $default.SharePointAlerts[0].UserLoginName | Should -Be 'i:0#.w|contoso\user7'
+    }
+
+    It 'rejects a SharePoint alert setting that is not a boolean instead of collecting the logins' {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Alerts = @((Get-TestAlert -Title 'A' -UserId 7))
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        { Get-SPSSiteCustomization -Site $site -SharePointAlertSettings @{ IncludeUserLogin = 'false' } } | Should -Throw -ExpectedMessage '*SharePointAlerts.IncludeUserLogin must be*'
+    }
+
     It 'resolves each alert owner once for the whole site collection' {
         $global:SPSTestUserLookups = 0
         $makeAlert = {

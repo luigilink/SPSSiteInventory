@@ -50,7 +50,7 @@ report pack, plus a dedicated farm-solution report, to the output folder:
 | `*-managedmetadata-*.csv` / `*-managedmetadata-*.json` | Managed metadata columns by list, following the SMAT Managed Metadata Columns report. One row per list or library with at least one visible managed metadata column. |
 | `*-externallists-*.csv` / `*-externallists-*.json` | External lists by list, following the SMAT External List report. One row per list backed by a Business Connectivity Services (BCS) external content type, with its BCS binding. |
 | `*-bcs-*.csv` / `*-bcs-*.json` | BCS LOB systems of the farm, following the SMAT BCS report. One row per LOB system, with its type, instances and entities. |
-| `*-sharepointalerts-*.csv` / `*-sharepointalerts-*.json` | SharePoint alerts ("Alert Me" subscriptions) by alert, following the SMAT Alerts report. One row per alert, with where it applies, what triggers it, how often it is sent and who owns it. Not the risk alerts of `*-alerts-*`. They contain the login names of the owners, so they are not part of the HTML report. |
+| `*-sharepointalerts-*.csv` / `*-sharepointalerts-*.json` | SharePoint alerts ("Alert Me" subscriptions) by alert, following the SMAT Alerts report. One row per alert, with where it applies, what triggers it, how often it is sent and who owns it. Not the risk alerts of `*-alerts-*`. They contain the login names of the owners, unless `SharePointAlerts.IncludeUserLogin` is `$false`, so they are not part of the HTML report. |
 
 The HTML report also includes configured authentication by web application/zone,
 an alerts section that groups the alerts by type with what to do about each, a content-type
@@ -251,13 +251,18 @@ one row per alert, for every user of every web:
 | `Status` | `On`, `Off` or `Error` |
 | `DeliveryChannels` / `AlwaysNotify` | How it is delivered, and whether a digest is sent even when nothing changed |
 | `DynamicRecipient` / `Filter` | The dynamic recipient field and the CAML filter of the alert, when it has one |
-| `UserId` / `UserLoginName` | The owner of the alert: the user ID in the site and the login name |
+| `UserId` / `UserLoginName` | The owner of the alert: the user ID in the site and the login name (empty when `SharePointAlerts.IncludeUserLogin` is `$false`) |
 
 `UserLoginName` is personal data, which is why these files are not part of the HTML report:
 handle them like any export that names users. It is empty when the owner is a system alert
 or no longer exists in the site. The HTML report shows the number of sites with alerts, the
 `SharePointAlertCount` column and the `AlertSubscriptions` alert, which has the `Low`
 severity.
+
+To leave the login names out, set `SharePointAlerts.IncludeUserLogin` to `$false` (see
+[Configuration](Configuration#sharepointalerts-section)): the column is then empty and the
+owners are not looked up. While the login names are collected, the scan logs a notice saying
+that the files contain them.
 
 The rows are capped per site collection by `LargeContentThresholds.MaxAlertRowsPerSite`
 (5000 by default) while `SharePointAlertCount` stays exact. When the cap is reached, or

@@ -92,7 +92,8 @@
         applies (web, list or item), what triggers it, how often it is sent, its status
         and its owner. The rows are capped per site (MaxAlertRowsPerSite) while the count
         stays exact; an alert that cannot be read, or rows left out by the cap, mark the
-        collection partial.
+        collection partial. The login name of the owner of each alert is personal data:
+        SharePointAlertSettings can turn it off, and the owners are then not looked up.
 
         The returned hashtable is designed to be passed straight to
         Measure-SPSSiteComplexity. CustomizationInventoryComplete is false when a signal
@@ -140,6 +141,11 @@
         Moderate, Records Center Web Service Submitters). Add the localized names on a
         non-English farm, otherwise those levels are reported as custom.
 
+        .PARAMETER SharePointAlertSettings
+        Optional SharePointAlerts settings. IncludeUserLogin (default $true) says whether the
+        login name of the owner of each alert is collected; a value that is not a boolean is
+        rejected.
+
         .PARAMETER ScanHtmlFile
         Counts .htm and .html files in document libraries. Set it for sites of a web
         application whose browser file handling is Permissive.
@@ -175,6 +181,10 @@
         [Parameter()]
         [System.Collections.IDictionary]
         $PermissionLevels = @{},
+
+        [Parameter()]
+        [System.Collections.IDictionary]
+        $SharePointAlertSettings = @{},
 
         [Parameter()]
         [System.Management.Automation.SwitchParameter]
@@ -254,6 +264,7 @@
     $externalListCount = 0
     $sharePointAlerts = [System.Collections.Generic.List[object]]::new()
     $alertUserLogins = @{}
+    $includeAlertUserLogin = (Get-SPSSharePointAlertOption -Settings $SharePointAlertSettings).IncludeUserLogin
     $alertRowsLeftOut = $false
     $unreadableAlertCount = 0
     $maxAlertWarnings = 5
@@ -1053,7 +1064,7 @@
                                 break
                             }
                             try {
-                                $sharePointAlerts.Add((ConvertTo-SPSSharePointAlertRecord -Alert $webAlert -SiteUrl $Site.Url -WebUrl $web.Url -UserLoginCache $alertUserLogins))
+                                $sharePointAlerts.Add((ConvertTo-SPSSharePointAlertRecord -Alert $webAlert -SiteUrl $Site.Url -WebUrl $web.Url -IncludeUserLogin $includeAlertUserLogin -UserLoginCache $alertUserLogins))
                             }
                             catch {
                                 $signals.CustomizationInventoryComplete = $false

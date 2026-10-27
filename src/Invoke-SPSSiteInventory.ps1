@@ -92,10 +92,16 @@ try {
     else {
         @{}
     }
+    $sharePointAlertSettings = if ($settings.ContainsKey('SharePointAlerts')) {
+        $settings.SharePointAlerts
+    }
+    else {
+        @{}
+    }
     $assessment = & $commonModule {
-        param ($Inventory, $CustomFeatureId, $FullTrustFeatureId, $Scoring, $LargeContentThresholds, $PermissionLevels)
-        Invoke-SPSiteAssessment -Inventory $Inventory -CustomFeatureId $CustomFeatureId -FullTrustFeatureId $FullTrustFeatureId -Scoring $Scoring -LargeContentThresholds $LargeContentThresholds -PermissionLevels $PermissionLevels
-    } $inventory $customFeatureId $fullTrustFeatureId $settings.Scoring $largeContentThresholds $permissionLevels
+        param ($Inventory, $CustomFeatureId, $FullTrustFeatureId, $Scoring, $LargeContentThresholds, $PermissionLevels, $SharePointAlertSettings)
+        Invoke-SPSiteAssessment -Inventory $Inventory -CustomFeatureId $CustomFeatureId -FullTrustFeatureId $FullTrustFeatureId -Scoring $Scoring -LargeContentThresholds $LargeContentThresholds -PermissionLevels $PermissionLevels -SharePointAlertSettings $SharePointAlertSettings
+    } $inventory $customFeatureId $fullTrustFeatureId $settings.Scoring $largeContentThresholds $permissionLevels $sharePointAlertSettings
     $scored = @($assessment.Inventory)
     $contentTypes = @($assessment.ContentTypes)
     $managedMetadataLists = @($assessment.ManagedMetadataLists)
@@ -147,6 +153,10 @@ try {
     }
     foreach ($bcsWarning in @($bcs.Warnings)) {
         Add-SPSInventoryEvent -Message $bcsWarning -Level Warning
+    }
+
+    if (@($sharePointAlerts | Where-Object { -not [string]::IsNullOrEmpty([string]$_.UserLoginName) }).Count -gt 0) {
+        Add-SPSInventoryEvent -Message 'The SharePoint alerts files contain the login names of the alert owners, which are personal data. Set SharePointAlerts.IncludeUserLogin to $false in the settings to leave them out.' -Level Information
     }
 
     $solutionOutput = Export-SPSSolutionReport -InputObject @($solutionMap) -OutputFolder $settings.OutputFolder -BaseName ('SPSSiteInventory-' + $settings.EnvName)

@@ -106,6 +106,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   web applications concerned. The alert logic moves out of `Export-SPSInventoryReport`
   into `Get-SPSInventoryAlert` with tests that every alert type is cataloged and documented
   in the new [Alerts and remediation](wiki/Alerts.md) wiki page. (#45)
+- Added the `SharePointAlerts.IncludeUserLogin` setting (default `$true`) to leave the login
+  name of the alert owners out of the SharePoint alerts report. The owners are then not looked
+  up at all and `UserLoginName` stays empty. While the names are collected, the scan logs a
+  notice saying that the alert files contain personal data. A value that is not `$true` or
+  `$false` is rejected when the settings file is loaded, because the string `'false'` would
+  otherwise collect the names the operator meant to leave out. (#63)
 - Added the SMAT Alerts parity: the SharePoint alerts ("Alert Me" subscriptions) that users
   set up are now inventoried. Each site gets `SharePointAlertCount` (exact, every user, every
   web; informational, not scored by default) and a new `-sharepointalerts-*.csv/json` report

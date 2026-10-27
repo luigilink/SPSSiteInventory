@@ -32,6 +32,44 @@ Describe 'Get-SPSInventorySetting' {
         { Get-SPSInventorySetting -Path $missing } | Should -Throw
     }
 
+    It 'accepts a SharePointAlerts section that turns the owner logins off, or no section at all' {
+        $path = Join-Path $TestDrive 'alerts-off.psd1'
+        @'
+@{
+    Scoring = @{ Weights = @{}; Thresholds = @{ Moderate = 1.0; Complex = 6.0 }; BlockingSignals = @() }
+    SharePointAlerts = @{ IncludeUserLogin = $false }
+}
+'@ | Set-Content -Path $path -Encoding UTF8
+
+        $settings = Get-SPSInventorySetting -Path $path
+
+        $settings.SharePointAlerts.IncludeUserLogin | Should -BeFalse
+    }
+
+    It 'rejects a SharePointAlerts.IncludeUserLogin that is not a boolean, naming the file' {
+        $path = Join-Path $TestDrive 'alerts-string.psd1'
+        @'
+@{
+    Scoring = @{ Weights = @{}; Thresholds = @{ Moderate = 1.0; Complex = 6.0 }; BlockingSignals = @() }
+    SharePointAlerts = @{ IncludeUserLogin = 'false' }
+}
+'@ | Set-Content -Path $path -Encoding UTF8
+
+        { Get-SPSInventorySetting -Path $path } | Should -Throw -ExpectedMessage "*alerts-string.psd1*SharePointAlerts.IncludeUserLogin must be `$true or `$false*"
+    }
+
+    It 'rejects a SharePointAlerts section that is not a hashtable' {
+        $path = Join-Path $TestDrive 'alerts-array.psd1'
+        @'
+@{
+    Scoring = @{ Weights = @{}; Thresholds = @{ Moderate = 1.0; Complex = 6.0 }; BlockingSignals = @() }
+    SharePointAlerts = @('IncludeUserLogin')
+}
+'@ | Set-Content -Path $path -Encoding UTF8
+
+        { Get-SPSInventorySetting -Path $path } | Should -Throw -ExpectedMessage "*alerts-array.psd1*'SharePointAlerts' section must be a hashtable*"
+    }
+
     It 'throws when the mandatory Scoring section is missing' {
         $path = Join-Path $TestDrive 'no-scoring.psd1'
         "@{ EnvName = 'TEST' }" | Set-Content -Path $path -Encoding UTF8
@@ -103,5 +141,11 @@ Describe 'Example settings file' {
         $settings.Scoring.ContainsKey('Weights') | Should -BeTrue
         $settings.Scoring.ContainsKey('Thresholds') | Should -BeTrue
         $settings.Scoring.ContainsKey('BlockingSignals') | Should -BeTrue
+    }
+
+    It 'collects the alert owner logins by default and the shipped example loads' {
+        $settings = Get-SPSInventorySetting -Path $script:ExamplePath
+
+        $settings.SharePointAlerts.IncludeUserLogin | Should -BeTrue
     }
 }
