@@ -2686,6 +2686,20 @@ Describe 'Get-SPSSiteCustomization subsites' {
         ($warnings -join ';') | Should -Match "Could not place web 'https://elsewhere.contoso.com/other' in the structure of the site collection"
     }
 
+    It 'marks the collection partial, and counts nothing, for a web with the same path on another host' {
+        $site = Get-TestSite -Web @(
+            Get-TestSubsite -Url 'https://intranet.contoso.com/sites/team' -IsRootWeb $true
+            Get-TestSubsite -Url 'https://elsewhere.contoso.com/sites/team/payroll'
+        )
+
+        $signals = Get-SPSSiteCustomization -Site $site -WarningVariable warnings -WarningAction SilentlyContinue
+
+        $signals.SubsiteCount | Should -Be 0
+        $signals.MaxSubsiteDepth | Should -Be 0
+        $signals.CustomizationInventoryComplete | Should -BeFalse
+        ($warnings -join ';') | Should -Match "Could not place web 'https://elsewhere.contoso.com/sites/team/payroll'"
+    }
+
     It 'marks the collection partial when the URL of a web cannot be read' {
         $site = Get-TestSite -Web @(
             Get-TestSubsite -Url 'https://intranet.contoso.com/sites/team' -IsRootWeb $true

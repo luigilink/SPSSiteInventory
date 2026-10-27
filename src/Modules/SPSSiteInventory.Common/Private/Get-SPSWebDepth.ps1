@@ -9,9 +9,10 @@
         comparison ignores case and a trailing slash. RelativeUrl is the part of the URL of
         the web that is below the root web, for example 'hr/payroll'.
 
-        Returns $null when a URL cannot be read or when the web is not below the site
-        collection, so that the caller can mark its inventory partial instead of counting
-        a wrong depth.
+        The scheme, the host and the port must be the same, so that the same path on another host
+        is not taken for a subsite. Returns $null when a URL cannot be read or when the web is not
+        below the site collection, so that the caller can mark its inventory partial instead of
+        counting a wrong depth.
 
         Private because it is an implementation detail of Get-SPSSiteCustomization.
 
@@ -43,8 +44,17 @@
 
     $separator = [System.Char[]]@('/')
     try {
-        $siteSegment = @(([System.Uri]$SiteUrl).AbsolutePath.Split($separator, [System.StringSplitOptions]::RemoveEmptyEntries))
-        $webSegment = @(([System.Uri]$WebUrl).AbsolutePath.Split($separator, [System.StringSplitOptions]::RemoveEmptyEntries))
+        $siteUri = [System.Uri]$SiteUrl
+        $webUri = [System.Uri]$WebUrl
+        $siteSegment = @($siteUri.AbsolutePath.Split($separator, [System.StringSplitOptions]::RemoveEmptyEntries))
+        $webSegment = @($webUri.AbsolutePath.Split($separator, [System.StringSplitOptions]::RemoveEmptyEntries))
+        # The same path on another host or port, or with another scheme, is not below the site collection.
+        # Uri.Port is the default port of the scheme when none is given, so https://host and https://host:443 are the same.
+        if ($siteUri.Scheme -ne $webUri.Scheme -or
+            $siteUri.Port -ne $webUri.Port -or
+            -not [System.String]::Equals($siteUri.Host, $webUri.Host, [System.StringComparison]::OrdinalIgnoreCase)) {
+            return $null
+        }
     }
     catch {
         return $null

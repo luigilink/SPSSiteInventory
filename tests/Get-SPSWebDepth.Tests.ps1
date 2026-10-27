@@ -57,6 +57,20 @@ Describe 'Get-SPSWebDepth' {
         Get-Depth -SiteUrl 'https://intranet/sites/hr' -WebUrl 'https://intranet/sites/hr2/payroll' | Should -BeNullOrEmpty
     }
 
+    It 'is $null for the same path on another host, another port or another scheme' {
+        Get-Depth -SiteUrl 'https://intranet/sites/hr' -WebUrl 'https://elsewhere/sites/hr/payroll' | Should -BeNullOrEmpty
+        Get-Depth -SiteUrl 'https://intranet/sites/hr' -WebUrl 'https://intranet:8443/sites/hr/payroll' | Should -BeNullOrEmpty
+        Get-Depth -SiteUrl 'https://intranet/sites/hr' -WebUrl 'http://intranet/sites/hr/payroll' | Should -BeNullOrEmpty
+        Get-Depth -SiteUrl 'https://intranet' -WebUrl 'https://elsewhere/news' | Should -BeNullOrEmpty
+        Get-Depth -SiteUrl 'https://intranet/sites/hr' -WebUrl 'http://intranet:443/sites/hr/payroll' | Should -BeNullOrEmpty
+    }
+
+    It 'takes the default port, and the case of the host, for the same authority' {
+        (Get-Depth -SiteUrl 'https://intranet/sites/hr' -WebUrl 'https://intranet:443/sites/hr/payroll').Depth | Should -Be 1
+        (Get-Depth -SiteUrl 'https://INTRANET/sites/hr' -WebUrl 'https://intranet/sites/hr/payroll').Depth | Should -Be 1
+        (Get-Depth -SiteUrl 'http://intranet:80/sites/hr' -WebUrl 'http://intranet/sites/hr/payroll/2026').Depth | Should -Be 2
+    }
+
     It 'is $null when the web is not below the site collection' {
         Get-Depth -SiteUrl 'https://intranet/sites/hr' -WebUrl 'https://intranet/sites/finance' | Should -BeNullOrEmpty
         Get-Depth -SiteUrl 'https://intranet/sites/hr/payroll' -WebUrl 'https://intranet/sites/hr' | Should -BeNullOrEmpty
