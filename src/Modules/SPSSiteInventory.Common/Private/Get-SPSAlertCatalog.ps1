@@ -63,8 +63,14 @@
             Remediation = 'Ask the site owners to finish the running workflows on the source before the migration: running instances are not migrated and appear as never started afterwards, and the SharePoint 2010 workflow engine is retired in SharePoint Online, so they cannot be restarted there. Plan a supported replacement, for example with Power Automate, for any work that is still unfinished.'
             Reference   = 'https://learn.microsoft.com/en-us/sharepoint/dev/business-apps/power-automate/guidance/migrate-from-classic-workflows-to-power-automate-flows'
         }
+        Workflow2013 = @{
+            Severity    = 'High'
+            Message     = 'SharePoint 2013 workflows are retired in SharePoint Online and require migration remediation.'
+            Remediation = 'List the workflows with the site owners and rebuild them, for example with Power Automate: the SharePoint 2013 workflow engine was retired in SharePoint Online on 2 April 2026. Complete the workflows in flight before the migration.'
+            Reference   = 'https://learn.microsoft.com/en-us/sharepoint/dev/business-apps/power-automate/guidance/migrate-from-classic-workflows-to-power-automate-flows'
+        }
         Workflow2013Running = @{
-            Severity    = 'Medium'
+            Severity    = 'High'
             Message     = 'Active SharePoint 2013 workflow instances were detected.'
             Remediation = 'Ask the site owners to finish the running workflows on the source before the migration: running instances are not migrated and appear as never started afterwards, and the SharePoint 2013 workflow engine was retired in SharePoint Online on 2 April 2026, so they cannot be restarted there. Plan a supported replacement, for example with Power Automate, for any work that is still unfinished.'
             Reference   = 'https://learn.microsoft.com/en-us/sharepoint/dev/business-apps/power-automate/guidance/migrate-from-classic-workflows-to-power-automate-flows'

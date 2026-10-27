@@ -106,6 +106,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   users. The rows are capped per site by `LargeContentThresholds.MaxAlertRowsPerSite` (5000
   by default); an unreadable alert or a reached cap marks the site partial. The files hold
   the login names of the alert owners, so they stay out of the HTML report. (#45)
+- Added the `Workflow2013` alert. SharePoint 2013 workflows were fully retired in SharePoint
+  Online on 2 April 2026, so a site that still has some now raises a `High` alert with a
+  remediation (rebuild them, for example with Power Automate), like `Workflow2010` does for the
+  2010 engine. `Workflow2013Running` moves from `Medium` to `High`, because a running instance
+  cannot be restarted in SharePoint Online any more. (#66)
 - Zone-aware web application authentication inventory, including mixed Windows/FBA,
   membership/role provider names and explicit identity-review flags. The example
   configuration treats `HasFbaZone` as a SharePoint Online migration blocker.

@@ -66,6 +66,18 @@ Describe 'Get-SPSAlertCatalog' {
         $script:Catalog['Workflow2013Running'].Remediation | Should -Match '2 April 2026'
     }
 
+    It 'treats the SharePoint 2013 workflows as retired in SharePoint Online, like the 2010 ones' {
+        $entry = $script:Catalog['Workflow2013']
+
+        $entry.Severity | Should -Be 'High'
+        $entry.Severity | Should -Be $script:Catalog['Workflow2010'].Severity
+        $entry.Remediation | Should -Match 'engine was retired in SharePoint Online on 2 April 2026'
+        $entry.Remediation | Should -Match 'Power Automate'
+        $entry.Remediation | Should -Match 'Complete the workflows in flight before the migration'
+        $entry.Reference | Should -Match 'migrate-from-classic-workflows-to-power-automate-flows'
+        $script:Catalog['Workflow2013Running'].Severity | Should -Be 'High'
+    }
+
     It 'does not tell users to reinstall add-ins in SharePoint Online, where the add-in model is retired' {
         foreach ($key in @('AppInstances', 'AppWebs')) {
             $entry = $script:Catalog[$key]

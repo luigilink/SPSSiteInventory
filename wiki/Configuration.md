@@ -111,7 +111,10 @@ Workflows are split by platform because their migration cost differs:
 - `Workflow2010RunningInstanceCount` — active runtime instances on the 2010
   platform where per-association counters are available.
 - `Workflow2013Count` — SharePoint 2013 workflows (Workflow Manager). A lighter, more
-  direct remediation, so they are weighted less than their 2010 counterparts.
+  direct remediation, so they are weighted less than their 2010 counterparts. They
+  were nevertheless **retired in SharePoint Online** on 2 April 2026, so every one
+  needs a rebuild, for example with Power Automate: the `Workflow2013` alert is `High`,
+  like the `Workflow2010` one.
 - `Workflow2013RunningInstanceCount` — active runtime instances on the 2013
   platform when Workflow Manager instance APIs are available.
 - `AppInstanceCount` — SharePoint add-in instances detected across the site
