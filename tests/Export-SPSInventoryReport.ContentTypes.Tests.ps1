@@ -601,4 +601,43 @@ Describe 'Export-SPSInventoryReport content types' {
         $alerts = Get-Content $output.AlertsJsonPath -Raw | ConvertFrom-Json
         Get-AlertCount -Alerts $alerts -Type 'BcsInventoryPartial' | Should -Be 0
     }
+
+    It 'writes the alerts with their remediation to the CSV and JSON files and lists the CSV in the manifest' {
+        $sites = @([PSCustomObject]@{
+            InventoryScope = 'SiteCollection'; Url = 'https://intranet/sites/team'; WebApp = 'Intranet'
+            AssessmentStatus = 'Complete'; Category = 4; InfoPathFormCount = 2; CheckedOutFileCount = 1
+        })
+
+        $output = Export-SPSInventoryReport -InputObject $sites -OutputFolder $TestDrive -BaseName 'AlertFiles'
+
+        (Get-Content $output.AlertsCsvPath -TotalCount 1) | Should -Be '"AlertType","Severity","Url","Value","Message","Remediation","Reference"'
+        $csvRows = @(Import-Csv $output.AlertsCsvPath)
+        $csvRows | Should -HaveCount 2
+        $infoPath = $csvRows | Where-Object { $_.AlertType -eq 'InfoPath' }
+        $infoPath.Severity | Should -Be 'High'
+        $infoPath.Url | Should -Be 'https://intranet/sites/team'
+        $infoPath.Value | Should -Be '2'
+        $infoPath.Remediation | Should -Match 'Power Apps'
+        $infoPath.Reference | Should -Be 'https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-infopath'
+        $jsonRows = Get-Content $output.AlertsJsonPath -Raw | ConvertFrom-Json
+        Get-RowCount -Rows $jsonRows | Should -Be 2
+        @($jsonRows | Where-Object { $_.AlertType -eq 'CheckedOutFiles' })[0].Remediation | Should -Match 'check in'
+        $manifest = Get-Content $output.ManifestJsonPath -Raw | ConvertFrom-Json
+        $manifest.Files.AlertsCsv | Should -Be $output.AlertsCsvPath
+        $manifest.Files.AlertsJson | Should -Be $output.AlertsJsonPath
+        $manifest.Summary.AlertCount | Should -Be 2
+        $html = Get-Content $output.HtmlPath -Raw
+        $html | Should -Match '<h2 id="alerts">Alerts and remediation</h2>'
+        $html | Should -Match '<strong>2</strong> alert\(s\) of <strong>2</strong> type\(s\)'
+    }
+
+    It 'writes a valid empty alerts CSV and an empty alerts section when nothing was raised' {
+        $output = Export-SPSInventoryReport -InputObject @() -OutputFolder $TestDrive -BaseName 'NoAlerts'
+
+        (Get-Content $output.AlertsCsvPath -TotalCount 1) | Should -Match 'Remediation'
+        @(Import-Csv $output.AlertsCsvPath) | Should -HaveCount 0
+        Get-RowCount -Rows (Get-Content $output.AlertsJsonPath -Raw | ConvertFrom-Json) | Should -Be 0
+        (Get-Content $output.ManifestJsonPath -Raw | ConvertFrom-Json).Summary.AlertCount | Should -Be 0
+        (Get-Content $output.HtmlPath -Raw) | Should -Match '<strong>0</strong> alert\(s\) of <strong>0</strong> type\(s\)'
+    }
 }

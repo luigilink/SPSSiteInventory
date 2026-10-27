@@ -1,0 +1,72 @@
+# Alerts and remediation
+
+SPSSiteInventory turns the signals it collects into **alerts**. An alert says that a site
+collection, a web application or the farm has something to deal with before or after the
+migration, how serious it is, and what to do about it. Alerts are about risks found by the
+inventory; they are not the SharePoint alerts (Alert Me subscriptions) that users configured.
+
+## Where to find them
+
+- The **Alerts and remediation** section of the HTML report groups the alerts by type, most
+  severe first, with the number of site collections or web applications concerned, what each
+  one means and what to do about it.
+- `*-alerts-*.csv` (for Excel) and `*-alerts-*.json` list every alert with the URL it is
+  about. The files are described in [Usage](Usage#output-files).
+
+Each alert has these fields:
+
+| Field | Description |
+| --- | --- |
+| `AlertType` | The kind of alert, from the table below. |
+| `Severity` | `High` for a finding that blocks or breaks a migration, `Medium` for one that needs a plan or a check. |
+| `Url` | The site collection or web application the alert is about. Empty for farm-wide alerts. |
+| `Value` | What raised the alert: a count, a state, a template or a LOB system name. |
+| `Message` | What was detected and why it matters. For the template alerts it is the reason of the mapping. |
+| `Remediation` | What to do next. The same alert type always gives the same advice. |
+| `Reference` | The Microsoft Learn page behind the advice, when there is one. |
+
+The advice comes from the guidance of the SharePoint Migration Assessment Tool (SMAT) scan
+reports and the Microsoft documentation. It is a starting point: confirm it against your own
+target and plan.
+
+## Alert catalog
+
+| Alert | Severity | Raised when | What to do |
+| --- | --- | --- | --- |
+| `WebApplicationEnumerationFailed` | High | The site collections of a web application could not be listed. Raised once per web application. | Fix the access or database problem reported in the run log and run the inventory again: the site collections of this web application are not assessed until then. |
+| `AssessmentFailed` | High | The assessment of a site collection failed (`AssessmentStatus` is `Failed`). | Read the warnings of the site record, fix the cause (permissions, locked or unreachable content) and run the inventory again: the site has no category or score until then. |
+| `AssessmentPartial` | Medium | The assessment of a site collection is partial (`AssessmentStatus` is `Partial`). | Review the warnings of the site record: counts are lower bounds and the category may be understated. Fix the unreadable item or raise the matching cap, then run the inventory again. |
+| `Workflow2010` | High | `Workflow2010Count` is above 0. | List the workflows with the site owners and rebuild them, for example with Power Automate: the SharePoint 2010 workflow engine is retired in SharePoint Online. Complete the workflows in flight before the migration. [Microsoft Learn](https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-workflow-associations-2010) |
+| `Workflow2010Running` | High | `Workflow2010RunningInstanceCount` is above 0. | Ask the site owners to finish the running workflows before the migration: running instances are not migrated and appear as never started afterwards, so users must restart them. [Microsoft Learn](https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-workflow-running-solutions-2010) |
+| `Workflow2013Running` | Medium | `Workflow2013RunningInstanceCount` is above 0. | Ask the site owners to finish the running workflows before the migration: running instances are not migrated, so users must restart the workflows afterwards. [Microsoft Learn](https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-workflow-running-solutions-2013) |
+| `AppInstances` | Medium | `AppInstanceCount` is above 0. | List the add-ins with the site owners: site content migrates but add-ins do not. Reinstall or replace each one after the migration, and reclaim the license of purchased add-ins. [Microsoft Learn](https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-apps) |
+| `AppWebs` | Medium | `AppWebCount` is above 0. | Check what each app web stores: data kept there is not carried over, because the add-in is reinstalled cleanly. Plan a replacement with the owners. [Microsoft Learn](https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-apps) |
+| `PublishingSite` | Medium | The Publishing Infrastructure feature is active or `PublishingWebCount` is above 0. | Run a test migration of these sites, list what breaks (page layouts, master pages, styles) and plan the fixes. Starting a new portal and archiving the old one is often easier. [Microsoft Learn](https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-publishing-sites) |
+| `PublishingPages` | Medium | `PublishingPageCount` is above 0. | Catalog the pages by page layout, run a test migration and plan the fixes to layouts, master pages, JavaScript and CSS after the migration. [Microsoft Learn](https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scanpublishing-pages) |
+| `CustomizedPages` | Medium | `CustomizedPageCount` is above 0. | Tell the site owners which pages are customized: they must reapply the customization after the migration, and should look for out-of-the-box behavior to replace it where possible. [Microsoft Learn](https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-customized-pages) |
+| `CustomPermissionLevels` | Medium | `CustomPermissionLevelCount` is above 0. | Decide before the migration: move users and groups to the built-in permission levels, or plan to recreate the custom levels. Check the permissions afterwards. [Microsoft Learn](https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-custom-permission-level) |
+| `EmailEnabledLists` | Medium | `EmailEnabledListCount` is above 0. | Tell the users that e-mail no longer reaches these lists after the migration and plan another way to capture the messages. [Microsoft Learn](https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-email-enabled-lists) |
+| `HtmlFiles` | Medium | `HtmlFileCount` is above 0. | Warn the site owners. If the files must open in the browser, rename them to .aspx (this needs designer access to the site); otherwise users are prompted to download them, which also affects Page Viewer web parts. [Microsoft Learn](https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-browser-file-handling) |
+| `ManagedMetadataColumns` | Medium | `ManagedMetadataListCount` is above 0. | Migrate these lists close to the term store migration, then check that items in them can still be created and edited. [Microsoft Learn](https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-managed-metadata-columns) |
+| `ExternalLists` | High | `ExternalListCount` is above 0. | Plan a replacement for each scenario, for example with Power Apps and its connectors; the on-premises data gateway reaches on-premises data. There is no direct migration. [Microsoft Learn](https://learn.microsoft.com/en-us/sharepoint/business-connectivity-services-retirement) |
+| `UnsupportedSiteTemplate` | High | The site template is mapped as unsupported (`IsUnsupportedSiteTemplate`). The message is the mapping reason. | Check what the Team Site template that receives the content lacks compared with the source site, plan the rebuild of those features and validate the site after the migration. [Microsoft Learn](https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-unsupported-site-templates) |
+| `TemplateCompatibilityReview` | Medium | The template compatibility is `Review` and the template is not unsupported. The message is the mapping reason. | Check the template against the templates your target supports. If it is not covered, treat the site like one with an unsupported template. [Microsoft Learn](https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-unsupported-site-templates) |
+| `TemplateLanguageReview` | Medium | `TemplateLanguageReviewRequired` is true. The message is the language reason. | Plan for someone who reads the language of the site to validate the migrated content during user acceptance testing. [Microsoft Learn](https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-site-template-language) |
+| `InfoPath` | High | `InfoPathFormCount` is above 0. | Remediate the forms that use SOAP data connections, managed code or people pickers, or rebuild them, for example with Power Apps. Test the forms during user acceptance testing. [Microsoft Learn](https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-infopath) |
+| `FullTrustCode` | High | `UsesFullTrustCode` is true. | Identify the farm solutions behind these features (see the farm solutions section) and plan their replacement: SharePoint Online does not support full-trust solutions. [Microsoft Learn](https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-full-trust-component-results) |
+| `FbaConfigured` | High | `HasFbaZone` is true. | Plan the move of the forms-based accounts to an identity SharePoint Online supports, and map the users before the migration. |
+| `LockedSite` | High | `IsLockedSite` is true; the value is the lock state. | Check that the lock is intended. Unlock the sites that must migrate: a locked site cannot be read, so it is skipped. [Microsoft Learn](https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-locked-sites) |
+| `IrmEnabledLists` | High | `IrmEnabledListCount` is above 0. | Configure the target for rights management, disable IRM on these lists before the migration, then enable it again on the source and target lists once the content is copied. [Microsoft Learn](https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-irm-enabled-lists) |
+| `LargeSite` | Medium | `IsLargeSite` is true; the value is the size in GB. | Plan more time and a dedicated wave: the larger the site, the harder the migration schedule is to predict. [Microsoft Learn](https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-large-sites) |
+| `LargeLists` | Medium | `LargeListCount` is above 0. | Check whether all the content must migrate, archive or clean up what is not needed, expect a longer and less predictable migration and validate the item counts afterwards. [Microsoft Learn](https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-large-lists) |
+| `LargeListViews` | Medium | `LargeListViewCount` is above 0. | Remediate the views before the migration, for example by filtering on indexed columns and limiting lookup columns: the list view threshold applies continuously in SharePoint Online. [Microsoft Learn](https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-large-list-views) |
+| `CheckedOutFiles` | Medium | `CheckedOutFileCount` is above 0. | Ask the users to check in their files before the migration date: only checked-in content is migrated. [Microsoft Learn](https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-checked-out-files) |
+| `FileVersions` | Medium | `FileVersionCount` is above 0. | Decide whether all versions must be kept: the migration time grows with the number of versions. [Microsoft Learn](https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-file-versions) |
+| `WebApplicationPolicies` | Medium | A web application has policies (`WebAppPolicyCount` above 0). Raised once per web application. | Manage these permissions at the site collection level instead, or use licensing to grant or limit capabilities, and check the result during user acceptance testing. [Microsoft Learn](https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-web-application-policies) |
+| `PermissiveBrowserFileHandling` | Medium | A web application uses Permissive browser file handling. Raised once per web application. | Warn the owners of the sites in this web application: see the HTML file alerts for the sites concerned and check that their pages render after the migration. [Microsoft Learn](https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-browser-file-handling) |
+| `BcsApplication` | Medium | A BCS LOB system is defined in the farm. Raised once per LOB system. | Replace the scenarios that rely on this application, for example with Power Apps and its connectors. BCS is not retired in SharePoint Server Subscription Edition, so a target that stays on-premises can keep using it. [Microsoft Learn](https://learn.microsoft.com/en-us/sharepoint/business-connectivity-services-retirement) |
+| `BcsInventoryPartial` | Medium | The BCS inventory could not be read in full. | Fix the web application or LOB system named in the run warnings and run the inventory again before relying on the BCS report. |
+
+Alerts do not change the category or the score of a site: that is the job of the
+[scoring configuration](Configuration#scoring-section). An alert is raised even for a signal
+that has no weight.

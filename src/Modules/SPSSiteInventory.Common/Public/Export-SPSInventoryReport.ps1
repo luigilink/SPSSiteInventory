@@ -31,8 +31,12 @@
         - `*-permissions-*.json`
         - `*-irm-locks-*.json`
         - `*-large-content-*.json`
-        - `*-alerts-*.json`
+        - `*-alerts-*.json` (also written as `*-alerts-*.csv` for Excel)
         - `*-manifest-*.json`
+
+        Every alert carries its severity, an explanation and a remediation hint taken from
+        the alert catalog, so the alerts files and the HTML alerts section tell the reader
+        what to do next.
 
         Returns a PSCustomObject with the output paths.
 
@@ -160,6 +164,7 @@
     $irmLocksJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-irm-locks-{1}.json' -f $BaseName, $timestamp)
     $largeContentJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-large-content-{1}.json' -f $BaseName, $timestamp)
     $alertsJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-alerts-{1}.json' -f $BaseName, $timestamp)
+    $alertsCsvPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-alerts-{1}.csv' -f $BaseName, $timestamp)
     $manifestJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-manifest-{1}.json' -f $BaseName, $timestamp)
 
     $InputObject | Export-Csv -Path $csvPath -NoTypeInformation -Encoding UTF8
@@ -284,314 +289,12 @@
         }
     )
 
-    $alerts = [System.Collections.Generic.List[object]]::new()
-    foreach ($record in $records) {
-        $scope = if ($null -ne $record.PSObject.Properties['InventoryScope']) { [string]$record.InventoryScope } else { 'SiteCollection' }
-        if ($scope -eq 'WebApplication') {
-            $alerts.Add([PSCustomObject]@{
-                    AlertType = 'WebApplicationEnumerationFailed'
-                    Severity = 'High'
-                    Url = if ($record.WebAppUrl) { $record.WebAppUrl } else { $record.Url }
-                    Value = if ($record.SiteInventoryWarnings) { $record.SiteInventoryWarnings } else { $record.AssessmentWarnings }
-                    Message = 'Site collection enumeration failed for this web application.'
-                })
-        }
-        if ($record.AssessmentStatus -eq 'Failed') {
-            $alerts.Add([PSCustomObject]@{
-                    AlertType = 'AssessmentFailed'
-                    Severity = 'High'
-                    Url = $record.Url
-                    Value = $record.AssessmentWarnings
-                    Message = 'Site assessment failed.'
-                })
-        }
-        if ($record.AssessmentStatus -eq 'Partial') {
-            $alerts.Add([PSCustomObject]@{
-                    AlertType = 'AssessmentPartial'
-                    Severity = 'Medium'
-                    Url = $record.Url
-                    Value = $record.AssessmentWarnings
-                    Message = 'Site assessment is partial and may miss signals.'
-                })
-        }
-        if ($scope -eq 'SiteCollection' -and [int]$record.Workflow2010Count -gt 0) {
-            $alerts.Add([PSCustomObject]@{
-                    AlertType = 'Workflow2010'
-                    Severity = 'High'
-                    Url = $record.Url
-                    Value = [int]$record.Workflow2010Count
-                    Message = 'Legacy SharePoint 2010 workflows require migration remediation.'
-                })
-        }
-        if ($scope -eq 'SiteCollection' -and [int]$record.Workflow2010RunningInstanceCount -gt 0) {
-            $alerts.Add([PSCustomObject]@{
-                    AlertType = 'Workflow2010Running'
-                    Severity = 'High'
-                    Url = $record.Url
-                    Value = [int]$record.Workflow2010RunningInstanceCount
-                    Message = 'Active SharePoint 2010 workflow instances were detected.'
-                })
-        }
-        if ($scope -eq 'SiteCollection' -and [int]$record.Workflow2013RunningInstanceCount -gt 0) {
-            $alerts.Add([PSCustomObject]@{
-                    AlertType = 'Workflow2013Running'
-                    Severity = 'Medium'
-                    Url = $record.Url
-                    Value = [int]$record.Workflow2013RunningInstanceCount
-                    Message = 'Active SharePoint 2013 workflow instances were detected.'
-                })
-        }
-        if ($scope -eq 'SiteCollection' -and [int]$record.AppInstanceCount -gt 0) {
-            $alerts.Add([PSCustomObject]@{
-                    AlertType = 'AppInstances'
-                    Severity = 'Medium'
-                    Url = $record.Url
-                    Value = [int]$record.AppInstanceCount
-                    Message = 'SharePoint add-ins were detected and require migration compatibility review.'
-                })
-        }
-        if ($scope -eq 'SiteCollection' -and [int]$record.AppWebCount -gt 0) {
-            $alerts.Add([PSCustomObject]@{
-                    AlertType = 'AppWebs'
-                    Severity = 'Medium'
-                    Url = $record.Url
-                    Value = [int]$record.AppWebCount
-                    Message = 'App webs were detected and should be assessed for SharePoint Online replacement paths.'
-                })
-        }
-        if ($scope -eq 'SiteCollection' -and ([bool]$record.PublishingInfrastructureEnabled -or [int]$record.PublishingWebCount -gt 0)) {
-            $alerts.Add([PSCustomObject]@{
-                    AlertType = 'PublishingSite'
-                    Severity = 'Medium'
-                    Url = $record.Url
-                    Value = [int]$record.PublishingWebCount
-                    Message = 'Publishing features are enabled; page layouts and publishing customizations typically need extensive remediation.'
-                })
-        }
-        if ($scope -eq 'SiteCollection' -and [int]$record.PublishingPageCount -gt 0) {
-            $alerts.Add([PSCustomObject]@{
-                    AlertType = 'PublishingPages'
-                    Severity = 'Medium'
-                    Url = $record.Url
-                    Value = [int]$record.PublishingPageCount
-                    Message = 'Publishing pages were detected; their pages may not render correctly until page layouts, master pages and styles are reviewed.'
-                })
-        }
-        if ($scope -eq 'SiteCollection' -and [int]$record.CustomizedPageCount -gt 0) {
-            $alerts.Add([PSCustomObject]@{
-                    AlertType = 'CustomizedPages'
-                    Severity = 'Medium'
-                    Url = $record.Url
-                    Value = [int]$record.CustomizedPageCount
-                    Message = 'Customized pages are reverted to their default state during migration; owners must reapply customizations afterwards.'
-                })
-        }
-        if ($scope -eq 'SiteCollection' -and [int]$record.CustomPermissionLevelCount -gt 0) {
-            $alerts.Add([PSCustomObject]@{
-                    AlertType = 'CustomPermissionLevels'
-                    Severity = 'Medium'
-                    Url = $record.Url
-                    Value = [int]$record.CustomPermissionLevelCount
-                    Message = 'Custom permission levels may not be carried over by migration tools; recreate them or move users to the built-in levels.'
-                })
-        }
-        if ($scope -eq 'SiteCollection' -and [int]$record.EmailEnabledListCount -gt 0) {
-            $alerts.Add([PSCustomObject]@{
-                    AlertType = 'EmailEnabledLists'
-                    Severity = 'Medium'
-                    Url = $record.Url
-                    Value = [int]$record.EmailEnabledListCount
-                    Message = 'Incoming e-mail is not available in SharePoint Online; messages sent to these lists will no longer arrive.'
-                })
-        }
-        if ($scope -eq 'SiteCollection' -and [int]$record.HtmlFileCount -gt 0) {
-            $alerts.Add([PSCustomObject]@{
-                    AlertType = 'HtmlFiles'
-                    Severity = 'Medium'
-                    Url = $record.Url
-                    Value = [int]$record.HtmlFileCount
-                    Message = 'HTML files open in the browser today but prompt a download under the Strict browser file handling SharePoint Online enforces.'
-                })
-        }
-        if ($scope -eq 'SiteCollection' -and [int]$record.ManagedMetadataListCount -gt 0) {
-            $alerts.Add([PSCustomObject]@{
-                    AlertType = 'ManagedMetadataColumns'
-                    Severity = 'Medium'
-                    Url = $record.Url
-                    Value = [int]$record.ManagedMetadataListCount
-                    Message = 'Managed metadata columns depend on the term store; plan the term store migration together with these lists and verify the columns afterwards.'
-                })
-        }
-        if ($scope -eq 'SiteCollection' -and [int]$record.ExternalListCount -gt 0) {
-            $alerts.Add([PSCustomObject]@{
-                    AlertType = 'ExternalLists'
-                    Severity = 'High'
-                    Url = $record.Url
-                    Value = [int]$record.ExternalListCount
-                    Message = 'External lists depend on BCS, which Microsoft retired in SharePoint Online on 30 September 2024: they cannot be migrated, so plan a replacement such as Power Apps.'
-                })
-        }
-        if ($scope -eq 'SiteCollection' -and [bool]$record.IsUnsupportedSiteTemplate) {
-            $alerts.Add([PSCustomObject]@{
-                    AlertType = 'UnsupportedSiteTemplate'
-                    Severity = 'High'
-                    Url = $record.Url
-                    Value = $record.Template
-                    Message = if ($record.TemplateCompatibilityReason) { [string]$record.TemplateCompatibilityReason } else { 'Site template is not supported for direct SharePoint Online migration.' }
-                })
-        }
-        if ($scope -eq 'SiteCollection' -and -not [bool]$record.IsUnsupportedSiteTemplate -and [string]$record.TemplateCompatibility -eq 'Review') {
-            $alerts.Add([PSCustomObject]@{
-                    AlertType = 'TemplateCompatibilityReview'
-                    Severity = 'Medium'
-                    Url = $record.Url
-                    Value = $record.Template
-                    Message = if ($record.TemplateCompatibilityReason) { [string]$record.TemplateCompatibilityReason } else { 'Site template compatibility requires manual validation.' }
-                })
-        }
-        if ($scope -eq 'SiteCollection' -and [bool]$record.TemplateLanguageReviewRequired) {
-            $alerts.Add([PSCustomObject]@{
-                    AlertType = 'TemplateLanguageReview'
-                    Severity = 'Medium'
-                    Url = $record.Url
-                    Value = if ($null -ne $record.TemplateLanguageLcid) { [int]$record.TemplateLanguageLcid } else { $null }
-                    Message = if ($record.TemplateLanguageReason) { [string]$record.TemplateLanguageReason } else { 'Template language requires manual compatibility review.' }
-                })
-        }
-        if ($scope -eq 'SiteCollection' -and [int]$record.InfoPathFormCount -gt 0) {
-            $alerts.Add([PSCustomObject]@{
-                    AlertType = 'InfoPath'
-                    Severity = 'High'
-                    Url = $record.Url
-                    Value = [int]$record.InfoPathFormCount
-                    Message = 'InfoPath forms are not supported in SharePoint Online.'
-                })
-        }
-        if ($scope -eq 'SiteCollection' -and [bool]$record.UsesFullTrustCode) {
-            $alerts.Add([PSCustomObject]@{
-                    AlertType = 'FullTrustCode'
-                    Severity = 'High'
-                    Url = $record.Url
-                    Value = $true
-                    Message = 'Custom full-trust code is a migration blocker.'
-                })
-        }
-        if ([bool]$record.HasFbaZone) {
-            $alerts.Add([PSCustomObject]@{
-                    AlertType = 'FbaConfigured'
-                    Severity = 'High'
-                    Url = $record.Url
-                    Value = $true
-                    Message = 'Forms-based authentication requires identity remediation.'
-                })
-        }
-        if ($scope -eq 'SiteCollection' -and [bool]$record.IsLockedSite) {
-            $alerts.Add([PSCustomObject]@{
-                    AlertType = 'LockedSite'
-                    Severity = 'High'
-                    Url = $record.Url
-                    Value = $record.SiteLockState
-                    Message = 'Site lock state blocks or delays migration.'
-                })
-        }
-        if ($scope -eq 'SiteCollection' -and [int]$record.IrmEnabledListCount -gt 0) {
-            $alerts.Add([PSCustomObject]@{
-                    AlertType = 'IrmEnabledLists'
-                    Severity = 'High'
-                    Url = $record.Url
-                    Value = [int]$record.IrmEnabledListCount
-                    Message = 'IRM-enabled lists require records-protection remediation.'
-                })
-        }
-        if ($scope -eq 'SiteCollection' -and [bool]$record.IsLargeSite) {
-            $alerts.Add([PSCustomObject]@{
-                    AlertType = 'LargeSite'
-                    Severity = 'Medium'
-                    Url = $record.Url
-                    Value = $record.SizeGB
-                    Message = 'Site content size is above the configured large-site threshold.'
-                })
-        }
-        if ($scope -eq 'SiteCollection' -and [int]$record.LargeListCount -gt 0) {
-            $alerts.Add([PSCustomObject]@{
-                    AlertType = 'LargeLists'
-                    Severity = 'Medium'
-                    Url = $record.Url
-                    Value = [int]$record.LargeListCount
-                    Message = 'Large lists were detected and may require migration batching or cleanup.'
-                })
-        }
-        if ($scope -eq 'SiteCollection' -and [int]$record.LargeListViewCount -gt 0) {
-            $alerts.Add([PSCustomObject]@{
-                    AlertType = 'LargeListViews'
-                    Severity = 'Medium'
-                    Url = $record.Url
-                    Value = [int]$record.LargeListViewCount
-                    Message = 'Large-list views were detected and should be reviewed for migration readiness.'
-                })
-        }
-        if ($scope -eq 'SiteCollection' -and [int]$record.CheckedOutFileCount -gt 0) {
-            $alerts.Add([PSCustomObject]@{
-                    AlertType = 'CheckedOutFiles'
-                    Severity = 'Medium'
-                    Url = $record.Url
-                    Value = [int]$record.CheckedOutFileCount
-                    Message = 'Checked-out files were detected and should be checked in before migration.'
-                })
-        }
-        if ($scope -eq 'SiteCollection' -and [int]$record.FileVersionCount -gt 0) {
-            $alerts.Add([PSCustomObject]@{
-                    AlertType = 'FileVersions'
-                    Severity = 'Medium'
-                    Url = $record.Url
-                    Value = [int]$record.FileVersionCount
-                    Message = 'Files with high version counts were detected and may increase migration time.'
-                })
-        }
+    $alertParams = @{ InputObject = @($records) }
+    if ($PSBoundParameters.ContainsKey('BcsApplications')) {
+        $alertParams['BcsApplication'] = @($BcsApplications)
+        $alertParams['BcsInventoryComplete'] = $BcsInventoryComplete
     }
-
-    # Policies and browser file handling belong to the web application, so alert once per web application.
-    foreach ($group in ($records | Where-Object { $_.WebAppUrl } | Group-Object -Property WebAppUrl)) {
-        $webAppRecord = $group.Group[0]
-        if ([int]$webAppRecord.WebAppPolicyCount -gt 0) {
-            $alerts.Add([PSCustomObject]@{
-                    AlertType = 'WebApplicationPolicies'
-                    Severity = 'Medium'
-                    Url = $webAppRecord.WebAppUrl
-                    Value = [int]$webAppRecord.WebAppPolicyCount
-                    Message = 'Web application policies are not migrated to SharePoint Online; replace them with site-collection permissions.'
-                })
-        }
-        if ([string]$webAppRecord.BrowserFileHandling -eq 'Permissive') {
-            $alerts.Add([PSCustomObject]@{
-                    AlertType = 'PermissiveBrowserFileHandling'
-                    Severity = 'Medium'
-                    Url = $webAppRecord.WebAppUrl
-                    Value = 'Permissive'
-                    Message = 'Permissive browser file handling is not available in SharePoint Online; .htm and .html files will prompt a download.'
-                })
-        }
-    }
-
-    # BCS applications belong to the farm, so alert once per LOB system rather than per site.
-    foreach ($bcsApplication in @($BcsApplications)) {
-        $alerts.Add([PSCustomObject]@{
-                AlertType = 'BcsApplication'
-                Severity = 'Medium'
-                Url = ([string]$bcsApplication.WebApplicationUrls -split '; ')[0]
-                Value = [string]$bcsApplication.LobSystemName
-                Message = 'BCS is retired in SharePoint Online, so BCS applications cannot be migrated; plan a replacement such as Power Apps for the solutions that rely on them.'
-            })
-    }
-    if ($PSBoundParameters.ContainsKey('BcsApplications') -and -not $BcsInventoryComplete) {
-        $alerts.Add([PSCustomObject]@{
-                AlertType = 'BcsInventoryPartial'
-                Severity = 'Medium'
-                Url = ''
-                Value = $false
-                Message = 'The BCS inventory is partial: some web applications or LOB systems could not be read, so BCS applications may be missing.'
-            })
-    }
+    $alerts = @(Get-SPSInventoryAlert @alertParams)
 
     ConvertTo-Json -InputObject @($records) -Depth 6 | Set-Content -Path $sitesJsonPath -Encoding UTF8
     ConvertTo-Json -InputObject @($authRecords) -Depth 6 | Set-Content -Path $authJsonPath -Encoding UTF8
@@ -601,12 +304,21 @@
     ConvertTo-Json -InputObject @($permissionRecords) -Depth 6 | Set-Content -Path $permissionsJsonPath -Encoding UTF8
     ConvertTo-Json -InputObject @($irmLockRecords) -Depth 6 | Set-Content -Path $irmLocksJsonPath -Encoding UTF8
     ConvertTo-Json -InputObject @($largeContentRecords) -Depth 6 | Set-Content -Path $largeContentJsonPath -Encoding UTF8
-    ConvertTo-Json -InputObject @($alerts.ToArray()) -Depth 6 | Set-Content -Path $alertsJsonPath -Encoding UTF8
+    ConvertTo-Json -InputObject @($alerts) -Depth 6 | Set-Content -Path $alertsJsonPath -Encoding UTF8
+    $alertColumns = @('AlertType', 'Severity', 'Url', 'Value', 'Message', 'Remediation', 'Reference')
+    if ($alerts.Count -gt 0) {
+        $alerts | Select-Object -Property $alertColumns |
+            Export-Csv -Path $alertsCsvPath -NoTypeInformation -Encoding UTF8
+    }
+    else {
+        Set-Content -Path $alertsCsvPath -Value ('"' + ($alertColumns -join '","') + '"') -Encoding UTF8
+    }
 
     $htmlParams = @{
         InputObject = @($InputObject)
         EnvName = $EnvName
         SolutionMap = @($SolutionMap)
+        Alert = @($alerts)
     }
     $contentTypesCsvPath = $null
     $contentTypesJsonPath = $null
@@ -737,6 +449,7 @@
             IrmLocksJson = $irmLocksJsonPath
             LargeContentJson = $largeContentJsonPath
             AlertsJson = $alertsJsonPath
+            AlertsCsv = $alertsCsvPath
             ContentTypesCsv = $contentTypesCsvPath
             ContentTypesJson = $contentTypesJsonPath
             ManagedMetadataCsv = $managedMetadataCsvPath
@@ -763,6 +476,7 @@
         IrmLocksJsonPath = $irmLocksJsonPath
         LargeContentJsonPath = $largeContentJsonPath
         AlertsJsonPath = $alertsJsonPath
+        AlertsCsvPath = $alertsCsvPath
         ManifestJsonPath = $manifestJsonPath
         ContentTypesCsvPath = $contentTypesCsvPath
         ContentTypesJsonPath = $contentTypesJsonPath

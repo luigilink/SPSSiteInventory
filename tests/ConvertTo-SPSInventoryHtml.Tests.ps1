@@ -631,4 +631,50 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $html | Should -Not -Match 'id="external-lists"'
         $html | Should -Not -Match 'id="bcs-applications"'
     }
+
+    It 'renders the alerts grouped by type, most severe first, with remediation and a reference link' {
+        $learn = 'https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-checked-out-files'
+        $alerts = @(
+            1..3 | ForEach-Object { [PSCustomObject]@{ AlertType = 'CheckedOutFiles'; Severity = 'Medium'; Url = "https://intranet/sites/$_"; Value = 1; Message = 'site specific'; Remediation = 'Ask the users to <check in> their files & retry.'; Reference = $learn } }
+            1..2 | ForEach-Object { [PSCustomObject]@{ AlertType = 'InfoPath'; Severity = 'High'; Url = "https://intranet/sites/hr$_"; Value = 1; Message = 'site specific'; Remediation = 'Rebuild the forms.'; Reference = '' } }
+            [PSCustomObject]@{ AlertType = 'FileVersions'; Severity = 'Medium'; Url = 'https://intranet/sites/x'; Value = 1; Message = 'site specific'; Remediation = 'Decide on the versions.'; Reference = '' }
+        )
+
+        $html = ConvertTo-SPSInventoryHtml -InputObject @() -Alert $alerts
+
+        $html | Should -Match '<h2 id="alerts">Alerts and remediation</h2>'
+        $html | Should -Match '<a href="#alerts">Alerts</a>'
+        $html | Should -Match '<strong>6</strong> alert\(s\) of <strong>3</strong> type\(s\): <strong>2</strong> high and <strong>4</strong> medium'
+        $html | Should -Match '(?s)<table class="alerts">.*<th>Severity</th><th>Alert</th><th class="num">Affected</th><th>What it means</th><th>What to do</th><th>Reference</th>'
+        $html | Should -Match '(?s)<td>InfoPath</td>.*<td>CheckedOutFiles</td>.*<td>FileVersions</td>'
+        $html | Should -Match '<span class="pill yes">High</span></td><td>InfoPath</td><td class="num">2</td>'
+        $html | Should -Match '<span class="pill warn">Medium</span></td><td>CheckedOutFiles</td><td class="num">3</td>'
+        $html | Should -Match 'Checked-out files were detected and should be checked in before migration\.'
+        $html | Should -Not -Match 'site specific'
+        $html | Should -Match 'Ask the users to &lt;check in&gt; their files &amp; retry\.'
+        $html | Should -Not -Match 'Ask the users to <check in>'
+        $html | Should -Match ('<a href="{0}">Microsoft Learn</a>' -f [regex]::Escape($learn))
+        ([regex]::Matches($html, 'Microsoft Learn</a>')).Count | Should -Be 1
+    }
+
+    It 'falls back to the message of the alert for a type that is not in the catalog' {
+        $alerts = @([PSCustomObject]@{ AlertType = 'Custom <type>'; Severity = 'Low'; Url = 'u'; Value = 1; Message = 'Custom & message'; Remediation = 'Custom remediation.'; Reference = 'not a link' })
+
+        $html = ConvertTo-SPSInventoryHtml -InputObject @() -Alert $alerts
+
+        $html | Should -Match '<span class="pill no">Low</span>'
+        $html | Should -Match 'Custom &lt;type&gt;'
+        $html | Should -Match 'Custom &amp; message'
+        $html | Should -Not -Match 'Microsoft Learn</a>'
+    }
+
+    It 'renders an explicit empty alerts section when requested and none when no alerts are passed' {
+        $empty = ConvertTo-SPSInventoryHtml -InputObject @() -Alert @()
+        $omitted = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
+
+        $empty | Should -Match '<strong>0</strong> alert\(s\) of <strong>0</strong> type\(s\)'
+        $empty | Should -Not -Match '<table class="alerts">'
+        $omitted | Should -Not -Match 'id="alerts"'
+        $omitted | Should -Not -Match 'href="#alerts"'
+    }
 }

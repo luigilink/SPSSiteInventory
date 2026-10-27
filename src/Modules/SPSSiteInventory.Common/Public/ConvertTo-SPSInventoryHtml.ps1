@@ -52,6 +52,13 @@
         columns). When supplied, renders a managed metadata section with interpretation
         guidance; the term store dependency is not a migration blocker by itself.
 
+        .PARAMETER Alert
+        Optional risk alerts, as produced for the alerts report (alert type, severity,
+        remediation and reference). When supplied, renders an alerts section that groups the
+        alerts by type with the number of sites or web applications affected, what each one
+        means and what to do about it, most severe first. The per-site list stays in the
+        alerts CSV and JSON files.
+
         .PARAMETER ExternalLists
         Optional per-list external list rows (lists backed by a Business Connectivity
         Services external content type). When supplied, renders an external list section
@@ -108,6 +115,11 @@
         [AllowEmptyCollection()]
         [System.Object[]]
         $ManagedMetadataLists = @(),
+
+        [Parameter()]
+        [AllowEmptyCollection()]
+        [System.Object[]]
+        $Alert = @(),
 
         [Parameter()]
         [AllowEmptyCollection()]
@@ -214,6 +226,7 @@
     $policyRecords = @($records | Where-Object { $null -ne $_.WebAppPolicyCount -or $_.BrowserFileHandling })
     $hasContentTypeSection = $PSBoundParameters.ContainsKey('ContentTypes')
     $hasManagedMetadataSection = $PSBoundParameters.ContainsKey('ManagedMetadataLists')
+    $hasAlertSection = $PSBoundParameters.ContainsKey('Alert')
     $hasExternalListSection = $PSBoundParameters.ContainsKey('ExternalLists')
     $hasBcsSection = $PSBoundParameters.ContainsKey('BcsApplications')
 
@@ -361,6 +374,9 @@ td.muted, .muted { color: var(--muted); }
     [void]$sb.AppendLine('<div class="nav">')
     [void]$sb.AppendLine('<a href="#summary">Summary</a>')
     [void]$sb.AppendLine('<a href="#risk-indicators">Risk indicators</a>')
+    if ($hasAlertSection) {
+        [void]$sb.AppendLine('<a href="#alerts">Alerts</a>')
+    }
     if ($waveKeys.Count -gt 0) {
         [void]$sb.AppendLine('<a href="#wave-plan">Migration waves</a>')
     }
@@ -412,6 +428,55 @@ td.muted, .muted { color: var(--muted); }
     }
     [void]$sb.AppendLine('</div>')
     [void]$sb.AppendLine('</div>')
+
+    # Alerts grouped by type, with what to do about each.
+    if ($hasAlertSection) {
+        $alertCatalog = Get-SPSAlertCatalog
+        $severityRank = @{ High = 0; Medium = 1; Low = 2 }
+        $alertRows = @($Alert | Where-Object { $null -ne $_ })
+        $alertGroups = @(
+            $alertRows | Group-Object -Property AlertType | ForEach-Object {
+                $first = $_.Group[0]
+                [PSCustomObject]@{
+                    AlertType   = [string]$_.Name
+                    Severity    = [string]$first.Severity
+                    Count       = $_.Count
+                    Message     = if ($alertCatalog.Contains([string]$_.Name)) { $alertCatalog[[string]$_.Name].Message } else { [string]$first.Message }
+                    Remediation = [string]$first.Remediation
+                    Reference   = [string]$first.Reference
+                }
+            } | Sort-Object -Property @{ Expression = { if ($severityRank.ContainsKey($_.Severity)) { $severityRank[$_.Severity] } else { 9 } } }, @{ Expression = { $_.Count }; Descending = $true }, @{ Expression = { $_.AlertType } }
+        )
+        $highAlertCount = @($alertRows | Where-Object { [string]$_.Severity -eq 'High' }).Count
+        $mediumAlertCount = @($alertRows | Where-Object { [string]$_.Severity -eq 'Medium' }).Count
+        [void]$sb.AppendLine('<h2 id="alerts">Alerts and remediation</h2>')
+        [void]$sb.AppendLine(('<p><strong>{0}</strong> alert(s) of <strong>{1}</strong> type(s): <strong>{2}</strong> high and <strong>{3}</strong> medium. Each type shows how many site collections or web applications it concerns and what to do about it. The alert of each site collection, with its URL, is in the alerts CSV and JSON files.</p>' -f $alertRows.Count, $alertGroups.Count, $highAlertCount, $mediumAlertCount))
+        if ($alertGroups.Count -gt 0) {
+            [void]$sb.AppendLine('<div class="table-scroll"><table class="alerts">')
+            [void]$sb.AppendLine('<thead><tr><th>Severity</th><th>Alert</th><th class="num">Affected</th><th>What it means</th><th>What to do</th><th>Reference</th></tr></thead><tbody>')
+            foreach ($alertGroup in $alertGroups) {
+                $severityPill = switch ($alertGroup.Severity) {
+                    'High' { '<span class="pill yes">High</span>' }
+                    'Medium' { '<span class="pill warn">Medium</span>' }
+                    default { ('<span class="pill no">{0}</span>' -f (ConvertTo-SPSHtmlText -Value $alertGroup.Severity)) }
+                }
+                $referenceLink = if ($alertGroup.Reference -like 'https://*') {
+                    '<a href="{0}">Microsoft Learn</a>' -f (ConvertTo-SPSHtmlText -Value $alertGroup.Reference)
+                }
+                else {
+                    ''
+                }
+                [void]$sb.AppendLine(('<tr><td>{0}</td><td>{1}</td><td class="num">{2}</td><td>{3}</td><td>{4}</td><td>{5}</td></tr>' -f
+                    $severityPill,
+                    (ConvertTo-SPSHtmlText -Value $alertGroup.AlertType),
+                    $alertGroup.Count,
+                    (ConvertTo-SPSHtmlText -Value $alertGroup.Message),
+                    (ConvertTo-SPSHtmlText -Value $alertGroup.Remediation),
+                    $referenceLink))
+            }
+            [void]$sb.AppendLine('</tbody></table></div>')
+        }
+    }
 
     # Migration wave plan.
     if ($waveKeys.Count -gt 0) {
