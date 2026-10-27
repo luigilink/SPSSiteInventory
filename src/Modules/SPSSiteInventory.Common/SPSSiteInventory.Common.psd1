@@ -18,6 +18,7 @@
         'Get-SPSFarmSolutionMap'
         'Get-SPSInstalledProductVersion'
         'Get-SPSInventorySetting'
+        'Get-SPSReadinessCheck'
         'Get-SPSWebApplicationAuthentication'
         'Get-SPSWebApplicationPolicy'
         'Get-SPSSiteCustomization'
@@ -26,6 +27,7 @@
         'Import-SPSSharePointCommand'
         'Initialize-SPSScript'
         'Measure-SPSSiteComplexity'
+        'Write-SPSReadinessReport'
     )
 
     CmdletsToExport   = @()
