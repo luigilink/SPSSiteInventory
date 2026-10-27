@@ -146,6 +146,9 @@
             if ([System.String]::IsNullOrEmpty($ancestor) -and [System.IO.Path]::IsPathRooted($outputFolder)) {
                 Add-ReadinessResult -Section 'Settings' -Name 'Output folder' -Status 'Error' -Detail ("'{0}' cannot be created: no part of that path exists. Is the drive there?" -f $outputFolder)
             }
+            elseif (-not [System.String]::IsNullOrEmpty($ancestor) -and -not (Test-Path -LiteralPath $ancestor -PathType Container)) {
+                Add-ReadinessResult -Section 'Settings' -Name 'Output folder' -Status 'Error' -Detail ("'{0}' cannot be created: '{1}' is a file, not a folder." -f $outputFolder, $ancestor)
+            }
             else {
                 Add-ReadinessResult -Section 'Settings' -Name 'Output folder' -Status 'OK' -Detail ("'{0}' does not exist yet; the scan creates it." -f $outputFolder)
             }
@@ -252,13 +255,19 @@
         Add-ReadinessResult -Section 'SharePoint' -Name 'Farm administrator' -Status 'Warning' -Detail ('Whether the current account is a farm administrator could not be determined: {0}' -f $_.Exception.Message)
     }
 
+    # The scan passes every entry to Get-SPWebApplication, so a blank entry is checked, not dropped:
+    # only a missing value or an empty list means that every content web application is scanned.
     $configuredUrl = @()
-    if ($null -ne $settings) {
-        $configuredUrl = @($settings['WebApplicationUrl'] | Where-Object { -not [System.String]::IsNullOrWhiteSpace($_) })
+    if ($null -ne $settings -and $null -ne $settings['WebApplicationUrl']) {
+        $configuredUrl = @($settings['WebApplicationUrl'])
     }
 
     if ($configuredUrl.Count -gt 0) {
         foreach ($url in $configuredUrl) {
+            if ([System.String]::IsNullOrWhiteSpace([System.String]$url)) {
+                Add-ReadinessResult -Section 'SharePoint' -Name 'Web application (empty entry)' -Status 'Error' -Detail 'WebApplicationUrl has an empty entry, and the scan fails on it. Remove it, or leave the setting empty to scan every content web application.'
+                continue
+            }
             try {
                 $null = Get-SPWebApplication -Identity $url -ErrorAction Stop
                 Add-ReadinessResult -Section 'SharePoint' -Name ("Web application '{0}'" -f $url) -Status 'OK' -Detail 'Found.'

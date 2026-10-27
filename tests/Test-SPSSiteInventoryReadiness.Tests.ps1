@@ -55,6 +55,49 @@ Describe 'Test-SPSSiteInventoryReadiness.ps1' {
         }
     }
 
+    It 'exits with 1, and does not show a report that says Ready, when the checks could not run' {
+        $global:LASTEXITCODE = 0
+
+        $output = @(& $script:ScriptPath -ConfigPath '' -SkipSharePoint -PassThru 6>&1 2>$null)
+
+        $LASTEXITCODE | Should -Be 1
+        @($output | Where-Object { $_ -is [System.Management.Automation.InformationRecord] -and [System.String]$_.MessageData.Message -match 'Ready' }) | Should -HaveCount 0
+        @($output | Where-Object { $_ -isnot [System.Management.Automation.InformationRecord] }) | Should -HaveCount 0
+    }
+
+    It 'exits with 1, in a fresh process, when a check fails with an error that is not terminating' {
+        # A stub module makes the collector write an error and return nothing: only an error preference of Stop turns that into a failure.
+        $folder = Join-Path -Path $TestDrive -ChildPath 'stub'
+        $module = Join-Path -Path $folder -ChildPath 'Modules\SPSSiteInventory.Common'
+        $null = New-Item -Path $module -ItemType Directory -Force
+        Copy-Item -LiteralPath $script:ScriptPath -Destination $folder
+        Set-Content -Path (Join-Path $module 'SPSSiteInventory.Common.psd1') -Value "@{ RootModule = 'SPSSiteInventory.Common.psm1'; ModuleVersion = '1.0.0'; FunctionsToExport = @('Get-SPSReadinessCheck', 'Write-SPSReadinessReport') }"
+        Set-Content -Path (Join-Path $module 'SPSSiteInventory.Common.psm1') -Value @'
+function Get-SPSReadinessCheck { [CmdletBinding()] param ($ConfigPath, $ExampleConfigPath, [switch] $SkipSharePoint) Write-Error 'The checks failed.' }
+function Write-SPSReadinessReport { param ($Check) Write-Output 'REPORT RENDERED'; [PSCustomObject]@{ IsReady = $true } }
+'@
+
+        $output = & $script:HostPath -NoProfile -NonInteractive -File (Join-Path $folder 'Test-SPSSiteInventoryReadiness.ps1') -ConfigPath 'x' | Out-String
+
+        $LASTEXITCODE | Should -Be 1
+        $output | Should -Not -Match 'REPORT RENDERED'
+    }
+
+    It 'sets the exit code on the success path too, so that an earlier failure of the caller is not read as its own' {
+        $global:LASTEXITCODE = 5
+
+        $summary = @(& $script:ScriptPath -ConfigPath $script:ValidSettings -SkipSharePoint -PassThru 6>$null)
+
+        $LASTEXITCODE | Should -Be $(if ($summary[0].IsReady) { 0 } else { 1 })
+        $LASTEXITCODE | Should -Not -Be 5
+    }
+
+    It 'sets the exit code to 0 when it is ready, in the source' {
+        $text = Get-Content -LiteralPath $script:ScriptPath -Raw
+
+        $text | Should -Match '(?s)if \(\$summary\.IsReady\) \{\s+exit 0\s+\}\s+exit 1'
+    }
+
     It 'returns the summary only with -PassThru' {
         $withoutPassThru = @(& $script:ScriptPath -ConfigPath $script:MissingSettings -SkipSharePoint 6>$null)
         $withPassThru = @(& $script:ScriptPath -ConfigPath $script:MissingSettings -SkipSharePoint -PassThru 6>$null)

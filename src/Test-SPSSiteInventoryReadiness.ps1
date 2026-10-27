@@ -15,8 +15,8 @@
       whether the web applications to scan exist.
 
     An error blocks the scan and a warning does not. The script exits with code 1 when there is
-    an error, so that it can gate an automated run, and 0 otherwise. It changes nothing on the
-    farm and writes no file.
+    an error, or when the checks themselves could not run, so that it can gate an automated run,
+    and with 0 otherwise. It changes nothing on the farm and writes no file.
 
     .PARAMETER ConfigPath
     Path to the inventory settings .psd1 file to check.
@@ -51,16 +51,28 @@ param
     $PassThru
 )
 
+$ErrorActionPreference = 'Stop'
+
 Import-Module -Name (Join-Path -Path $PSScriptRoot -ChildPath 'Modules\SPSSiteInventory.Common\SPSSiteInventory.Common.psd1') -Force
 
 $exampleConfigPath = Join-Path -Path $PSScriptRoot -ChildPath 'config\inventory-settings.example.psd1'
-$check = @(Get-SPSReadinessCheck -ConfigPath $ConfigPath -ExampleConfigPath $exampleConfigPath -SkipSharePoint:$SkipSharePoint)
+try {
+    $check = @(Get-SPSReadinessCheck -ConfigPath $ConfigPath -ExampleConfigPath $exampleConfigPath -SkipSharePoint:$SkipSharePoint)
+}
+catch {
+    # No check ran: do not show an empty report that says Ready.
+    Write-Error -Message "The readiness checks could not run: $($_.Exception.Message)" -ErrorAction Continue
+    exit 1
+}
 $summary = Write-SPSReadinessReport -Check $check
 
 if ($PassThru) {
     Write-Output $summary
 }
 
-if (-not $summary.IsReady) {
-    exit 1
+# Set the exit code on both paths: a caller that runs the script with & would otherwise keep the
+# $LASTEXITCODE of an earlier command and could read a Ready report as a failure.
+if ($summary.IsReady) {
+    exit 0
 }
+exit 1

@@ -257,6 +257,19 @@ Describe 'Get-SPSReadinessCheck' {
             Test-Path -LiteralPath $newFolder | Should -BeFalse
         }
 
+        It 'is an error when a part of the path is a file, because the scan could not create the folder below it' {
+            $file = Join-Path -Path $TestDrive -ChildPath 'AFile2.txt'
+            Set-Content -Path $file -Value 'x'
+            $nested = Join-Path -Path (Join-Path -Path $file -ChildPath 'Reports') -ChildPath 'Deeper'
+            $path = Write-TestSettings -Name 'underfile.psd1' -Body (Get-SettingsBody -OutputFolderLine "OutputFolder = '$nested'")
+
+            $result = Get-TestResult -Check @(Get-SPSReadinessCheck -ConfigPath $path) -Name 'Output folder'
+
+            $result.Status | Should -Be 'Error'
+            $result.Detail | Should -Match 'is a file, not a folder'
+            $result.Detail | Should -Match 'AFile2\.txt'
+        }
+
         It 'is an error when the path is a file' {
             $file = Join-Path -Path $TestDrive -ChildPath 'AFile.txt'
             Set-Content -Path $file -Value 'x'
@@ -421,6 +434,27 @@ Describe 'Get-SPSReadinessCheck' {
             $result.Status | Should -Be 'Warning'
             $result.Detail | Should -Match 'could not be determined'
             $result.Detail | Should -Match 'Access denied'
+        }
+
+        It 'checks a blank entry of WebApplicationUrl as the scan would, and reports it as an error' {
+            $path = Write-TestSettings -Name 'blankentry.psd1' -Body (Get-SettingsBody -WebApplicationUrl "@('https://intranet', ' ')")
+
+            $checks = @(Get-SPSReadinessCheck -ConfigPath $path)
+
+            (Get-TestResult -Check $checks -Name "Web application 'https://intranet'").Status | Should -Be 'OK'
+            $blank = Get-TestResult -Check $checks -Name 'Web application (empty entry)'
+            $blank.Status | Should -Be 'Error'
+            $blank.Detail | Should -Match 'empty entry'
+            Get-TestResult -Check $checks -Name 'Web applications' | Should -BeNullOrEmpty
+        }
+
+        It 'reads an empty string as a blank entry, and a missing value or an empty list as every web application' {
+            $empty = Write-TestSettings -Name 'emptystring.psd1' -Body (Get-SettingsBody -WebApplicationUrl "''")
+            $none = Write-TestSettings -Name 'nullurl.psd1' -Body (Get-SettingsBody -WebApplicationUrl '$null')
+
+            (Get-TestResult -Check @(Get-SPSReadinessCheck -ConfigPath $empty) -Name 'Web application (empty entry)').Status | Should -Be 'Error'
+            (Get-TestResult -Check @(Get-SPSReadinessCheck -ConfigPath $none) -Name 'Web applications').Status | Should -Be 'OK'
+            (Get-TestResult -Check @(Get-SPSReadinessCheck -ConfigPath $script:SettingsPath) -Name 'Web applications').Status | Should -Be 'OK'
         }
 
         It 'is an error when the farm has no content web application' {
