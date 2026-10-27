@@ -61,6 +61,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and template-language review metadata (`TemplateLanguage*`). These fields are
   now propagated to CSV/JSON/HTML/report-pack and alert outputs, with
   configurable rules under `TemplateParity`. (#39)
+- The five classic customization signals, scored since 1.0.0, are now columns of the inventory:
+  `EventReceivers` (custom receivers only), `CustomMasterPage`, `SandboxSolutions`,
+  `UniquePermissionsCount` and `UsesCustomFarmFeature`. They were only visible in the `Reasons`
+  text, and not at all when their weight was 0 or missing, so the CSV could not be filtered on
+  them and the HTML report had nothing for them. They are in the CSV, JSON and HTML table, with
+  a summary card for four of them, and the failure rows carry them empty like the other signals.
+  Tests keep every signal that the example configuration weights or blocks on a field of the
+  record. Their scores and categories are unchanged. (#77)
 - Added SMAT apps parity signals: `AppInstanceCount`, `AppWebCount`, and
   `AppInstanceExamples`. These fields are now propagated to scoring, CSV/JSON/HTML
   outputs, report-pack `-apps-*.json`, and dedicated app alerts. (#40)

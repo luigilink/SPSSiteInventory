@@ -280,6 +280,19 @@ is personal data.
 non-Microsoft assembly). Out-of-the-box receivers on native lists are ignored, so a stock
 site is not promoted just because SharePoint's own lists carry many built-in receivers.
 
+The classic customization signals are columns of the CSV, JSON and HTML reports under their
+own name, so that you can filter and sort on them:
+
+- `SandboxSolutions` — the sandbox (user) solutions in the solution gallery of the site
+  collection, activated or not.
+- `CustomMasterPage` — true when a web uses a master page other than the default seattle,
+  oslo or v4 master.
+- `EventReceivers` — the custom event receivers described above.
+- `UsesCustomFarmFeature` — see [BlockingSignals](#blockingsignals).
+- `UniquePermissionsCount` — the role assignments on the webs that do not inherit their
+  permissions. The root web always has its own, so the value is never 0, and a subsite with
+  unique permissions adds its own: it is not a count of webs.
+
 ### Thresholds
 
 - `Moderate` — a score at or above this value promotes the site from **Simple (1)** to **Moderate (2)**.

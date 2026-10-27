@@ -147,6 +147,11 @@ CSV/JSON rows describe site collections and any web-application enumeration fail
 | `FileVersionCount` / `FileVersionExamples` | Number of files above the configured file-version threshold and up to five examples |
 | `SiteLockState` / `IsLockedSite` / `HasNoAccessLock` | Site collection lock state (`Unlock`, `ReadOnly`, `NoAdditions`, `NoAccess`, `Unknown`), whether the site has any lock, and whether the lock is `NoAccess`, the only one that makes the site unreadable (and blocking in the example configuration) |
 | `UsesFullTrustCode` | Site activates a feature from a custom full-trust WSP (GAC assembly) |
+| `UsesCustomFarmFeature` | Site activates a feature from a custom farm solution (WSP), as identified by the farm-solution map |
+| `SandboxSolutions` | Sandbox (user) solutions in the solution gallery of the site collection, activated or not |
+| `CustomMasterPage` | At least one web of the site collection uses a master page other than the default seattle, oslo or v4 master |
+| `EventReceivers` | Event receivers registered on lists from a custom (non-Microsoft) assembly; out-of-the-box receivers are not counted |
+| `UniquePermissionsCount` | Role assignments on the webs that do not inherit their permissions. The root web always has its own, so the value is never 0: it is not a count of webs with unique permissions |
 | `ContentTypeCount` | Distinct content-type IDs seen in web definition collections, deduplicated within this site collection |
 | `ListContentTypeBindingCount` | Number of content-type bindings across the collection's lists, not the number of distinct designs |
 | `ContentTypeInventoryComplete` | False means partial collection: review warnings before interpreting counts or missing definitions |

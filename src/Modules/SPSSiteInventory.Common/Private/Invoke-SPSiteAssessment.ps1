@@ -214,6 +214,11 @@
                     HasNoAccessLock = $signals['HasNoAccessLock']
                     SiteLockState = $signals['SiteLockState']
                     UsesFullTrustCode = $signals['UsesFullTrustCode']
+                    UsesCustomFarmFeature = $signals['UsesCustomFarmFeature']
+                    SandboxSolutions = $signals['SandboxSolutions']
+                    CustomMasterPage = $signals['CustomMasterPage']
+                    EventReceivers = $signals['EventReceivers']
+                    UniquePermissionsCount = $signals['UniquePermissionsCount']
                     ContentTypeCount = $signals['ContentTypeCount']
                     ListContentTypeBindingCount = $signals['ListContentTypeBindingCount']
                     Category = $result.Category
@@ -305,6 +310,11 @@
                     HasNoAccessLock = $null
                     SiteLockState = $null
                     UsesFullTrustCode = $null
+                    UsesCustomFarmFeature = $null
+                    SandboxSolutions = $null
+                    CustomMasterPage = $null
+                    EventReceivers = $null
+                    UniquePermissionsCount = $null
                     ContentTypeCount = $null
                     ListContentTypeBindingCount = $null
                     Category = $null
