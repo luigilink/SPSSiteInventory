@@ -318,7 +318,9 @@
     }
     $newPagedQuery = {
         param([uint32]$RowLimit, [string]$QueryText = '')
-        $spQueryType = [Type]::GetType('Microsoft.SharePoint.SPQuery, Microsoft.SharePoint', $false)
+        # Type.GetType with an assembly name that has no version and no public key token does not look in the GAC:
+        # it returns $null on a farm server. -as looks among the assemblies that the SharePoint snap-in has loaded.
+        $spQueryType = 'Microsoft.SharePoint.SPQuery' -as [System.Type]
         $queryObject = if ($null -ne $spQueryType) { New-Object -TypeName Microsoft.SharePoint.SPQuery } else { [PSCustomObject]@{} }
         & $setQueryProperty $queryObject 'RowLimit' $RowLimit
         & $setQueryProperty $queryObject 'ViewAttributes' "Scope='RecursiveAll'"
