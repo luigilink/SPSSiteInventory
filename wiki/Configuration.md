@@ -237,6 +237,20 @@ site collection itself can still be migrated, without those lists. Remove
 `ExternalListCount` from `BlockingSignals` to treat the replacement as remediation of a
 Moderate or Complex site instead.
 
+SharePoint alert signals follow the SMAT Alerts scan:
+
+- `SharePointAlertCount` — the alerts ("Alert Me" subscriptions) that users set up on the
+  site collection: every user's alerts, in every web. Migration tools do not migrate them,
+  so users have to set them up again after the migration. The count is exact.
+
+The signal is reported but **not scored and not blocking** in the example configuration:
+the content migrates, and recreating alerts is a matter of telling the users, not of
+rebuilding anything. Add `SharePointAlertCount` to `Scoring.Weights` if you want sites with
+many alerts to weigh more. The alert raised for it has the `Low` severity (see
+[Alerts](Alerts)). The per-alert detail goes to the `*-sharepointalerts-*` CSV/JSON files
+(see [Usage](Usage#sharepoint-alerts)); they hold the login names of the alert owners, which
+is personal data.
+
 `EventReceivers` counts only **custom** event receivers (those registered from a
 non-Microsoft assembly). Out-of-the-box receivers on native lists are ignored, so a stock
 site is not promoted just because SharePoint's own lists carry many built-in receivers.
@@ -362,6 +376,7 @@ LargeContentThresholds = @{
     MaxItemsForVersionScanPerLibrary = 2000
     MaxItemsForPublishingPageScanPerLibrary = 2000
     MaxItemsForHtmlFileScanPerLibrary = 2000
+    MaxAlertRowsPerSite = 5000
 }
 ```
 
@@ -381,6 +396,9 @@ LargeContentThresholds = @{
   lower bound and the assessment is marked partial with a warning. The query filters on
   the file type column, which is not indexed, so it asks SharePoint to override the list
   view threshold; run the scan as the farm account.
+- `MaxAlertRowsPerSite` — cap for the SharePoint alert rows exported per site
+  collection. `SharePointAlertCount` stays exact; when the cap is reached the rows are cut,
+  the assessment is marked partial and a warning names the setting.
 
 ## MigrationWaves section
 

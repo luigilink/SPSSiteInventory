@@ -17,7 +17,10 @@
         When managed metadata rows are supplied it also writes a per-list CSV and JSON
         file (`*-managedmetadata-*`) that follows the SMAT Managed Metadata Columns report.
         External list rows add `*-externallists-*` (SMAT External List report) and BCS
-        application rows add `*-bcs-*` (SMAT BCS report), each as CSV and JSON.
+        application rows add `*-bcs-*` (SMAT BCS report), each as CSV and JSON. SharePoint
+        alert rows (the "Alert Me" subscriptions of the users) add `*-sharepointalerts-*`
+        (SMAT Alerts report), as CSV and JSON too. They are not the risk alerts below, and
+        they hold the login names of the alert owners, so they stay out of the HTML report.
 
         Also writes a modular JSON report pack and a manifest file so downstream
         automation and dashboards can consume focused datasets without parsing one
@@ -74,6 +77,12 @@
         list backed by a Business Connectivity Services external content type). When
         supplied, adds an external list HTML section and dedicated -externallists
         CSV/JSON files, including valid empty reports.
+
+        .PARAMETER SharePointAlerts
+        Optional per-alert rows collected with the site signals (the "Alert Me"
+        subscriptions of the users, one row per alert). When supplied, adds dedicated
+        -sharepointalerts CSV/JSON files, including valid empty reports. The rows include
+        the login name of the alert owner, which is personal data.
 
         .PARAMETER BcsApplications
         Optional Business Connectivity Services LOB system rows from Get-SPSBcsApplication.
@@ -132,6 +141,11 @@
         [AllowEmptyCollection()]
         [System.Object[]]
         $ExternalLists = @(),
+
+        [Parameter()]
+        [AllowEmptyCollection()]
+        [System.Object[]]
+        $SharePointAlerts = @(),
 
         [Parameter()]
         [AllowEmptyCollection()]
@@ -384,6 +398,27 @@
             Set-Content -Path $externalListsJsonPath -Encoding UTF8
     }
 
+    $sharePointAlertsCsvPath = $null
+    $sharePointAlertsJsonPath = $null
+    if ($PSBoundParameters.ContainsKey('SharePointAlerts')) {
+        $sharePointAlertsCsvPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-sharepointalerts-{1}.csv' -f $BaseName, $timestamp)
+        $sharePointAlertsJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-sharepointalerts-{1}.json' -f $BaseName, $timestamp)
+        $sharePointAlertColumns = @(
+            'SiteUrl', 'WebUrl', 'AlertId', 'Title', 'AlertTemplateName', 'AlertType', 'ListUrl', 'ListId',
+            'ItemId', 'EventType', 'AlertFrequency', 'AlertTime', 'Status', 'DeliveryChannels', 'AlwaysNotify',
+            'DynamicRecipient', 'Filter', 'UserId', 'UserLoginName'
+        )
+        if ($SharePointAlerts.Count -gt 0) {
+            $SharePointAlerts | Select-Object -Property $sharePointAlertColumns |
+                Export-Csv -Path $sharePointAlertsCsvPath -NoTypeInformation -Encoding UTF8
+        }
+        else {
+            Set-Content -Path $sharePointAlertsCsvPath -Value ('"' + ($sharePointAlertColumns -join '","') + '"') -Encoding UTF8
+        }
+        ConvertTo-Json -InputObject @($SharePointAlerts) -Depth 6 |
+            Set-Content -Path $sharePointAlertsJsonPath -Encoding UTF8
+    }
+
     $bcsCsvPath = $null
     $bcsJsonPath = $null
     if ($PSBoundParameters.ContainsKey('BcsApplications')) {
@@ -456,6 +491,8 @@
             ManagedMetadataJson = $managedMetadataJsonPath
             ExternalListsCsv = $externalListsCsvPath
             ExternalListsJson = $externalListsJsonPath
+            SharePointAlertsCsv = $sharePointAlertsCsvPath
+            SharePointAlertsJson = $sharePointAlertsJsonPath
             BcsCsv = $bcsCsvPath
             BcsJson = $bcsJsonPath
             SolutionsJson = if ($SolutionJsonPath) { $SolutionJsonPath } else { $null }
@@ -484,6 +521,8 @@
         ManagedMetadataJsonPath = $managedMetadataJsonPath
         ExternalListsCsvPath = $externalListsCsvPath
         ExternalListsJsonPath = $externalListsJsonPath
+        SharePointAlertsCsvPath = $sharePointAlertsCsvPath
+        SharePointAlertsJsonPath = $sharePointAlertsJsonPath
         BcsCsvPath = $bcsCsvPath
         BcsJsonPath = $bcsJsonPath
     }

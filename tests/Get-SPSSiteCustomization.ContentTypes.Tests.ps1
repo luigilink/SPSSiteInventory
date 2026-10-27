@@ -55,6 +55,19 @@ public sealed class SPSSiteInventoryThrowAfterOne : IEnumerable
         }
     }
 }
+
+public sealed class SPSSiteInventoryBrokenAlertCollection : IEnumerable
+{
+    public int Count
+    {
+        get { throw new InvalidOperationException("The alert data could not be loaded."); }
+    }
+
+    public IEnumerator GetEnumerator()
+    {
+        return new object[0].GetEnumerator();
+    }
+}
 '@
 
     function global:Get-SPAppInstance {
@@ -109,9 +122,31 @@ public sealed class SPSSiteInventoryThrowAfterOne : IEnumerable
             IsRootWeb = $true
             HasUniqueRoleDefinitions = $true
             RoleDefinitions = @()
+            Alerts = @()
         }
         $web | Add-Member -MemberType ScriptMethod -Name Dispose -Value { }
         return $web
+    }
+
+    function Get-TestAlert {
+        param ([string]$Title = 'Documents: all changes', [int]$UserId = 7)
+        [PSCustomObject]@{
+            ID = [guid]::NewGuid()
+            Title = $Title
+            AlertTemplateName = 'SPAlertTemplateType.DocumentLibrary'
+            AlertType = 'List'
+            ListUrl = 'Shared Documents'
+            ListID = [guid]::NewGuid()
+            EventType = 'All'
+            AlertFrequency = 'Immediate'
+            Status = 'On'
+            DeliveryChannels = 'Email'
+            AlwaysNotify = $false
+            DynamicRecipient = ''
+            Filter = ''
+            UserId = $UserId
+            User = [PSCustomObject]@{ LoginName = "i:0#.w|contoso\user$UserId" }
+        }
     }
 
     function Get-TestWorkflowAssociation {
@@ -2247,5 +2282,217 @@ Describe 'Get-SPSSiteCustomization content types' {
         $signals.ExternalLists | Should -HaveCount 0
         $signals.CustomizationInventoryComplete | Should -BeFalse
         $result.Category | Should -Be 4
+    }
+
+    It 'counts the SharePoint alerts of every web and records one row per alert' {
+        $first = Get-TestWeb -Definitions @() -Bindings @()
+        $first.Alerts = @((Get-TestAlert -Title 'First' -UserId 7), (Get-TestAlert -Title 'Second' -UserId 8))
+        $second = Get-TestWeb -Definitions @() -Bindings @()
+        $second.Url = 'https://intranet.contoso.com/sites/team/sub'
+        $second.Alerts = @((Get-TestAlert -Title 'Third' -UserId 9))
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($first, $second)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -WarningVariable warnings -WarningAction SilentlyContinue
+
+        $signals.SharePointAlertCount | Should -Be 3
+        $signals.SharePointAlerts | Should -HaveCount 3
+        $signals.SharePointAlerts[0].SiteUrl | Should -Be 'https://intranet.contoso.com/sites/team'
+        $signals.SharePointAlerts[0].WebUrl | Should -Be 'https://intranet.contoso.com/sites/team'
+        $signals.SharePointAlerts[1].Title | Should -Be 'Second'
+        $signals.SharePointAlerts[1].UserLoginName | Should -Be 'i:0#.w|contoso\user8'
+        $signals.SharePointAlerts[2].WebUrl | Should -Be 'https://intranet.contoso.com/sites/team/sub'
+        $signals.CustomizationInventoryComplete | Should -BeTrue
+        @($warnings) | Should -HaveCount 0
+    }
+
+    It 'reports no SharePoint alert on a site without any' {
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @(Get-TestWeb -Definitions @() -Bindings @())
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site
+
+        $signals.SharePointAlertCount | Should -Be 0
+        $signals.SharePointAlerts | Should -HaveCount 0
+        $signals.CustomizationInventoryComplete | Should -BeTrue
+    }
+
+    It 'keeps the alert count exact and marks the site partial when the rows reach the per-site cap' {
+        $first = Get-TestWeb -Definitions @() -Bindings @()
+        $first.Alerts = @(1..2 | ForEach-Object { Get-TestAlert -Title "First$_" })
+        $second = Get-TestWeb -Definitions @() -Bindings @()
+        $second.Url = 'https://intranet.contoso.com/sites/team/sub'
+        $second.Alerts = @(1..2 | ForEach-Object { Get-TestAlert -Title "Second$_" })
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($first, $second)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -LargeContentThresholds @{ MaxAlertRowsPerSite = 3 } -WarningVariable warnings -WarningAction SilentlyContinue
+
+        $signals.SharePointAlertCount | Should -Be 4
+        $signals.SharePointAlerts | Should -HaveCount 3
+        $signals.SharePointAlerts[2].Title | Should -Be 'Second1'
+        $signals.CustomizationInventoryComplete | Should -BeFalse
+        ($warnings -join ';') | Should -Match 'LargeContentThresholds\.MaxAlertRowsPerSite'
+    }
+
+    It 'warns once per site, not once per web, when the alert rows reach the cap' {
+        $first = Get-TestWeb -Definitions @() -Bindings @()
+        $first.Alerts = @(1..2 | ForEach-Object { Get-TestAlert -Title "First$_" })
+        $second = Get-TestWeb -Definitions @() -Bindings @()
+        $second.Url = 'https://intranet.contoso.com/sites/team/sub'
+        $second.Alerts = @(1..2 | ForEach-Object { Get-TestAlert -Title "Second$_" })
+        $third = Get-TestWeb -Definitions @() -Bindings @()
+        $third.Url = 'https://intranet.contoso.com/sites/team/other'
+        $third.Alerts = @(Get-TestAlert -Title 'Third')
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($first, $second, $third)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -LargeContentThresholds @{ MaxAlertRowsPerSite = 1 } -WarningVariable warnings -WarningAction SilentlyContinue
+
+        $signals.SharePointAlertCount | Should -Be 5
+        $signals.SharePointAlerts | Should -HaveCount 1
+        @($warnings | Where-Object { $_ -match 'MaxAlertRowsPerSite' }) | Should -HaveCount 1
+    }
+
+    It 'reports the first unreadable alerts and summarizes the others instead of warning for every alert' {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Alerts = @(1..8 | ForEach-Object {
+            $broken = Get-TestAlert -Title "Broken$_"
+            $broken.PSObject.Properties.Remove('Status')
+            $broken
+        })
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -WarningVariable warnings -WarningAction SilentlyContinue
+
+        $signals.SharePointAlertCount | Should -Be 8
+        $signals.SharePointAlerts | Should -HaveCount 0
+        $signals.CustomizationInventoryComplete | Should -BeFalse
+        @($warnings | Where-Object { $_ -match 'Could not read an alert on web' }) | Should -HaveCount 5
+        @($warnings | Where-Object { $_ -match '3 more alert\(s\) could not be read on site' }) | Should -HaveCount 1
+    }
+
+    It 'resolves each alert owner once for the whole site collection' {
+        $global:SPSTestUserLookups = 0
+        $makeAlert = {
+            param ([string]$Title, [int]$UserId)
+            $alert = Get-TestAlert -Title $Title -UserId $UserId
+            $alert.PSObject.Properties.Remove('User')
+            $alert | Add-Member -MemberType ScriptProperty -Name User -Value { $global:SPSTestUserLookups++; [PSCustomObject]@{ LoginName = "i:0#.w|contoso\user$($this.UserId)" } }
+            $alert
+        }
+        $first = Get-TestWeb -Definitions @() -Bindings @()
+        $first.Alerts = @((& $makeAlert 'A' 7), (& $makeAlert 'B' 7), (& $makeAlert 'C' 8))
+        $second = Get-TestWeb -Definitions @() -Bindings @()
+        $second.Url = 'https://intranet.contoso.com/sites/team/sub'
+        $second.Alerts = @((& $makeAlert 'D' 7), (& $makeAlert 'E' 9))
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($first, $second)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site
+
+        $signals.SharePointAlerts | Should -HaveCount 5
+        $global:SPSTestUserLookups | Should -Be 3
+        $signals.SharePointAlerts[3].UserLoginName | Should -Be 'i:0#.w|contoso\user7'
+        $signals.SharePointAlerts[4].UserLoginName | Should -Be 'i:0#.w|contoso\user9'
+        Remove-Variable -Name SPSTestUserLookups -Scope Global
+    }
+
+    It 'keeps the site complete when the alert rows exactly fill the cap' {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Alerts = @(1..3 | ForEach-Object { Get-TestAlert -Title "Alert$_" })
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -LargeContentThresholds @{ MaxAlertRowsPerSite = 3 } -WarningVariable warnings -WarningAction SilentlyContinue
+
+        $signals.SharePointAlertCount | Should -Be 3
+        $signals.SharePointAlerts | Should -HaveCount 3
+        $signals.CustomizationInventoryComplete | Should -BeTrue
+        @($warnings) | Should -HaveCount 0
+    }
+
+    It 'still counts an alert that cannot be read and marks the site partial' {
+        $broken = Get-TestAlert -Title 'Broken'
+        $broken.PSObject.Properties.Remove('Status')
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Alerts = @((Get-TestAlert -Title 'Fine'), $broken)
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -WarningVariable warnings -WarningAction SilentlyContinue
+
+        $signals.SharePointAlertCount | Should -Be 2
+        $signals.SharePointAlerts | Should -HaveCount 1
+        $signals.SharePointAlerts[0].Title | Should -Be 'Fine'
+        $signals.CustomizationInventoryComplete | Should -BeFalse
+        ($warnings -join ';') | Should -Match "Could not read an alert on web 'https://intranet.contoso.com/sites/team'"
+    }
+
+    It 'marks the site partial when the alert collection of a web is unavailable' {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Alerts = $null
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -WarningVariable warnings -WarningAction SilentlyContinue
+
+        $signals.SharePointAlertCount | Should -Be 0
+        $signals.CustomizationInventoryComplete | Should -BeFalse
+        ($warnings -join ';') | Should -Match "Could not read the alerts on web 'https://intranet.contoso.com/sites/team': The alert collection is unavailable"
+    }
+
+    It 'marks the site partial instead of reporting no alert when the alert count cannot be read' {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Alerts = [SPSSiteInventoryBrokenAlertCollection]::new()
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -WarningVariable warnings -WarningAction SilentlyContinue
+
+        $signals.SharePointAlertCount | Should -Be 0
+        $signals.CustomizationInventoryComplete | Should -BeFalse
+        ($warnings -join ';') | Should -Match 'The alert data could not be loaded'
     }
 }

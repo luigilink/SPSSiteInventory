@@ -100,6 +100,7 @@ try {
     $contentTypes = @($assessment.ContentTypes)
     $managedMetadataLists = @($assessment.ManagedMetadataLists)
     $externalLists = @($assessment.ExternalLists)
+    $sharePointAlerts = @($assessment.SharePointAlerts)
     if (@($scored | Where-Object { $_.IsLockedSite }).Count -gt 0 -and
         @($settings.Scoring.BlockingSignals) -notcontains 'IsLockedSite') {
         Add-SPSInventoryEvent -Message 'Locked site collections were detected, but IsLockedSite is not in Scoring.BlockingSignals. Add it to classify lock states as migration blockers.' -Level Warning
@@ -148,7 +149,7 @@ try {
     }
 
     $solutionOutput = Export-SPSSolutionReport -InputObject @($solutionMap) -OutputFolder $settings.OutputFolder -BaseName ('SPSSiteInventory-' + $settings.EnvName)
-    $output = Export-SPSInventoryReport -InputObject @($scored) -OutputFolder $settings.OutputFolder -BaseName ('SPSSiteInventory-' + $settings.EnvName) -EnvName $settings.EnvName -SolutionMap @($solutionMap) -ContentTypes $contentTypes -ManagedMetadataLists $managedMetadataLists -ExternalLists $externalLists -BcsApplications @($bcs.Applications) -BcsInventoryComplete ([bool]$bcs.Complete) -SolutionJsonPath $solutionOutput.JsonPath
+    $output = Export-SPSInventoryReport -InputObject @($scored) -OutputFolder $settings.OutputFolder -BaseName ('SPSSiteInventory-' + $settings.EnvName) -EnvName $settings.EnvName -SolutionMap @($solutionMap) -ContentTypes $contentTypes -ManagedMetadataLists $managedMetadataLists -ExternalLists $externalLists -SharePointAlerts $sharePointAlerts -BcsApplications @($bcs.Applications) -BcsInventoryComplete ([bool]$bcs.Complete) -SolutionJsonPath $solutionOutput.JsonPath
 
     Add-SPSInventoryEvent -Message "Inventory complete. CSV: $($output.CsvPath) | JSON: $($output.JsonPath) | HTML: $($output.HtmlPath)" -Level Information
     Add-SPSInventoryEvent -Message "Report pack. Sites: $($output.SitesJsonPath) | Auth: $($output.AuthJsonPath) | Workflows: $($output.WorkflowsJsonPath) | Apps: $($output.AppsJsonPath) | Publishing: $($output.PublishingJsonPath) | Permissions: $($output.PermissionsJsonPath) | IRM/Locks: $($output.IrmLocksJsonPath) | Large content: $($output.LargeContentJsonPath) | Alerts: $($output.AlertsJsonPath) | Alerts CSV: $($output.AlertsCsvPath) | Manifest: $($output.ManifestJsonPath)" -Level Information
@@ -156,6 +157,7 @@ try {
     Add-SPSInventoryEvent -Message "Content-type report. CSV: $($output.ContentTypesCsvPath) | JSON: $($output.ContentTypesJsonPath)" -Level Information
     Add-SPSInventoryEvent -Message "Managed metadata report. CSV: $($output.ManagedMetadataCsvPath) | JSON: $($output.ManagedMetadataJsonPath)" -Level Information
     Add-SPSInventoryEvent -Message "External list report. CSV: $($output.ExternalListsCsvPath) | JSON: $($output.ExternalListsJsonPath)" -Level Information
+    Add-SPSInventoryEvent -Message "SharePoint alerts report. CSV: $($output.SharePointAlertsCsvPath) | JSON: $($output.SharePointAlertsJsonPath)" -Level Information
     Add-SPSInventoryEvent -Message "BCS report. CSV: $($output.BcsCsvPath) | JSON: $($output.BcsJsonPath)" -Level Information
 }
 catch {

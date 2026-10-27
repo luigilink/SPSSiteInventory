@@ -97,6 +97,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   web applications concerned. The alert logic moves out of `Export-SPSInventoryReport`
   into `Get-SPSInventoryAlert` with tests that every alert type is cataloged and documented
   in the new [Alerts and remediation](wiki/Alerts.md) wiki page. (#45)
+- Added the SMAT Alerts parity: the SharePoint alerts ("Alert Me" subscriptions) that users
+  set up are now inventoried. Each site gets `SharePointAlertCount` (exact, every user, every
+  web; informational, not scored by default) and a new `-sharepointalerts-*.csv/json` report
+  lists one row per alert: where it applies (web, list or item), its event type, frequency,
+  time, status, delivery channel, CAML filter and owner. Migration tools do not migrate
+  alerts, so a new `Low` alert, `AlertSubscriptions`, tells the administrator to warn the
+  users. The rows are capped per site by `LargeContentThresholds.MaxAlertRowsPerSite` (5000
+  by default); an unreadable alert or a reached cap marks the site partial. The files hold
+  the login names of the alert owners, so they stay out of the HTML report. (#45)
 - Zone-aware web application authentication inventory, including mixed Windows/FBA,
   membership/role provider names and explicit identity-review flags. The example
   configuration treats `HasFbaZone` as a SharePoint Online migration blocker.
