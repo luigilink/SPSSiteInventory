@@ -376,10 +376,10 @@ SharePointAlerts = @{
 
 The SharePoint alerts report (`*-sharepointalerts-*`, see
 [Usage](Usage#sharepoint-alerts)) lists the "Alert Me" subscriptions of the users, with the
-login name of each owner so that you can tell them which alerts to recreate. A login name is
-personal data. Set `IncludeUserLogin` to `$false` to leave it out: `UserLoginName` stays
-empty and the owner of an alert is not looked up at all, which also saves a query per owner.
-`UserId`, a number local to the site collection that does not name anybody, is kept.
+login name of each owner so that you can tell them which notifications to replace. A login
+name is personal data. Set `IncludeUserLogin` to `$false` to leave it out: `UserLoginName`
+stays empty and the owner of an alert is not looked up at all, which also saves a query per
+owner. `UserId`, a number local to the site collection that does not name anybody, is kept.
 
 The value must be `$true` or `$false`. Anything else, such as the string `'false'`, is
 rejected when the settings file is loaded: it would otherwise count as `$true` and collect

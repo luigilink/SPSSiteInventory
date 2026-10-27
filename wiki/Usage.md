@@ -255,12 +255,14 @@ one row per alert, for every user of every web:
 
 `UserLoginName` is personal data, which is why these files are not part of the HTML report:
 handle them like any export that names users. It is empty when the owner is a system alert
-or no longer exists in the site. Set `SharePointAlerts.IncludeUserLogin` to `$false` (see
-[Configuration](Configuration#sharepointalerts-section)) to leave the login names out: the
-column is then empty and the owners are not looked up. While the login names are collected,
-the scan logs a notice saying that the files contain them. The HTML report shows the number of sites with alerts, the
+or no longer exists in the site. The HTML report shows the number of sites with alerts, the
 `SharePointAlertCount` column and the `AlertSubscriptions` alert, which has the `Low`
 severity.
+
+To leave the login names out, set `SharePointAlerts.IncludeUserLogin` to `$false` (see
+[Configuration](Configuration#sharepointalerts-section)): the column is then empty and the
+owners are not looked up. While the login names are collected, the scan logs a notice saying
+that the files contain them.
 
 The rows are capped per site collection by `LargeContentThresholds.MaxAlertRowsPerSite`
 (5000 by default) while `SharePointAlertCount` stays exact. When the cap is reached, or

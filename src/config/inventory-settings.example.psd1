@@ -131,7 +131,7 @@
     # SharePoint alerts
     #
     # The SharePoint alerts report lists the "Alert Me" subscriptions of the users, with
-    # the login name of each owner so that you can tell them which alerts to recreate.
+    # the login name of each owner so that you can tell them which notifications to replace.
     # A login name is personal data: set IncludeUserLogin to $false to leave it out.
     # UserLoginName then stays empty and the owners are not looked up. The value must be
     # $true or $false.
