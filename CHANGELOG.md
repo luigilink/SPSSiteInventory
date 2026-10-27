@@ -21,7 +21,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   as `SLA: 48`. (#31)
 - Site scans now report IRM-enabled lists (`IrmEnabledListCount`) and site lock
   state (`SiteLockState` / `IsLockedSite`) in CSV/JSON/HTML outputs. The example
-  scoring configuration treats both as migration blockers. (#38)
+  scoring configuration treats both as migration blockers; for locks this was later
+  narrowed to `NoAccess` (#65). (#38)
+- Only a `NoAccess` site lock is a migration blocker in the example configuration now. A
+  `NoAccess` lock makes the site unreadable, so the migration tools skip it, while `NoAdditions`
+  and `ReadOnly` restrict changes only and are often a deliberate migration freeze. The new
+  `HasNoAccessLock` signal replaces `IsLockedSite` in `Scoring.BlockingSignals`; `IsLockedSite` and
+  `SiteLockState` still report every lock, and a settings file that lists `IsLockedSite` keeps its
+  behavior. The alert follows the state: `NoAccessSite` (`High`) for `NoAccess`, and `LockedSite`
+  (`Medium`) for `NoAdditions` and `ReadOnly`. The HTML report gains a card and a column, and the
+  orchestrator warns when `NoAccess` sites exist and neither signal is listed. (#65)
 - Reporting now emits a modular JSON report pack (`-sites-`, `-auth-`,
   `-workflows-`, `-irm-locks-`, `-alerts-`) with a `-manifest-` file while
   preserving the existing CSV/JSON/HTML outputs. The HTML report now includes

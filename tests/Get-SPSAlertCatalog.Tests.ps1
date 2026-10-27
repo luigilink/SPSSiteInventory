@@ -101,15 +101,24 @@ Describe 'Get-SPSAlertCatalog' {
     }
 
     It 'tells a read-only or no-additions lock from a no-access lock' {
-        $entry = $script:Catalog['LockedSite']
+        $noAccess = $script:Catalog['NoAccessSite']
+        $locked = $script:Catalog['LockedSite']
 
-        $entry.Remediation | Should -Match 'ReadOnly or NoAdditions'
-        $entry.Remediation | Should -Match 'restricts changes, not reading'
-        $entry.Remediation | Should -Match 'only if your migration method requires it'
-        $entry.Remediation | Should -Match 'NoAccess lock makes the site unreadable'
-        $entry.Remediation | Should -Not -Match 'a locked site cannot be read'
-        $entry.Message | Should -Match 'NoAccess'
-        $entry.Message | Should -Match 'ReadOnly and NoAdditions only restrict changes'
+        $noAccess.Severity | Should -Be 'High'
+        $noAccess.Message | Should -Match 'NoAccess'
+        $noAccess.Remediation | Should -Match 'NoAccess lock makes the site unreadable'
+        $noAccess.Remediation | Should -Match 'unlock the sites that must migrate'
+        $noAccess.Reference | Should -Match 'migration-assessment-scan-locked-sites'
+        $locked.Severity | Should -Be 'Medium'
+        $locked.Message | Should -Match 'NoAdditions or ReadOnly'
+        $locked.Message | Should -Match 'still be read and migrated'
+        $locked.Remediation | Should -Match 'NoAdditions lock prevents adding content'
+        $locked.Remediation | Should -Match 'ReadOnly lock prevents adding, updating and deleting it'
+        $locked.Remediation | Should -Match 'both still allow reading'
+        $locked.Remediation | Should -Match 'only if your migration method requires it'
+        $locked.Remediation | Should -Not -Match 'unreadable'
+        $locked.Remediation | Should -Not -Match 'a locked site cannot be read'
+        $locked.Reference | Should -Match 'powershell/module/microsoft\.sharepoint\.powershell/set-spsite\?view=sharepoint-ps$'
     }
 
     It 'is documented in the alerts wiki page, with the same remediation' {

@@ -70,8 +70,9 @@ Describe 'Invoke-SPSiteAssessment' {
                     CheckedOutFileExamples = ''
                     FileVersionCount = 0
                     FileVersionExamples = ''
-                    IsLockedSite = $false
-                    SiteLockState = 'Unlock'
+                    IsLockedSite = $true
+                    HasNoAccessLock = $true
+                    SiteLockState = 'NoAccess'
                     UsesFullTrustCode = $false
                     ContentTypeCount = 0
                     ListContentTypeBindingCount = 0
@@ -120,8 +121,9 @@ Describe 'Invoke-SPSiteAssessment' {
             $result.Inventory[0].ExternalListExamples | Should -Be 'Customers (Contoso.Crm.Customer); Orders (Contoso.Sap.Order)'
             $result.Inventory[0].SharePointAlertCount | Should -Be 3
             $result.Inventory[0].IsLargeSite | Should -BeFalse
-            $result.Inventory[0].IsLockedSite | Should -BeFalse
-            $result.Inventory[0].SiteLockState | Should -Be 'Unlock'
+            $result.Inventory[0].IsLockedSite | Should -BeTrue
+            $result.Inventory[0].HasNoAccessLock | Should -BeTrue
+            $result.Inventory[0].SiteLockState | Should -Be 'NoAccess'
             $result.Inventory[1].AssessmentStatus | Should -Be 'Failed'
             $result.Inventory[1].Category | Should -BeNullOrEmpty
             $result.Inventory[1].Score | Should -BeNullOrEmpty
@@ -153,6 +155,7 @@ Describe 'Invoke-SPSiteAssessment' {
             $result.Inventory[1].SharePointAlertCount | Should -BeNullOrEmpty
             $result.Inventory[1].IsLargeSite | Should -BeNullOrEmpty
             $result.Inventory[1].IsLockedSite | Should -BeNullOrEmpty
+            $result.Inventory[1].HasNoAccessLock | Should -BeNullOrEmpty
             $result.Inventory[1].SiteLockState | Should -BeNullOrEmpty
             $result.Inventory[2].AssessmentStatus | Should -Be 'Complete'
             @($result.ContentTypes).Count | Should -Be 0

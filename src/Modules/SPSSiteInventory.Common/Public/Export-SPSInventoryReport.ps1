@@ -228,6 +228,7 @@
                 AssessmentStatus = $record.AssessmentStatus
                 SiteLockState = $record.SiteLockState
                 IsLockedSite = $record.IsLockedSite
+                HasNoAccessLock = $record.HasNoAccessLock
                 IrmEnabledListCount = $record.IrmEnabledListCount
             }
         }

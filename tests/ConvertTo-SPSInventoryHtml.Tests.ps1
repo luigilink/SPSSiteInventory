@@ -29,7 +29,7 @@ BeforeAll {
             LargeListViewCount = 0; LargeListViewExamples = ''
             CheckedOutFileCount = 0; CheckedOutFileExamples = ''
             FileVersionCount = 0; FileVersionExamples = ''
-            SiteLockState = 'Unlock'; IsLockedSite = $false; IrmEnabledListCount = 0
+            SiteLockState = 'Unlock'; IsLockedSite = $false; HasNoAccessLock = $false; IrmEnabledListCount = 0
             LastModified = [datetime]'2025-01-15'; Category = 1; CategoryName = 'Simple'
             Wave = 1; WaveName = 'Quick wins'; Score = 0; Reasons = ''
         },
@@ -58,7 +58,7 @@ BeforeAll {
             LargeListViewCount = 1; LargeListViewExamples = 'Documents/All Documents (7000)'
             CheckedOutFileCount = 3; CheckedOutFileExamples = 'Documents (3)'
             FileVersionCount = 2; FileVersionExamples = '/sites/legacy/docs/spec.docx (80)'
-            SiteLockState = 'NoAccess'; IsLockedSite = $true; IrmEnabledListCount = 3
+            SiteLockState = 'NoAccess'; IsLockedSite = $true; HasNoAccessLock = $true; IrmEnabledListCount = 3
             LastModified = [datetime]'2024-06-01'; Category = 4; CategoryName = 'Blocking'
             UsesFullTrustCode = $true
             Wave = 4; WaveName = 'Projects / blockers'; Score = 9.5; Reasons = 'blocking: UsesFullTrustCode'
@@ -197,6 +197,27 @@ Describe 'ConvertTo-SPSInventoryHtml' {
 
         $html | Should -Match '<div class="num">2</div><div class="lbl">Sites with SharePoint alerts</div>'
         $html | Should -Match '<div class="num">1</div><div class="lbl">Sites with external lists</div>'
+    }
+
+    It 'shows the NoAccess lock in a summary card and a table column' {
+        $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
+
+        $html | Should -Match '<div class="num">1</div><div class="lbl">Sites locked with NoAccess</div>'
+        $html | Should -Match '>NoAccess lock <span class="arrow">'
+    }
+
+    It 'counts the NoAccess locks apart from the other locks' {
+        $records = @(
+            [PSCustomObject]@{ Url = 'https://intranet/sites/a'; Category = 1; CategoryName = 'Simple'; Wave = 1; WaveName = 'Quick wins'; IsLockedSite = $true; HasNoAccessLock = $false; SiteLockState = 'ReadOnly' }
+            [PSCustomObject]@{ Url = 'https://intranet/sites/b'; Category = 4; CategoryName = 'Blocking'; Wave = 4; WaveName = 'Projects / blockers'; IsLockedSite = $true; HasNoAccessLock = $true; SiteLockState = 'NoAccess' }
+            [PSCustomObject]@{ Url = 'https://intranet/sites/c'; Category = 1; CategoryName = 'Simple'; Wave = 1; WaveName = 'Quick wins'; IsLockedSite = $true; HasNoAccessLock = $false; SiteLockState = 'NoAdditions' }
+            [PSCustomObject]@{ Url = 'https://intranet/sites/d'; Category = 1; CategoryName = 'Simple'; Wave = 1; WaveName = 'Quick wins'; IsLockedSite = $false; HasNoAccessLock = $false; SiteLockState = 'Unlock' }
+        )
+
+        $html = ConvertTo-SPSInventoryHtml -InputObject $records
+
+        $html | Should -Match '<div class="num">3</div><div class="lbl">Sites with locked state</div>'
+        $html | Should -Match '<div class="num">1</div><div class="lbl">Sites locked with NoAccess</div>'
     }
 
     It 'renders a web application policies section grouped by web application' {

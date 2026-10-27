@@ -101,9 +101,10 @@ try {
     $managedMetadataLists = @($assessment.ManagedMetadataLists)
     $externalLists = @($assessment.ExternalLists)
     $sharePointAlerts = @($assessment.SharePointAlerts)
-    if (@($scored | Where-Object { $_.IsLockedSite }).Count -gt 0 -and
+    if (@($scored | Where-Object { $_.HasNoAccessLock }).Count -gt 0 -and
+        @($settings.Scoring.BlockingSignals) -notcontains 'HasNoAccessLock' -and
         @($settings.Scoring.BlockingSignals) -notcontains 'IsLockedSite') {
-        Add-SPSInventoryEvent -Message 'Locked site collections were detected, but IsLockedSite is not in Scoring.BlockingSignals. Add it to classify lock states as migration blockers.' -Level Warning
+        Add-SPSInventoryEvent -Message 'Site collections locked with NoAccess were detected, but HasNoAccessLock is not in Scoring.BlockingSignals. Add it to classify them as migration blockers: the migration tools cannot read them.' -Level Warning
     }
     if (@($scored | Where-Object { [int]$_.IrmEnabledListCount -gt 0 }).Count -gt 0 -and
         @($settings.Scoring.BlockingSignals) -notcontains 'IrmEnabledListCount') {

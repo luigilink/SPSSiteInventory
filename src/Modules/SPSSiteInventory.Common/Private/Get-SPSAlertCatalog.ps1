@@ -177,11 +177,17 @@
             Remediation = 'Plan the move of the forms-based accounts to an identity SharePoint Online supports, and map the users before the migration.'
             Reference   = ''
         }
-        LockedSite = @{
+        NoAccessSite = @{
             Severity    = 'High'
-            Message     = 'The site collection is locked: a NoAccess lock makes it unreadable for the migration tools, while ReadOnly and NoAdditions only restrict changes.'
-            Remediation = 'Check that the lock is intended. A ReadOnly or NoAdditions lock restricts changes, not reading, so the content can still be migrated and the lock is often a deliberate migration freeze: change it only if your migration method requires it. A NoAccess lock makes the site unreadable and the migration tools skip it: unlock the sites that must migrate.'
+            Message     = 'The site collection is locked with NoAccess: it cannot be read, so the migration tools skip it.'
+            Remediation = 'Check that the lock is intended. A NoAccess lock makes the site unreadable and the migration tools skip it: unlock the sites that must migrate.'
             Reference   = 'https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-locked-sites'
+        }
+        LockedSite = @{
+            Severity    = 'Medium'
+            Message     = 'The site collection is locked NoAdditions or ReadOnly: its content can still be read and migrated.'
+            Remediation = 'Check that the lock is intended. A NoAdditions lock prevents adding content and a ReadOnly lock prevents adding, updating and deleting it, but both still allow reading, so the content can be migrated and the lock is often a deliberate migration freeze: change it only if your migration method requires it.'
+            Reference   = 'https://learn.microsoft.com/en-us/powershell/module/microsoft.sharepoint.powershell/set-spsite?view=sharepoint-ps'
         }
         IrmEnabledLists = @{
             Severity    = 'High'

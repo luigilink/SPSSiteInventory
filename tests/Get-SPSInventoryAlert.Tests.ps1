@@ -26,7 +26,8 @@ BeforeDiscovery {
         @{ Type = 'InfoPath'; Severity = 'High'; Signals = @{ InfoPathFormCount = 1 }; Value = 1 }
         @{ Type = 'FullTrustCode'; Severity = 'High'; Signals = @{ UsesFullTrustCode = $true }; Value = $true }
         @{ Type = 'FbaConfigured'; Severity = 'High'; Signals = @{ HasFbaZone = $true }; Value = $true }
-        @{ Type = 'LockedSite'; Severity = 'High'; Signals = @{ IsLockedSite = $true; SiteLockState = 'ReadOnly' }; Value = 'ReadOnly' }
+        @{ Type = 'NoAccessSite'; Severity = 'High'; Signals = @{ IsLockedSite = $true; HasNoAccessLock = $true; SiteLockState = 'NoAccess' }; Value = 'NoAccess' }
+        @{ Type = 'LockedSite'; Severity = 'Medium'; Signals = @{ IsLockedSite = $true; HasNoAccessLock = $false; SiteLockState = 'ReadOnly' }; Value = 'ReadOnly' }
         @{ Type = 'IrmEnabledLists'; Severity = 'High'; Signals = @{ IrmEnabledListCount = 2 }; Value = 2 }
         @{ Type = 'LargeSite'; Severity = 'Medium'; Signals = @{ IsLargeSite = $true; SizeGB = 150 }; Value = 150 }
         @{ Type = 'LargeLists'; Severity = 'Medium'; Signals = @{ LargeListCount = 1 }; Value = 1 }
@@ -103,6 +104,7 @@ Describe 'Get-SPSInventoryAlert' {
 
     It 'raises the enumeration failure of a web application and no site alert for its row' {
         $row = [PSCustomObject]@{
+            IsLockedSite = $true; HasNoAccessLock = $true; SiteLockState = 'NoAccess'
             InventoryScope = 'WebApplication'; Url = 'https://other'; WebAppUrl = 'https://other'; AssessmentStatus = 'Failed'
             SiteInventoryWarnings = 'Access denied'; Workflow2010Count = 5; Workflow2013Count = 3; InfoPathFormCount = 2; SharePointAlertCount = 4
         }
@@ -113,6 +115,25 @@ Describe 'Get-SPSInventoryAlert' {
         $alerts[0].Url | Should -Be 'https://other'
         $alerts[0].Value | Should -Be 'Access denied'
         $alerts[0].Severity | Should -Be 'High'
+    }
+
+    It 'raises one lock alert that follows the lock state, never both' -ForEach @(
+        @{ State = 'NoAccess'; NoAccess = $true; Expected = 'NoAccessSite' }
+        @{ State = 'NoAdditions'; NoAccess = $false; Expected = 'LockedSite' }
+        @{ State = 'ReadOnly'; NoAccess = $false; Expected = 'LockedSite' }
+    ) {
+        $alerts = Get-Alert -Record @((New-Site -Signals @{ IsLockedSite = $true; HasNoAccessLock = $NoAccess; SiteLockState = $State }))
+
+        @($alerts.AlertType) | Should -Be @($Expected)
+        $alerts[0].Value | Should -Be $State
+    }
+
+    It 'raises no lock alert for an unlocked site or for a lock state that is unknown' {
+        $unlocked = Get-Alert -Record @((New-Site -Signals @{ IsLockedSite = $false; HasNoAccessLock = $false; SiteLockState = 'Unlock' }))
+        $unknown = Get-Alert -Record @((New-Site -Signals @{ IsLockedSite = $false; HasNoAccessLock = $false; SiteLockState = 'Unknown' }))
+
+        $unlocked | Should -HaveCount 0
+        $unknown | Should -HaveCount 0
     }
 
     It 'raises the policy and browser file handling alerts once per web application' {

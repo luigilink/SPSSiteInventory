@@ -1342,6 +1342,7 @@ Describe 'Get-SPSSiteCustomization content types' {
         $signals.IrmEnabledListCount | Should -Be 1
         $signals.SiteLockState | Should -Be 'Unlock'
         $signals.IsLockedSite | Should -BeFalse
+        $signals.HasNoAccessLock | Should -BeFalse
     }
 
     It 'flags locked site collections as NoAccess when read access is locked' {
@@ -1360,6 +1361,7 @@ Describe 'Get-SPSSiteCustomization content types' {
 
         $signals.SiteLockState | Should -Be 'NoAccess'
         $signals.IsLockedSite | Should -BeTrue
+        $signals.HasNoAccessLock | Should -BeTrue
     }
 
     It 'flags locked site collections as NoAdditions when write access is locked' {
@@ -1378,6 +1380,7 @@ Describe 'Get-SPSSiteCustomization content types' {
 
         $signals.SiteLockState | Should -Be 'NoAdditions'
         $signals.IsLockedSite | Should -BeTrue
+        $signals.HasNoAccessLock | Should -BeFalse
     }
 
     It 'flags locked site collections as ReadOnly when only read-only mode is set' {
@@ -1396,6 +1399,23 @@ Describe 'Get-SPSSiteCustomization content types' {
 
         $signals.SiteLockState | Should -Be 'ReadOnly'
         $signals.IsLockedSite | Should -BeTrue
+        $signals.HasNoAccessLock | Should -BeFalse
+    }
+
+    It 'does not flag a NoAccess lock when the lock state cannot be determined' {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site
+
+        $signals.SiteLockState | Should -Be 'Unknown'
+        $signals.IsLockedSite | Should -BeFalse
+        $signals.HasNoAccessLock | Should -BeFalse
     }
 
     It 'does not count lists when IRM is disabled' {
