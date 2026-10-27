@@ -77,7 +77,7 @@
         }
     }
 
-    @($csvRows) | Export-Csv -Path $csvPath -NoTypeInformation -Encoding UTF8
+    @($csvRows) | ConvertTo-SPSCsvSafeRecord | Export-Csv -Path $csvPath -NoTypeInformation -Encoding UTF8
     $json = ConvertTo-Json -InputObject @($InputObject) -Depth 6
     Set-Content -Path $jsonPath -Value $json -Encoding UTF8
 

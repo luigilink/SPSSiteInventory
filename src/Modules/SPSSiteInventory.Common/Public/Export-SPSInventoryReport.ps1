@@ -181,7 +181,7 @@
     $alertsCsvPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-alerts-{1}.csv' -f $BaseName, $timestamp)
     $manifestJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-manifest-{1}.json' -f $BaseName, $timestamp)
 
-    $InputObject | Export-Csv -Path $csvPath -NoTypeInformation -Encoding UTF8
+    $InputObject | ConvertTo-SPSCsvSafeRecord | Export-Csv -Path $csvPath -NoTypeInformation -Encoding UTF8
     ConvertTo-Json -InputObject @($InputObject) -Depth 6 | Set-Content -Path $jsonPath -Encoding UTF8
 
     $records = @($InputObject)
@@ -322,6 +322,7 @@
     $alertColumns = @('AlertType', 'Severity', 'Url', 'Value', 'Message', 'Remediation', 'Reference')
     if ($alerts.Count -gt 0) {
         $alerts | Select-Object -Property $alertColumns |
+            ConvertTo-SPSCsvSafeRecord |
             Export-Csv -Path $alertsCsvPath -NoTypeInformation -Encoding UTF8
     }
     else {
@@ -347,6 +348,7 @@
         )
         if ($ContentTypes.Count -gt 0) {
             $ContentTypes | Select-Object -Property $columns |
+                ConvertTo-SPSCsvSafeRecord |
                 Export-Csv -Path $contentTypesCsvPath -NoTypeInformation -Encoding UTF8
         }
         else {
@@ -369,6 +371,7 @@
         )
         if ($ManagedMetadataLists.Count -gt 0) {
             $ManagedMetadataLists | Select-Object -Property $managedMetadataColumns |
+                ConvertTo-SPSCsvSafeRecord |
                 Export-Csv -Path $managedMetadataCsvPath -NoTypeInformation -Encoding UTF8
         }
         else {
@@ -389,6 +392,7 @@
         )
         if ($ExternalLists.Count -gt 0) {
             $ExternalLists | Select-Object -Property $externalListColumns |
+                ConvertTo-SPSCsvSafeRecord |
                 Export-Csv -Path $externalListsCsvPath -NoTypeInformation -Encoding UTF8
         }
         else {
@@ -410,6 +414,7 @@
         )
         if ($SharePointAlerts.Count -gt 0) {
             $SharePointAlerts | Select-Object -Property $sharePointAlertColumns |
+                ConvertTo-SPSCsvSafeRecord |
                 Export-Csv -Path $sharePointAlertsCsvPath -NoTypeInformation -Encoding UTF8
         }
         else {
@@ -432,6 +437,7 @@
         )
         if ($BcsApplications.Count -gt 0) {
             $BcsApplications | Select-Object -Property $bcsColumns |
+                ConvertTo-SPSCsvSafeRecord |
                 Export-Csv -Path $bcsCsvPath -NoTypeInformation -Encoding UTF8
         }
         else {

@@ -52,6 +52,37 @@ report pack, plus a dedicated farm-solution report, to the output folder:
 | `*-bcs-*.csv` / `*-bcs-*.json` | BCS LOB systems of the farm, following the SMAT BCS report. One row per LOB system, with its type, instances and entities. |
 | `*-sharepointalerts-*.csv` / `*-sharepointalerts-*.json` | SharePoint alerts ("Alert Me" subscriptions) by alert, following the SMAT Alerts report. One row per alert, with where it applies, what triggers it, how often it is sent and who owns it. Not the risk alerts of `*-alerts-*`. They contain the login names of the owners, so they are not part of the HTML report. |
 
+### CSV files and spreadsheet formulas
+
+The CSV files are meant to be opened in a spreadsheet, and text typed by the users of the farm
+reaches them: titles of sites, lists, content types and alerts, CAML filters, and so on. A
+spreadsheet reads a cell that starts with `=`, `+`, `-` or `@`, or with a tab, a carriage return
+or a line feed, as a formula, and some locales read the full-width forms of `=`, `+`, `-` and
+`@` the same way. A user could therefore craft a title, such as a `HYPERLINK` or a DDE formula,
+that runs on the machine of the administrator who opens the file (CSV injection).
+
+Every CSV the toolkit writes therefore puts a single quote in front of a text cell that starts
+with one of those characters, as the [OWASP guidance](https://community.owasp.org/attacks/CSV_Injection)
+recommends: the spreadsheet reads the cell as text and shows it after the quote. For example, the
+title `=HYPERLINK("http://example.test","x")` is written as `'=HYPERLINK("http://example.test","x")`.
+
+- Only text cells change. Numbers (a negative number included), booleans and dates are left alone,
+  so a spreadsheet still reads a number as a number. A text cell is always checked, even when it
+  looks like a number, because text typed by a user cannot be told from a number.
+- The JSON files keep the original text, and so does the HTML report, which encodes it. Read the
+  JSON when a script needs the exact values.
+- A script that parses a CSV file must remove that leading quote.
+- The header row is not changed.
+
+OWASP states that no CSV sanitization is safe for every spreadsheet. Two things to know:
+
+- **Do not save these files as CSV again.** Excel can drop the quote when a file is saved as CSV
+  and opened again, which would turn such a cell back into a formula. Treat the CSV files as
+  reports to read, and use the JSON files as the data.
+- Export-Csv writes every field between double quotes and doubles the quotes inside the text, so
+  a comma or a quote typed by a user stays inside its cell when the spreadsheet reads the file as
+  the comma-separated CSV it is (for example with Data > From Text/CSV in Excel).
+
 The HTML report also includes configured authentication by web application/zone,
 an alerts section that groups the alerts by type with what to do about each, a content-type
 detail section, a managed metadata section, an external list section and a BCS application
