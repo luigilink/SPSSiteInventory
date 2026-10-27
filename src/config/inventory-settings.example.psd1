@@ -53,6 +53,10 @@
     # applies the same cap to the page-layout scan of publishing Pages libraries, and
     # MaxItemsForHtmlFileScanPerLibrary to the .htm/.html file count (collected only in
     # web applications that use Permissive browser file handling).
+    #
+    # MaxAlertRowsPerSite caps how many SharePoint alert rows are exported per site
+    # collection; SharePointAlertCount stays exact. When the cap is hit, the site is
+    # marked partial and a warning is emitted.
     # -------------------------------------------------------------------------------
     LargeContentThresholds = @{
         LargeSiteSizeGB = 100
@@ -63,6 +67,7 @@
         MaxItemsForVersionScanPerLibrary = 2000
         MaxItemsForPublishingPageScanPerLibrary = 2000
         MaxItemsForHtmlFileScanPerLibrary = 2000
+        MaxAlertRowsPerSite = 5000
     }
 
     # -------------------------------------------------------------------------------

@@ -18,6 +18,7 @@ BeforeDiscovery {
         @{ Type = 'HtmlFiles'; Severity = 'Medium'; Signals = @{ HtmlFileCount = 8 }; Value = 8 }
         @{ Type = 'ManagedMetadataColumns'; Severity = 'Medium'; Signals = @{ ManagedMetadataListCount = 3 }; Value = 3 }
         @{ Type = 'ExternalLists'; Severity = 'High'; Signals = @{ ExternalListCount = 2 }; Value = 2 }
+        @{ Type = 'AlertSubscriptions'; Severity = 'Low'; Signals = @{ SharePointAlertCount = 14 }; Value = 14 }
         @{ Type = 'UnsupportedSiteTemplate'; Severity = 'High'; Signals = @{ IsUnsupportedSiteTemplate = $true; Template = 'APP#0' }; Value = 'APP#0' }
         @{ Type = 'TemplateCompatibilityReview'; Severity = 'Medium'; Signals = @{ TemplateCompatibility = 'Review'; Template = 'CUSTOM#1' }; Value = 'CUSTOM#1' }
         @{ Type = 'TemplateLanguageReview'; Severity = 'Medium'; Signals = @{ TemplateLanguageReviewRequired = $true; TemplateLanguageLcid = 1036 }; Value = 1036 }
@@ -102,7 +103,7 @@ Describe 'Get-SPSInventoryAlert' {
     It 'raises the enumeration failure of a web application and no site alert for its row' {
         $row = [PSCustomObject]@{
             InventoryScope = 'WebApplication'; Url = 'https://other'; WebAppUrl = 'https://other'; AssessmentStatus = 'Failed'
-            SiteInventoryWarnings = 'Access denied'; Workflow2010Count = 5; InfoPathFormCount = 2
+            SiteInventoryWarnings = 'Access denied'; Workflow2010Count = 5; InfoPathFormCount = 2; SharePointAlertCount = 4
         }
 
         $alerts = Get-Alert -Record @($row)

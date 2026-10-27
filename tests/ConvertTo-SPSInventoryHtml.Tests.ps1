@@ -24,6 +24,7 @@ BeforeAll {
             HtmlFileCount = 0; HtmlFileExamples = ''
             ManagedMetadataListCount = 0; ManagedMetadataColumnCount = 0; ManagedMetadataTermSetCount = 0; ManagedMetadataExamples = ''
             ExternalListCount = 0; ExternalListExamples = ''
+            SharePointAlertCount = 0
             IsLargeSite = $false; LargeListCount = 0; LargeListExamples = ''
             LargeListViewCount = 0; LargeListViewExamples = ''
             CheckedOutFileCount = 0; CheckedOutFileExamples = ''
@@ -52,6 +53,7 @@ BeforeAll {
             ManagedMetadataListCount = 2; ManagedMetadataColumnCount = 3; ManagedMetadataTermSetCount = 2
             ManagedMetadataExamples = 'Contracts (Department, Region); Projects <Q&A> (Department)'
             ExternalListCount = 2; ExternalListExamples = 'Customers (Contoso.Crm.Customer); Orders <SAP> (Contoso.Sap.Order)'
+            SharePointAlertCount = 1234
             IsLargeSite = $true; LargeListCount = 2; LargeListExamples = 'Documents (7000); Records (5100)'
             LargeListViewCount = 1; LargeListViewExamples = 'Documents/All Documents (7000)'
             CheckedOutFileCount = 3; CheckedOutFileExamples = 'Documents (3)'
@@ -174,6 +176,27 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         }
         $html | Should -Match 'Orders &lt;SAP&gt; \(Contoso.Sap.Order\)'
         $html | Should -Not -Match 'Orders <SAP>'
+    }
+
+    It 'shows the SharePoint alert count in the summary card and table column, without the alert rows' {
+        $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
+
+        $html | Should -Match '>SharePoint alerts <span class="arrow">'
+        $html | Should -Match '<td class="num">1234</td>'
+    }
+
+    It 'counts the sites that have SharePoint alerts, not the sites with other signals' {
+        $records = @(
+            [PSCustomObject]@{ Url = 'https://intranet/sites/a'; Category = 1; CategoryName = 'Simple'; Wave = 1; WaveName = 'Quick wins'; SharePointAlertCount = 3; ExternalListCount = 0 }
+            [PSCustomObject]@{ Url = 'https://intranet/sites/b'; Category = 1; CategoryName = 'Simple'; Wave = 1; WaveName = 'Quick wins'; SharePointAlertCount = 0; ExternalListCount = 2 }
+            [PSCustomObject]@{ Url = 'https://intranet/sites/c'; Category = 1; CategoryName = 'Simple'; Wave = 1; WaveName = 'Quick wins'; SharePointAlertCount = 1; ExternalListCount = 0 }
+            [PSCustomObject]@{ Url = 'https://intranet/sites/d'; Category = 1; CategoryName = 'Simple'; Wave = 1; WaveName = 'Quick wins' }
+        )
+
+        $html = ConvertTo-SPSInventoryHtml -InputObject $records
+
+        $html | Should -Match '<div class="num">2</div><div class="lbl">Sites with SharePoint alerts</div>'
+        $html | Should -Match '<div class="num">1</div><div class="lbl">Sites with external lists</div>'
     }
 
     It 'renders a web application policies section grouped by web application' {
@@ -638,15 +661,18 @@ Describe 'ConvertTo-SPSInventoryHtml' {
             1..3 | ForEach-Object { [PSCustomObject]@{ AlertType = 'CheckedOutFiles'; Severity = 'Medium'; Url = "https://intranet/sites/$_"; Value = 1; Message = 'site specific'; Remediation = 'Ask the users to <check in> their files & retry.'; Reference = $learn } }
             1..2 | ForEach-Object { [PSCustomObject]@{ AlertType = 'InfoPath'; Severity = 'High'; Url = "https://intranet/sites/hr$_"; Value = 1; Message = 'site specific'; Remediation = 'Rebuild the forms.'; Reference = '' } }
             [PSCustomObject]@{ AlertType = 'FileVersions'; Severity = 'Medium'; Url = 'https://intranet/sites/x'; Value = 1; Message = 'site specific'; Remediation = 'Decide on the versions.'; Reference = '' }
+            1..2 | ForEach-Object { [PSCustomObject]@{ AlertType = 'AlertSubscriptions'; Severity = 'Low'; Url = "https://intranet/sites/al$_"; Value = 3; Message = 'site specific'; Remediation = 'Tell the users.'; Reference = '' } }
         )
 
         $html = ConvertTo-SPSInventoryHtml -InputObject @() -Alert $alerts
 
         $html | Should -Match '<h2 id="alerts">Alerts and remediation</h2>'
         $html | Should -Match '<a href="#alerts">Alerts</a>'
-        $html | Should -Match '<strong>6</strong> alert\(s\) of <strong>3</strong> type\(s\): <strong>2</strong> high and <strong>4</strong> medium'
+        $html | Should -Match '<strong>8</strong> alert\(s\) of <strong>4</strong> type\(s\): <strong>2</strong> high, <strong>4</strong> medium and <strong>2</strong> low'
         $html | Should -Match '(?s)<table class="alerts">.*<th>Severity</th><th>Alert</th><th class="num">Affected</th><th>What it means</th><th>What to do</th><th>Reference</th>'
-        $html | Should -Match '(?s)<td>InfoPath</td>.*<td>CheckedOutFiles</td>.*<td>FileVersions</td>'
+        $html | Should -Match '(?s)<td>InfoPath</td>.*<td>CheckedOutFiles</td>.*<td>FileVersions</td>.*<td>AlertSubscriptions</td>'
+        $html | Should -Match '<span class="pill no">Low</span></td><td>AlertSubscriptions</td><td class="num">2</td>'
+        $html | Should -Match 'Users have SharePoint alerts \(Alert Me subscriptions\) on this site; migration tools do not migrate them\.'
         $html | Should -Match '<span class="pill yes">High</span></td><td>InfoPath</td><td class="num">2</td>'
         $html | Should -Match '<span class="pill warn">Medium</span></td><td>CheckedOutFiles</td><td class="num">3</td>'
         $html | Should -Match 'Checked-out files were detected and should be checked in before migration\.'

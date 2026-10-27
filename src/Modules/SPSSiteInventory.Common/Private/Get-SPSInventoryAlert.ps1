@@ -99,6 +99,9 @@
         if ($scope -eq 'SiteCollection' -and [int]$record.ExternalListCount -gt 0) {
             $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'ExternalLists' -Url $($record.Url) -Value $([int]$record.ExternalListCount)))
         }
+        if ($scope -eq 'SiteCollection' -and [int]$record.SharePointAlertCount -gt 0) {
+            $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'AlertSubscriptions' -Url $($record.Url) -Value $([int]$record.SharePointAlertCount)))
+        }
         if ($scope -eq 'SiteCollection' -and [bool]$record.IsUnsupportedSiteTemplate) {
             $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'UnsupportedSiteTemplate' -Url $($record.Url) -Value $($record.Template) -Message ([string]$record.TemplateCompatibilityReason)))
         }

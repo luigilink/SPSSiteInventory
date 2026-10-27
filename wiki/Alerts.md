@@ -4,6 +4,8 @@ SPSSiteInventory turns the signals it collects into **alerts**. An alert says th
 collection, a web application or the farm has something to deal with before or after the
 migration, how serious it is, and what to do about it. Alerts are about risks found by the
 inventory; they are not the SharePoint alerts (Alert Me subscriptions) that users configured.
+Those are inventoried in their own `*-sharepointalerts-*` files (see
+[Usage](Usage#sharepoint-alerts)) and raise a single `Low` alert per site collection.
 
 ## Where to find them
 
@@ -18,7 +20,7 @@ Each alert has these fields:
 | Field | Description |
 | --- | --- |
 | `AlertType` | The kind of alert, from the table below. |
-| `Severity` | `High` for a finding that blocks or breaks a migration, `Medium` for one that needs a plan or a check. |
+| `Severity` | `High` for a finding that blocks or breaks a migration, `Medium` for one that needs a plan or a check, `Low` for information to pass on. |
 | `Url` | The site collection or web application the alert is about. Empty for farm-wide alerts. |
 | `Value` | What raised the alert: a count, a state, a template or a LOB system name. |
 | `Message` | What was detected and why it matters. For the template alerts it is the reason of the mapping. |
@@ -50,6 +52,7 @@ a starting point: confirm it against your own target and plan.
 | `HtmlFiles` | Medium | `HtmlFileCount` is above 0. | Warn the site owners. If the files must open in the browser, rename them to .aspx (this needs designer access to the site); otherwise users are prompted to download them, which also affects Page Viewer web parts. [Microsoft Learn](https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-browser-file-handling) |
 | `ManagedMetadataColumns` | Medium | `ManagedMetadataListCount` is above 0. | Migrate these lists close to the term store migration, then check that items in them can still be created and edited. [Microsoft Learn](https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-managed-metadata-columns) |
 | `ExternalLists` | High | `ExternalListCount` is above 0. | Plan a replacement for each scenario, for example with Power Apps and its connectors; the on-premises data gateway reaches on-premises data. There is no direct migration. [Microsoft Learn](https://learn.microsoft.com/en-us/sharepoint/business-connectivity-services-retirement) |
+| `AlertSubscriptions` | Low | `SharePointAlertCount` is above 0. | Tell the users, before and after the migration, that they must set up their alerts again. The SharePoint alerts CSV and JSON files list each alert with its owner, so that you can give every owner the alerts to recreate. [Microsoft Learn](https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-alerts) |
 | `UnsupportedSiteTemplate` | High | The site template is mapped as unsupported (`IsUnsupportedSiteTemplate`). The message is the mapping reason. | Check what the Team Site template that receives the content lacks compared with the source site, plan the rebuild of those features and validate the site after the migration. [Microsoft Learn](https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-unsupported-site-templates) |
 | `TemplateCompatibilityReview` | Medium | The template compatibility is `Review` and the template is not unsupported. The message is the mapping reason. | Check the template against the templates your target supports. If it is not covered, treat the site like one with an unsupported template. [Microsoft Learn](https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-unsupported-site-templates) |
 | `TemplateLanguageReview` | Medium | `TemplateLanguageReviewRequired` is true. The message is the language reason. | Plan for someone who reads the language of the site to validate the migrated content during user acceptance testing. [Microsoft Learn](https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-site-template-language) |

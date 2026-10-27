@@ -193,6 +193,7 @@
         [PSCustomObject]@{ Label = 'Sites with HTML files'; Count = @($siteRecords | Where-Object { [int]$_.HtmlFileCount -gt 0 }).Count }
         [PSCustomObject]@{ Label = 'Sites with managed metadata columns'; Count = @($siteRecords | Where-Object { [int]$_.ManagedMetadataListCount -gt 0 }).Count }
         [PSCustomObject]@{ Label = 'Sites with external lists'; Count = @($siteRecords | Where-Object { [int]$_.ExternalListCount -gt 0 }).Count }
+        [PSCustomObject]@{ Label = 'Sites with SharePoint alerts'; Count = @($siteRecords | Where-Object { [int]$_.SharePointAlertCount -gt 0 }).Count }
         [PSCustomObject]@{ Label = 'Sites in web applications with permissive browser file handling'; Count = @($siteRecords | Where-Object { [string]$_.BrowserFileHandling -eq 'Permissive' }).Count }
         [PSCustomObject]@{ Label = 'Sites above large-size threshold'; Count = @($siteRecords | Where-Object { $_.IsLargeSite }).Count }
         [PSCustomObject]@{ Label = 'Sites with large lists'; Count = @($siteRecords | Where-Object { [int]$_.LargeListCount -gt 0 }).Count }
@@ -449,8 +450,9 @@ td.muted, .muted { color: var(--muted); }
         )
         $highAlertCount = @($alertRows | Where-Object { [string]$_.Severity -eq 'High' }).Count
         $mediumAlertCount = @($alertRows | Where-Object { [string]$_.Severity -eq 'Medium' }).Count
+        $lowAlertCount = @($alertRows | Where-Object { [string]$_.Severity -eq 'Low' }).Count
         [void]$sb.AppendLine('<h2 id="alerts">Alerts and remediation</h2>')
-        [void]$sb.AppendLine(('<p><strong>{0}</strong> alert(s) of <strong>{1}</strong> type(s): <strong>{2}</strong> high and <strong>{3}</strong> medium. Each type shows how many site collections or web applications it concerns and what to do about it. The alert of each site collection, with its URL, is in the alerts CSV and JSON files.</p>' -f $alertRows.Count, $alertGroups.Count, $highAlertCount, $mediumAlertCount))
+        [void]$sb.AppendLine(('<p><strong>{0}</strong> alert(s) of <strong>{1}</strong> type(s): <strong>{2}</strong> high, <strong>{3}</strong> medium and <strong>{4}</strong> low. Each type shows how many site collections or web applications it concerns and what to do about it. The alert of each site collection, with its URL, is in the alerts CSV and JSON files.</p>' -f $alertRows.Count, $alertGroups.Count, $highAlertCount, $mediumAlertCount, $lowAlertCount))
         if ($alertGroups.Count -gt 0) {
             [void]$sb.AppendLine('<div class="table-scroll"><table class="alerts">')
             [void]$sb.AppendLine('<thead><tr><th>Severity</th><th>Alert</th><th class="num">Affected</th><th>What it means</th><th>What to do</th><th>Reference</th></tr></thead><tbody>')
@@ -802,6 +804,7 @@ td.muted, .muted { color: var(--muted); }
         @{ Key = 'ManagedMetadataExamples'; Label = 'Managed metadata examples'; Class = 'reasons'; Type = 'text' }
         @{ Key = 'ExternalListCount'; Label = 'External lists'; Class = 'num'; Type = 'num' }
         @{ Key = 'ExternalListExamples'; Label = 'External list examples'; Class = 'reasons'; Type = 'text' }
+        @{ Key = 'SharePointAlertCount'; Label = 'SharePoint alerts'; Class = 'num'; Type = 'num' }
         @{ Key = 'SizeGB'; Label = 'Size (GB)'; Class = 'num'; Type = 'num' }
         @{ Key = 'SubWebCount'; Label = 'Sub-webs'; Class = 'num'; Type = 'num' }
         @{ Key = 'LastModified'; Label = 'Last modified'; Class = ''; Type = 'text' }

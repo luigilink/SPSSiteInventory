@@ -8,7 +8,9 @@
         the same signal always produces the same severity, explanation and advice, and a
         reader of the report knows what to do next. An entry holds:
 
-        - Severity: High or Medium. High is for findings that block or break a migration.
+        - Severity: High, Medium or Low. High is for findings that block or break a
+          migration, Medium for findings that need a plan or a check, and Low for
+          information to pass on, such as telling users what the migration does not carry.
         - Message: what was detected and why it matters. Alerts whose message depends on the
           record, such as the template reasons, replace it with their own text.
         - Remediation: the next step, written from the guidance of the SharePoint Migration
@@ -126,6 +128,12 @@
             Message     = 'External lists depend on BCS, which Microsoft retired in SharePoint Online on 30 September 2024: they cannot be migrated, so plan a replacement such as Power Apps.'
             Remediation = 'Plan a replacement for each scenario, for example with Power Apps and its connectors; the on-premises data gateway reaches on-premises data. There is no direct migration.'
             Reference   = 'https://learn.microsoft.com/en-us/sharepoint/business-connectivity-services-retirement'
+        }
+        AlertSubscriptions = @{
+            Severity    = 'Low'
+            Message     = 'Users have SharePoint alerts (Alert Me subscriptions) on this site; migration tools do not migrate them.'
+            Remediation = 'Tell the users, before and after the migration, that they must set up their alerts again. The SharePoint alerts CSV and JSON files list each alert with its owner, so that you can give every owner the alerts to recreate.'
+            Reference   = 'https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-alerts'
         }
         UnsupportedSiteTemplate = @{
             Severity    = 'High'

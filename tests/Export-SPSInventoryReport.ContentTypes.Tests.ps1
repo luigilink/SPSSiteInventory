@@ -528,6 +528,101 @@ Describe 'Export-SPSInventoryReport content types' {
         Get-AlertCount -Alerts $alerts -Type 'ExternalLists' | Should -Be 0
     }
 
+    It 'writes the SharePoint alerts CSV and JSON, manifest entries and one low alert per site, without the rows in the HTML' {
+        $sites = @([PSCustomObject]@{
+            InventoryScope = 'SiteCollection'; Url = 'https://intranet/sites/team'; WebApp = 'Intranet'
+            AssessmentStatus = 'Complete'; Category = 1; SharePointAlertCount = 2
+        })
+        $rows = @(
+            [PSCustomObject]@{
+                SiteUrl = 'https://intranet/sites/team'; WebUrl = 'https://intranet/sites/team'; AlertId = '11111111-1111-1111-1111-111111111111'
+                Title = 'Documents, & more'; AlertTemplateName = 'SPAlertTemplateType.DocumentLibrary'; AlertType = 'List'
+                ListUrl = 'Shared Documents'; ListId = '22222222-2222-2222-2222-222222222222'; ItemId = ''
+                EventType = 'All'; AlertFrequency = 'Daily'; AlertTime = '2026-10-27 08:30'; Status = 'On'
+                DeliveryChannels = 'Email'; AlwaysNotify = $true; DynamicRecipient = ''; Filter = '<Query />'
+                UserId = 7; UserLoginName = 'i:0#.w|contoso\anna'
+            }
+            [PSCustomObject]@{
+                SiteUrl = 'https://intranet/sites/team'; WebUrl = 'https://intranet/sites/team/sub'; AlertId = '33333333-3333-3333-3333-333333333333'
+                Title = 'Item alert'; AlertTemplateName = ''; AlertType = 'Item'
+                ListUrl = 'Lists/Tasks'; ListId = '44444444-4444-4444-4444-444444444444'; ItemId = '42'
+                EventType = 'Modify'; AlertFrequency = 'Immediate'; AlertTime = ''; Status = 'Off'
+                DeliveryChannels = 'Email'; AlwaysNotify = $false; DynamicRecipient = ''; Filter = ''
+                UserId = 8; UserLoginName = ''
+            }
+        )
+
+        $output = Export-SPSInventoryReport -InputObject $sites -SharePointAlerts $rows -OutputFolder $TestDrive -BaseName 'SpAlerts'
+
+        $csvRows = @(Import-Csv $output.SharePointAlertsCsvPath)
+        $csvRows | Should -HaveCount 2
+        (Get-Content $output.SharePointAlertsCsvPath -TotalCount 1) | Should -Be '"SiteUrl","WebUrl","AlertId","Title","AlertTemplateName","AlertType","ListUrl","ListId","ItemId","EventType","AlertFrequency","AlertTime","Status","DeliveryChannels","AlwaysNotify","DynamicRecipient","Filter","UserId","UserLoginName"'
+        $csvRows[0].Title | Should -Be 'Documents, & more'
+        $csvRows[0].UserLoginName | Should -Be 'i:0#.w|contoso\anna'
+        $csvRows[1].ItemId | Should -Be '42'
+        $jsonRows = Get-Content $output.SharePointAlertsJsonPath -Raw | ConvertFrom-Json
+        Get-RowCount -Rows $jsonRows | Should -Be 2
+        $jsonRows[0].AlwaysNotify | Should -BeTrue
+        $jsonRows[1].Status | Should -Be 'Off'
+        $manifest = Get-Content $output.ManifestJsonPath -Raw | ConvertFrom-Json
+        $manifest.Files.SharePointAlertsCsv | Should -Be $output.SharePointAlertsCsvPath
+        $manifest.Files.SharePointAlertsJson | Should -Be $output.SharePointAlertsJsonPath
+        $alerts = Get-Content $output.AlertsJsonPath -Raw | ConvertFrom-Json
+        Get-AlertCount -Alerts $alerts -Type 'AlertSubscriptions' -Url 'https://intranet/sites/team' | Should -Be 1
+        $alert = @($alerts | Where-Object { $_.AlertType -eq 'AlertSubscriptions' })[0]
+        $alert.Value | Should -Be 2
+        $alert.Severity | Should -Be 'Low'
+        $alert.Reference | Should -Be 'https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-alerts'
+        $html = Get-Content $output.HtmlPath -Raw
+        $html | Should -Match 'Sites with SharePoint alerts'
+        $html | Should -Not -Match 'anna'
+        $html | Should -Not -Match 'Documents, &amp; more'
+        (Get-Content $output.SitesJsonPath -Raw | ConvertFrom-Json)[0].SharePointAlertCount | Should -Be 2
+    }
+
+    It 'writes a valid empty SharePoint alerts report instead of dropping the files' {
+        $output = Export-SPSInventoryReport -InputObject @() -SharePointAlerts @() -OutputFolder $TestDrive -BaseName 'EmptySpAlerts'
+
+        (Get-Content $output.SharePointAlertsCsvPath -TotalCount 1) | Should -Match 'UserLoginName'
+        @(Import-Csv $output.SharePointAlertsCsvPath) | Should -HaveCount 0
+        Get-RowCount -Rows (Get-Content $output.SharePointAlertsJsonPath -Raw | ConvertFrom-Json) | Should -Be 0
+        (Get-Content $output.ManifestJsonPath -Raw | ConvertFrom-Json).Files.SharePointAlertsJson | Should -Be $output.SharePointAlertsJsonPath
+    }
+
+    It 'does not create SharePoint alert files when callers omit the optional parameter' {
+        $sites = @([PSCustomObject]@{ Url = 'https://intranet/sites/team'; Category = 1; SharePointAlertCount = 3 })
+
+        $output = Export-SPSInventoryReport -InputObject $sites -OutputFolder $TestDrive -BaseName 'NoSpAlertFiles'
+
+        $output.SharePointAlertsCsvPath | Should -BeNullOrEmpty
+        $output.SharePointAlertsJsonPath | Should -BeNullOrEmpty
+        @(Get-ChildItem $TestDrive 'NoSpAlertFiles-sharepointalerts-*') | Should -HaveCount 0
+        $manifest = Get-Content $output.ManifestJsonPath -Raw | ConvertFrom-Json
+        $manifest.Files.SharePointAlertsJson | Should -BeNullOrEmpty
+    }
+
+    It 'does not write a SharePoint alerts alert for empty counts, absent signals or web application failure rows' {
+        $records = @(
+            [PSCustomObject]@{
+                InventoryScope = 'SiteCollection'; Url = 'https://intranet/sites/plain'; WebApp = 'Intranet'
+                AssessmentStatus = 'Complete'; Category = 1; SharePointAlertCount = 0
+            },
+            [PSCustomObject]@{
+                InventoryScope = 'SiteCollection'; Url = 'https://intranet/sites/legacy-row'; WebApp = 'Intranet'
+                AssessmentStatus = 'Complete'; Category = 1
+            },
+            [PSCustomObject]@{
+                InventoryScope = 'WebApplication'; Url = 'https://other'; WebAppUrl = 'https://other'
+                AssessmentStatus = 'Failed'; Category = $null; SharePointAlertCount = 4
+            }
+        )
+
+        $output = Export-SPSInventoryReport -InputObject $records -OutputFolder $TestDrive -BaseName 'NoSpAlert'
+        $alerts = Get-Content $output.AlertsJsonPath -Raw | ConvertFrom-Json
+
+        Get-AlertCount -Alerts $alerts -Type 'AlertSubscriptions' | Should -Be 0
+    }
+
     It 'writes the BCS CSV and JSON, manifest entries and one alert per LOB system' {
         $applications = @(
             [PSCustomObject]@{

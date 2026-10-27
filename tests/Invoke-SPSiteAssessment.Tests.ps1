@@ -57,6 +57,8 @@ Describe 'Invoke-SPSiteAssessment' {
                     ExternalListCount = 2
                     ExternalListExamples = 'Customers (Contoso.Crm.Customer); Orders (Contoso.Sap.Order)'
                     ExternalLists = @([PSCustomObject]@{ ListTitle = 'Customers' }, [PSCustomObject]@{ ListTitle = 'Orders' })
+                    SharePointAlertCount = 3
+                    SharePointAlerts = @([PSCustomObject]@{ Title = 'Alert A' }, [PSCustomObject]@{ Title = 'Alert B' })
                     InfoPathFormCount = 0
                     IrmEnabledListCount = 0
                     IsLargeSite = $false
@@ -116,6 +118,7 @@ Describe 'Invoke-SPSiteAssessment' {
             $result.Inventory[0].ManagedMetadataExamples | Should -Be 'Contracts (Department, Region); Projects (Department)'
             $result.Inventory[0].ExternalListCount | Should -Be 2
             $result.Inventory[0].ExternalListExamples | Should -Be 'Customers (Contoso.Crm.Customer); Orders (Contoso.Sap.Order)'
+            $result.Inventory[0].SharePointAlertCount | Should -Be 3
             $result.Inventory[0].IsLargeSite | Should -BeFalse
             $result.Inventory[0].IsLockedSite | Should -BeFalse
             $result.Inventory[0].SiteLockState | Should -Be 'Unlock'
@@ -147,6 +150,7 @@ Describe 'Invoke-SPSiteAssessment' {
             $result.Inventory[1].ManagedMetadataExamples | Should -BeNullOrEmpty
             $result.Inventory[1].ExternalListCount | Should -BeNullOrEmpty
             $result.Inventory[1].ExternalListExamples | Should -BeNullOrEmpty
+            $result.Inventory[1].SharePointAlertCount | Should -BeNullOrEmpty
             $result.Inventory[1].IsLargeSite | Should -BeNullOrEmpty
             $result.Inventory[1].IsLockedSite | Should -BeNullOrEmpty
             $result.Inventory[1].SiteLockState | Should -BeNullOrEmpty
@@ -154,6 +158,7 @@ Describe 'Invoke-SPSiteAssessment' {
             @($result.ContentTypes).Count | Should -Be 0
             @($result.ManagedMetadataLists).Count | Should -Be 2
             @($result.ExternalLists).Count | Should -Be 4
+            @($result.SharePointAlerts).Count | Should -Be 4
             Should -Invoke Get-SPSite -Times 3 -Exactly
             Should -Invoke Get-SPSSiteCustomization -Times 2 -Exactly
             Should -Invoke Write-Progress -Times 4 -Exactly

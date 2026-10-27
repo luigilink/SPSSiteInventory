@@ -40,6 +40,7 @@
     $contentTypes = [System.Collections.Generic.List[object]]::new()
     $managedMetadataLists = [System.Collections.Generic.List[object]]::new()
     $externalLists = [System.Collections.Generic.List[object]]::new()
+    $sharePointAlerts = [System.Collections.Generic.List[object]]::new()
     $scored = [System.Collections.Generic.List[object]]::new()
     $siteTotal = $Inventory.Count
     $siteIndex = 0
@@ -107,6 +108,9 @@
                 }
                 foreach ($externalList in $signals.ExternalLists) {
                     $externalLists.Add($externalList)
+                }
+                foreach ($sharePointAlert in $signals.SharePointAlerts) {
+                    $sharePointAlerts.Add($sharePointAlert)
                 }
 
                 $result = Measure-SPSSiteComplexity -Signals $signals -Scoring $Scoring
@@ -184,6 +188,7 @@
                     ManagedMetadataExamples = $signals['ManagedMetadataExamples']
                     ExternalListCount = $signals['ExternalListCount']
                     ExternalListExamples = $signals['ExternalListExamples']
+                    SharePointAlertCount = $signals['SharePointAlertCount']
                     InfoPathFormCount = $signals['InfoPathFormCount']
                     IrmEnabledListCount = $signals['IrmEnabledListCount']
                     IsLargeSite = $signals['IsLargeSite']
@@ -270,6 +275,7 @@
                     ManagedMetadataExamples = $null
                     ExternalListCount = $null
                     ExternalListExamples = $null
+                    SharePointAlertCount = $null
                     InfoPathFormCount = $null
                     IrmEnabledListCount = $null
                     IsLargeSite = $null
@@ -313,5 +319,6 @@
         ContentTypes = $contentTypes.ToArray()
         ManagedMetadataLists = $managedMetadataLists.ToArray()
         ExternalLists = $externalLists.ToArray()
+        SharePointAlerts = $sharePointAlerts.ToArray()
     }
 }

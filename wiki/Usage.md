@@ -50,6 +50,7 @@ report pack, plus a dedicated farm-solution report, to the output folder:
 | `*-managedmetadata-*.csv` / `*-managedmetadata-*.json` | Managed metadata columns by list, following the SMAT Managed Metadata Columns report. One row per list or library with at least one visible managed metadata column. |
 | `*-externallists-*.csv` / `*-externallists-*.json` | External lists by list, following the SMAT External List report. One row per list backed by a Business Connectivity Services (BCS) external content type, with its BCS binding. |
 | `*-bcs-*.csv` / `*-bcs-*.json` | BCS LOB systems of the farm, following the SMAT BCS report. One row per LOB system, with its type, instances and entities. |
+| `*-sharepointalerts-*.csv` / `*-sharepointalerts-*.json` | SharePoint alerts ("Alert Me" subscriptions) by alert, following the SMAT Alerts report. One row per alert, with where it applies, what triggers it, how often it is sent and who owns it. Not the risk alerts of `*-alerts-*`. They contain the login names of the owners, so they are not part of the HTML report. |
 
 The HTML report also includes configured authentication by web application/zone,
 an alerts section that groups the alerts by type with what to do about each, a content-type
@@ -101,6 +102,7 @@ CSV/JSON rows describe site collections and any web-application enumeration fail
 | `ManagedMetadataListCount` / `ManagedMetadataColumnCount` | Lists with at least one visible managed metadata column, and those columns counted once per list. Enterprise Keywords is included; hidden columns are not |
 | `ManagedMetadataTermSetCount` / `ManagedMetadataExamples` | Distinct term sets, by ID, that those columns use in the site collection, and up to five lists with their column names |
 | `ExternalListCount` / `ExternalListExamples` | Lists backed by a BCS external content type (not migrated) and up to five examples with their entity |
+| `SharePointAlertCount` | SharePoint alerts ("Alert Me" subscriptions) of every user, in every web of the site collection. Migration tools do not migrate them. Exact even when the rows are capped |
 | `BrowserFileHandling` | Web application setting, `Strict` or `Permissive`. SharePoint Online enforces Strict |
 | `WebAppPolicyCount` / `WebAppPolicyExamples` | Web application policies (all zones and each zone), including accounts SharePoint adds itself, and the first ten as `user: permission levels`. They are not migrated |
 | `CustomizedPageCount` / `CustomizedPageExamples` | Customized (unghosted) pages at the root of each web, ignoring System Account edits, and up to five server-relative URLs. List view and form pages are not scanned |
@@ -229,6 +231,48 @@ In the example configuration a site with external lists is classed **Blocking** 
 4), like a site with InfoPath forms, because the scenario has to be rebuilt. The site
 collection itself can still be migrated without those lists. Remove `ExternalListCount`
 from `BlockingSignals` to treat it as remediation instead.
+
+### SharePoint alerts
+
+A SharePoint alert is an "Alert Me" subscription: a user asks to be notified when a list,
+a list item or a custom object changes. Migration tools do not migrate them, so each user
+has to set up the alerts again in the destination. The `*-sharepointalerts-*` files give
+you what you need to tell them what to recreate, like the SMAT Alerts report. They hold
+one row per alert, for every user of every web:
+
+| Field | Description |
+| --- | --- |
+| `SiteUrl` / `WebUrl` | The site collection and the web that hold the alert |
+| `AlertId` / `Title` / `AlertTemplateName` | The alert, its title and its template (for example the one for a document library) |
+| `AlertType` | `List`, `Item` or `Custom` |
+| `ListUrl` / `ListId` / `ItemId` | What the alert is on: the list URL relative to the web and its ID for a list or item alert, plus the item ID for an item alert. Empty for a custom alert, and `ListUrl` is also empty when the list no longer exists |
+| `EventType` | What triggers it: for example `All`, `Add`, `Modify` or `Delete` |
+| `AlertFrequency` / `AlertTime` | `Immediate`, `Daily` or `Weekly`. `AlertTime` is the time the digest is sent and is empty for an immediate alert |
+| `Status` | `On`, `Off` or `Error` |
+| `DeliveryChannels` / `AlwaysNotify` | How it is delivered, and whether a digest is sent even when nothing changed |
+| `DynamicRecipient` / `Filter` | The dynamic recipient field and the CAML filter of the alert, when it has one |
+| `UserId` / `UserLoginName` | The owner of the alert: the user ID in the site and the login name |
+
+`UserLoginName` is personal data, which is why these files are not part of the HTML report:
+handle them like any export that names users. It is empty when the owner is a system alert
+or no longer exists in the site. The HTML report shows the number of sites with alerts, the
+`SharePointAlertCount` column and the `AlertSubscriptions` alert, which has the `Low`
+severity.
+
+The rows are capped per site collection by `LargeContentThresholds.MaxAlertRowsPerSite`
+(5000 by default) while `SharePointAlertCount` stays exact. When the cap is reached, or
+when an alert cannot be read, the row is missing and the site is marked `Partial` with a
+warning: check `CustomizationInventoryComplete`. The warnings name the first five alerts of
+a site that cannot be read and count the others.
+
+To plan the work:
+
+1. Group the rows of `*-sharepointalerts-*` by `SiteUrl` to see which sites have the most
+   alerts, and by `UserLoginName` to tell each owner which alerts to recreate.
+2. Look at `Status`: an alert that is `Off` is not active today, so ask its owner before
+   recreating it. An alert without a `UserLoginName` has nobody to tell.
+3. Communicate before and after the migration, as the Microsoft guidance recommends: see
+   [Migration Assessment Scan: Alerts](https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-alerts).
 
 ### Migration categories
 

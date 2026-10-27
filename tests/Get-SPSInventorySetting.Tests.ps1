@@ -64,6 +64,14 @@ Describe 'Example settings file' {
         $without.Category | Should -Be 1
     }
 
+    It 'documents the alert row cap and keeps SharePoint alerts informational' {
+        $settings = Import-PowerShellDataFile -Path $script:ExamplePath
+
+        $settings.LargeContentThresholds.MaxAlertRowsPerSite | Should -Be 5000
+        $settings.Scoring.BlockingSignals | Should -Not -Contain 'SharePointAlertCount'
+        $settings.Scoring.Weights.ContainsKey('SharePointAlertCount') | Should -BeFalse
+    }
+
     It 'the shipped example is a valid settings file' {
         $repoRoot = Split-Path -Path $PSScriptRoot -Parent
         $example  = Join-Path $repoRoot 'src/config/inventory-settings.example.psd1'

@@ -22,7 +22,7 @@ Describe 'Get-SPSAlertCatalog' {
         foreach ($key in $script:Catalog.Keys) {
             $entry = $script:Catalog[$key]
 
-            $entry.Severity | Should -BeIn @('High', 'Medium') -Because "alert $key"
+            $entry.Severity | Should -BeIn @('High', 'Medium', 'Low') -Because "alert $key"
             [string]::IsNullOrWhiteSpace($entry.Message) | Should -BeFalse -Because "alert $key needs a message"
             [string]::IsNullOrWhiteSpace($entry.Remediation) | Should -BeFalse -Because "alert $key needs a remediation"
             $entry.Remediation | Should -Match '[.]$' -Because "alert $key remediation should be a sentence"

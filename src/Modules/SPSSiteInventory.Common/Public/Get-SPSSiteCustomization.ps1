@@ -81,6 +81,15 @@
         whose binding cannot be read is still counted, so it cannot hide a blocking
         signal; its row is left out and the collection is marked partial.
 
+        SharePointAlertCount counts the alerts on the site: the "Alert Me" subscriptions
+        of every user, in every web. Migration tools do not migrate them, so users have
+        to recreate them; the count is informational and is not scored by default.
+        SharePointAlerts holds one row per alert, like the SMAT Alerts report: where it
+        applies (web, list or item), what triggers it, how often it is sent, its status
+        and its owner. The rows are capped per site (MaxAlertRowsPerSite) while the count
+        stays exact; an alert that cannot be read, or rows left out by the cap, mark the
+        collection partial.
+
         The returned hashtable is designed to be passed straight to
         Measure-SPSSiteComplexity. CustomizationInventoryComplete is false when a signal
         cannot be read; partial results are returned with warnings rather than aborting
@@ -118,6 +127,7 @@
         MaxItemsForPublishingPageScanPerLibrary, which caps how many pages per Pages
         library are read to count page layouts, and MaxItemsForHtmlFileScanPerLibrary,
         which caps how many .htm and .html files are counted per library.
+        MaxAlertRowsPerSite caps how many alert rows are exported per site collection.
 
         .PARAMETER PermissionLevels
         Optional permission-level settings. BuiltInNames lists permission level names to
@@ -194,6 +204,7 @@
         ManagedMetadataExamples  = ''
         ExternalListCount        = 0
         ExternalListExamples     = ''
+        SharePointAlertCount     = 0
         InfoPathFormCount        = 0
         IrmEnabledListCount      = 0
         IsLargeSite              = $false
@@ -236,6 +247,11 @@
     $externalLists = [System.Collections.Generic.List[object]]::new()
     $externalListExamples = [System.Collections.Generic.List[string]]::new()
     $externalListCount = 0
+    $sharePointAlerts = [System.Collections.Generic.List[object]]::new()
+    $alertUserLogins = @{}
+    $alertRowsLeftOut = $false
+    $unreadableAlertCount = 0
+    $maxAlertWarnings = 5
     $publishingLayouts = [System.Collections.Generic.Dictionary[string, object]]::new([System.StringComparer]::OrdinalIgnoreCase)
 
     $largeListItemThreshold = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'LargeListItemCount' -DefaultValue 5000 -MinimumValue 1)
@@ -250,6 +266,7 @@
     $publishingWebFeatureId = '94c94ca6-b32f-4da9-a9e3-1f3d343d7ecb'
     $pagesLibraryTemplateId = 850
     $maxHtmlFileScan = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'MaxItemsForHtmlFileScanPerLibrary' -DefaultValue 2000 -MinimumValue 1)
+    $maxAlertRows = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'MaxAlertRowsPerSite' -DefaultValue 5000 -MinimumValue 1)
     # Names SharePoint provisions with a None type, in English; PermissionLevels.BuiltInNames adds localized ones.
     $builtInPermissionLevelNames = @(
         'View Only', 'Approve', 'Manage Hierarchy', 'Restricted Interfaces for Translation',
@@ -1011,6 +1028,43 @@
                     Write-Warning -Message "Lists could not be fully enumerated on web '$($web.Url)': $($_.Exception.Message)"
                 }
 
+                # SPWeb.Alerts covers every user. The count stays exact; rows stop at the per-site cap.
+                try {
+                    $webAlerts = $web.Alerts
+                    if ($null -eq $webAlerts) {
+                        throw 'The alert collection is unavailable.'
+                    }
+                    $webAlertCount = Get-SPSPropertyValue -InputObject $webAlerts -Name 'Count'
+                    if ($null -eq $webAlertCount) {
+                        throw 'The alert count could not be read.'
+                    }
+                    $signals.SharePointAlertCount += [int]$webAlertCount
+
+                    if ([int]$webAlertCount -gt 0) {
+                        foreach ($webAlert in $webAlerts) {
+                            if ($sharePointAlerts.Count -ge $maxAlertRows) {
+                                $alertRowsLeftOut = $true
+                                break
+                            }
+                            try {
+                                $sharePointAlerts.Add((ConvertTo-SPSSharePointAlertRecord -Alert $webAlert -SiteUrl $Site.Url -WebUrl $web.Url -UserLoginCache $alertUserLogins))
+                            }
+                            catch {
+                                $signals.CustomizationInventoryComplete = $false
+                                $unreadableAlertCount++
+                                # A systematic failure would otherwise warn once per alert, and a site can hold thousands.
+                                if ($unreadableAlertCount -le $maxAlertWarnings) {
+                                    Write-Warning -Message "Could not read an alert on web '$($web.Url)': $($_.Exception.Message)"
+                                }
+                            }
+                        }
+                    }
+                }
+                catch {
+                    $signals.CustomizationInventoryComplete = $false
+                    Write-Warning -Message "Could not read the alerts on web '$($web.Url)': $($_.Exception.Message)"
+                }
+
                 # SharePoint 2013 platform: Workflow Manager subscriptions. An unavailable
                 # optional API stays best-effort; a connected read failure is incomplete data.
                 try {
@@ -1076,6 +1130,14 @@
         Write-Warning -Message "Webs could not be fully enumerated for '$($Site.Url)': $($_.Exception.Message)"
     }
 
+    if ($alertRowsLeftOut) {
+        $signals.CustomizationInventoryComplete = $false
+        Write-Warning -Message "Alert rows stopped after $maxAlertRows on site '$($Site.Url)'; SharePointAlertCount stays exact. Increase LargeContentThresholds.MaxAlertRowsPerSite to export more."
+    }
+    if ($unreadableAlertCount -gt $maxAlertWarnings) {
+        Write-Warning -Message "$($unreadableAlertCount - $maxAlertWarnings) more alert(s) could not be read on site '$($Site.Url)'; only the first $maxAlertWarnings are reported."
+    }
+
     $signals.ContentTypeCount = $contentTypeIds.Count
     $signals.ContentTypes = $contentTypes.ToArray()
     $signals.LargeListExamples = $largeListExamples -join '; '
@@ -1095,6 +1157,7 @@
     $signals.ExternalListCount = $externalListCount
     $signals.ExternalListExamples = $externalListExamples -join '; '
     $signals.ExternalLists = $externalLists.ToArray()
+    $signals.SharePointAlerts = $sharePointAlerts.ToArray()
     $signals.PublishingPageLayoutCount = $publishingLayouts.Count
     $signals.PublishingPageLayoutExamples = @(
         $publishingLayouts.Values |
