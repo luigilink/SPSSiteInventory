@@ -41,6 +41,13 @@ public class SPSTestDescriptiveList
     public DateTime LastItemModifiedDate { get { if (FailDate) { throw new InvalidOperationException("date unavailable"); } return new DateTime(2026, 3, 4, 10, 20, 30); } }
 }
 
+public enum SPSTestListTemplateType
+{
+    GenericList = 100,
+    DocumentLibrary = 101,
+    NamedNewsfeed = 544
+}
+
 public class SPSTestHiddenList
 {
     public object Fields { get; set; }
@@ -133,10 +140,18 @@ Describe 'ConvertTo-SPSManagedMetadataListRecord' {
     }
 
     It 'returns null for the newsfeed list (template 544) even when it is not flagged as hidden' {
-        foreach ($template in @(544, '544')) {
+        foreach ($template in @(544, '544', [SPSTestListTemplateType]::NamedNewsfeed)) {
             $list = Get-TestList -Fields @((Get-TestField -Title 'HashTags' -Type 'TaxonomyFieldTypeMulti')) -BaseTemplate $template -Hidden $false
 
             Convert-List -List $list | Should -BeNullOrEmpty
+        }
+    }
+
+    It 'still reports a list whose template is an enum value or a name that is not the newsfeed list' {
+        foreach ($template in @([SPSTestListTemplateType]::DocumentLibrary, [SPSTestListTemplateType]::GenericList, 'DocumentLibrary', 101)) {
+            $list = Get-TestList -Fields @((Get-TestField)) -BaseTemplate $template -Hidden $false
+
+            (Convert-List -List $list).ListTitle | Should -Be 'Contracts'
         }
     }
 

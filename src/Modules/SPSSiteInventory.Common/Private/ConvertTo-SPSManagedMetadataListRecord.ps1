@@ -126,8 +126,16 @@
     if ($null -eq $listTemplate) {
         throw "The template of list '$listTitle' could not be read."
     }
-    # The newsfeed list, in case SharePoint does not flag it as hidden.
-    if ([string]$listTemplate -eq '544') {
+    # The newsfeed list, in case SharePoint does not flag it as hidden. SPList.BaseTemplate is an enum: a value
+    # without a name is written as its number, a value with a name as that name, so compare the number.
+    $templateNumber = 0
+    if ($listTemplate -is [System.ValueType]) {
+        $templateNumber = [System.Convert]::ToInt32($listTemplate)
+    }
+    elseif (-not [System.Int32]::TryParse([string]$listTemplate, [ref]$templateNumber)) {
+        $templateNumber = 0
+    }
+    if ($templateNumber -eq 544) {
         return $null
     }
     $listType = Get-SPSPropertyValue -InputObject $List -Name 'BaseType'
