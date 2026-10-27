@@ -24,7 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The script exits with code 1 when there is an error, accepts `-SkipSharePoint` to check a host
   that is not a farm server, and returns a summary object only with `-PassThru` (it used to return
   a small object of its own by default). The checks are the new public functions
-  `Get-SPSReadinessCheck` and `Write-SPSReadinessReport`. (#32)
+  `Get-SPSReadinessCheck` and `Write-SPSReadinessReport`. When the example configuration
+  file is not found, the check now shows a skipped `Comparison with the example` result
+  instead of silently leaving the comparison out; the verdict and the exit code do not
+  change. (#32, #89)
 - Workflow counts now exclude historical "previous version" workflow associations
   when SharePoint metadata flags them (with a marker-based fallback for English
   and French previous-version names when metadata is unavailable), so migration

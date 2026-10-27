@@ -349,11 +349,45 @@ Describe 'Get-SPSReadinessCheck' {
             $result.Detail | Should -Match 'could not be read'
         }
 
+        It 'is skipped, with the path, when the example file does not exist' {
+            $missingExample = Join-Path -Path $TestDrive -ChildPath 'no-such-example.psd1'
+
+            $checks = @(Get-SPSReadinessCheck -ConfigPath $script:SettingsPath -ExampleConfigPath $missingExample)
+            $result = Get-TestResult -Check $checks -Name 'Comparison with the example'
+
+            $result.Section | Should -Be 'Settings'
+            $result.Status | Should -Be 'Skipped'
+            $result.IsBlocking | Should -BeFalse
+            $result.Detail | Should -Be ('The example settings file was not found at {0}: the blocking signals and the weights were not compared.' -f $missingExample)
+            Get-TestResult -Check $checks -Name 'Blocking signals' | Should -BeNullOrEmpty
+            Get-TestResult -Check $checks -Name 'Signal weights' | Should -BeNullOrEmpty
+        }
+
+        It 'does not change the verdict when the example file does not exist' {
+            $missingExample = Join-Path -Path $TestDrive -ChildPath 'no-such-example.psd1'
+
+            $checks = @(Get-SPSReadinessCheck -ConfigPath $script:SettingsPath -ExampleConfigPath $missingExample)
+            $report = Write-SPSReadinessReport -Check $checks 6>$null
+
+            @($checks | Where-Object { $_.Status -ne 'OK' }) | Should -HaveCount 1
+            $report.IsReady | Should -BeTrue
+            $report.ErrorCount | Should -Be 0
+            $report.WarningCount | Should -Be 0
+            $report.SkippedCount | Should -Be 1
+        }
+
+        It 'adds no comparison result when the example path is empty' {
+            $checks = @(Get-SPSReadinessCheck -ConfigPath $script:SettingsPath -ExampleConfigPath '')
+
+            Get-TestResult -Check $checks -Name 'Comparison with the example' | Should -BeNullOrEmpty
+        }
+
         It 'does not compare when no example is given' {
             $checks = @(Get-SPSReadinessCheck -ConfigPath $script:SettingsPath)
 
             Get-TestResult -Check $checks -Name 'Blocking signals' | Should -BeNullOrEmpty
             Get-TestResult -Check $checks -Name 'Signal weights' | Should -BeNullOrEmpty
+            Get-TestResult -Check $checks -Name 'Comparison with the example' | Should -BeNullOrEmpty
         }
     }
 
