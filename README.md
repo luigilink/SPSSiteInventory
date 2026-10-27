@@ -30,6 +30,7 @@ Microsoft's assessment tooling has shifted: **SMAT reaches end of support on 1 O
 - 📖 [Documentation (Wiki)](https://github.com/luigilink/SPSSiteInventory/wiki)
 - 🚀 [Getting Started](https://github.com/luigilink/SPSSiteInventory/wiki/Getting-Started)
 - ⚙️ [Configuration reference](https://github.com/luigilink/SPSSiteInventory/wiki/Configuration)
+- 🧪 [Lab testing](https://github.com/luigilink/SPSSiteInventory/wiki/Lab-Testing) (test a release on a lab farm)
 - 📝 [Changelog](CHANGELOG.md)
 - 🔒 [Security policy](SECURITY.md)
 - 🤝 [Contributing](.github/CONTRIBUTING.md)

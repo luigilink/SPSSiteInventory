@@ -150,6 +150,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   remediation (rebuild them, for example with Power Automate), like `Workflow2010` does for the
   2010 engine. `Workflow2013Running` moves from `Medium` to `High`, because a running instance
   cannot be restarted in SharePoint Online any more. (#66)
+- Added the lab scripts (`tools/lab`, not part of the release package) to test a release on a lab
+  SharePoint farm. `Invoke-SPSLabTest.ps1` creates small, labeled site collections that trigger
+  known signals (subsites, locks, large content, permissions, alerts, publishing, InfoPath, event
+  receivers, custom master page, a blog template and, best effort, workflows, IRM and incoming
+  e-mail), writes lab settings from the example configuration of the toolkit being tested with the
+  large-content thresholds lowered, runs the inventory, checks the reports against what each
+  scenario must produce (PASS, FAIL, INFO or SKIP, with the actual values and the assessment of
+  every lab site), and removes the lab, and only the lab, on request. Tests keep the expectations
+  in line with the inventory record and the alert catalog. The wiki page "Lab testing" documents
+  the scenarios and what stays manual. (#75)
 - Zone-aware web application authentication inventory, including mixed Windows/FBA,
   membership/role provider names and explicit identity-review flags. The example
   configuration treats `HasFbaZone` as a SharePoint Online migration blocker.

@@ -26,6 +26,8 @@ The single source of truth for the version is `ModuleVersion` in
    git push origin vX.Y.Z
    ```
 
+Before step 6, you can test the release on a lab farm: see [Lab testing](Lab-Testing).
+
 ## What the automation does
 
 - **Pester workflow** (`pester.yml`) — runs the Pester suite (under both PowerShell 7 and Windows PowerShell 5.1) and PSScriptAnalyzer on every pull request to `main`.
