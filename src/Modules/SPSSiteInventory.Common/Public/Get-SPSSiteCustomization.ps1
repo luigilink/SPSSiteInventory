@@ -383,15 +383,16 @@
         $hasWriteLocked = $null -ne $writeLockedProperty -and $null -ne $writeLockedProperty.Value
         $hasReadOnly = $null -ne $readOnlyProperty -and $null -ne $readOnlyProperty.Value
 
+        # From the most to the least restrictive: SharePoint also sets WriteLocked on a read-only site collection.
         $lockState = 'Unknown'
         if ($hasReadLocked -and [bool]$Site.ReadLocked) {
             $lockState = 'NoAccess'
         }
-        elseif ($hasWriteLocked -and [bool]$Site.WriteLocked) {
-            $lockState = 'NoAdditions'
-        }
         elseif ($hasReadOnly -and [bool]$Site.ReadOnly) {
             $lockState = 'ReadOnly'
+        }
+        elseif ($hasWriteLocked -and [bool]$Site.WriteLocked) {
+            $lockState = 'NoAdditions'
         }
         elseif ($hasReadLocked -and $hasWriteLocked -and $hasReadOnly) {
             $lockState = 'Unlock'

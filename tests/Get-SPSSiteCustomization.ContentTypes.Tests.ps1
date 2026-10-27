@@ -1402,6 +1402,25 @@ Describe 'Get-SPSSiteCustomization content types' {
         $signals.HasNoAccessLock | Should -BeFalse
     }
 
+    It 'flags a ReadOnly lock as ReadOnly when SharePoint also sets the write lock' {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            ReadLocked = $false
+            WriteLocked = $true
+            ReadOnly = $true
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site
+
+        $signals.SiteLockState | Should -Be 'ReadOnly'
+        $signals.IsLockedSite | Should -BeTrue
+        $signals.HasNoAccessLock | Should -BeFalse
+    }
+
     It 'does not flag a NoAccess lock when the lock state cannot be determined' {
         $web = Get-TestWeb -Definitions @() -Bindings @()
         $site = [PSCustomObject]@{

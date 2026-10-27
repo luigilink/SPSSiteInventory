@@ -33,7 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Site scans now report IRM-enabled lists (`IrmEnabledListCount`) and site lock
   state (`SiteLockState` / `IsLockedSite`) in CSV/JSON/HTML outputs. The example
   scoring configuration treats both as migration blockers; for locks this was later
-  narrowed to `NoAccess` (#65). (#38)
+  narrowed to `NoAccess` (#65). A `ReadOnly` lock, which SharePoint also reports as
+  write-locked, is reported as `ReadOnly` and not as `NoAdditions`. (#38, #82)
 - Only a `NoAccess` site lock is a migration blocker in the example configuration now. A
   `NoAccess` lock makes the site unreadable, so the migration tools skip it, while `NoAdditions`
   and `ReadOnly` restrict changes only and are often a deliberate migration freeze. The new
