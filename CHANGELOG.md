@@ -14,6 +14,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pull request template now aligns with contribution guidelines by making
   validation expectations explicit (Pester, ScriptAnalyzer, docs/wiki updates,
   changelog, and Windows PowerShell 5.1 compatibility). (#30)
+- The readiness check (`Test-SPSSiteInventoryReadiness.ps1`) now shows one line per check with a
+  clear status, grouped by section like the readiness check of SPSUpdate: `[ OK ]`, `[WARN]`,
+  `[ERR ]` and `[SKIP]`, then a summary and a verdict that tells the operator whether the scan can
+  run (an error blocks it, a warning does not). It also checks that the session is elevated, that
+  the settings file loads and that its output folder is usable, that the farm can be reached and
+  that the web applications to scan exist, and it compares the settings with the example
+  configuration to list the blocking signals and weights that an older settings file does not have.
+  The script exits with code 1 when there is an error, accepts `-SkipSharePoint` to check a host
+  that is not a farm server, and returns a summary object only with `-PassThru` (it used to return
+  a small object of its own by default). The checks are the new public functions
+  `Get-SPSReadinessCheck` and `Write-SPSReadinessReport`. (#32)
 - Workflow counts now exclude historical "previous version" workflow associations
   when SharePoint metadata flags them (with a marker-based fallback for English
   and French previous-version names when metadata is unavailable), so migration

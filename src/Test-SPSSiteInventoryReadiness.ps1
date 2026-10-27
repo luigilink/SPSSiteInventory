@@ -1,22 +1,38 @@
 ﻿<#
     .SYNOPSIS
-    Checks that the host meets the SPSSiteInventory prerequisites.
+    Checks that the host is ready to run SPSSiteInventory.
 
     .DESCRIPTION
-    A quick, read-only readiness check to run before Invoke-SPSSiteInventory. It reports:
+    A quick, read-only readiness check to run before Invoke-SPSSiteInventory. It reports, one
+    line per check with a status (OK, Warning, Error or Skipped):
 
-    - the PowerShell edition and version (Windows PowerShell 5.1 is expected);
-    - whether SharePoint is installed (and its build number);
-    - whether the SharePoint commands can be loaded;
-    - whether the settings file exists.
+    - the toolkit module, the PowerShell edition and version (Windows PowerShell 5.1 is
+      expected) and whether the session is elevated;
+    - the settings file: that it exists and loads, that its output folder is usable, and which
+      blocking signals and weights of the example configuration it does not have yet;
+    - SharePoint: whether it is installed (and its build), whether the SharePoint commands
+      load, whether the farm can be reached, whether the account is a farm administrator and
+      whether the web applications to scan exist.
 
-    It changes nothing on the farm and returns a PSCustomObject summarizing the checks.
+    An error blocks the scan and a warning does not. The script exits with code 1 when there is
+    an error, or when the checks themselves could not run, so that it can gate an automated run,
+    and with 0 otherwise. It changes nothing on the farm and writes no file.
 
     .PARAMETER ConfigPath
-    Path to the inventory settings .psd1 file to check for existence.
+    Path to the inventory settings .psd1 file to check.
+
+    .PARAMETER SkipSharePoint
+    Skips the checks that need SharePoint, to check the host and the settings file on a machine
+    that is not a farm server.
+
+    .PARAMETER PassThru
+    Returns a summary object (counts, IsReady and the checks) in addition to the report.
 
     .EXAMPLE
     .\Test-SPSSiteInventoryReadiness.ps1
+
+    .EXAMPLE
+    .\Test-SPSSiteInventoryReadiness.ps1 -ConfigPath D:\Config\inventory-settings.psd1 -SkipSharePoint
 #>
 #Requires -Version 5.1
 [CmdletBinding()]
@@ -24,53 +40,39 @@ param
 (
     [Parameter()]
     [System.String]
-    $ConfigPath = (Join-Path -Path $PSScriptRoot -ChildPath 'config\inventory-settings.psd1')
+    $ConfigPath = (Join-Path -Path $PSScriptRoot -ChildPath 'config\inventory-settings.psd1'),
+
+    [Parameter()]
+    [switch]
+    $SkipSharePoint,
+
+    [Parameter()]
+    [switch]
+    $PassThru
 )
+
+$ErrorActionPreference = 'Stop'
 
 Import-Module -Name (Join-Path -Path $PSScriptRoot -ChildPath 'Modules\SPSSiteInventory.Common\SPSSiteInventory.Common.psd1') -Force
 
-$editionName = $PSVersionTable.PSEdition
-$psVersion = $PSVersionTable.PSVersion.ToString()
-$isWindowsPowerShell51 = ($PSVersionTable.PSVersion.Major -eq 5)
-
-$productVersion = Get-SPSInstalledProductVersion
-$sharePointInstalled = ($null -ne $productVersion)
-$buildNumber = if ($sharePointInstalled) {
-    '{0}.{1}.{2}.{3}' -f $productVersion.ProductMajorPart, $productVersion.ProductMinorPart, $productVersion.ProductBuildPart, $productVersion.ProductPrivatePart
+$exampleConfigPath = Join-Path -Path $PSScriptRoot -ChildPath 'config\inventory-settings.example.psd1'
+try {
+    $check = @(Get-SPSReadinessCheck -ConfigPath $ConfigPath -ExampleConfigPath $exampleConfigPath -SkipSharePoint:$SkipSharePoint)
 }
-else {
-    'not installed'
+catch {
+    # No check ran: do not show an empty report that says Ready.
+    Write-Error -Message "The readiness checks could not run: $($_.Exception.Message)" -ErrorAction Continue
+    exit 1
 }
+$summary = Write-SPSReadinessReport -Check $check
 
-$commandsLoadable = $false
-if ($sharePointInstalled) {
-    try {
-        Import-SPSSharePointCommand
-        $commandsLoadable = $null -ne (Get-Command -Name 'Get-SPWebApplication' -ErrorAction SilentlyContinue)
-    }
-    catch {
-        Write-Warning -Message "SharePoint commands could not be loaded: $($_.Exception.Message)"
-    }
+if ($PassThru) {
+    Write-Output $summary
 }
 
-$configExists = Test-Path -Path $ConfigPath
-
-$result = [PSCustomObject]@{
-    PowerShellEdition     = $editionName
-    PowerShellVersion     = $psVersion
-    IsWindowsPowerShell51 = $isWindowsPowerShell51
-    SharePointInstalled   = $sharePointInstalled
-    SharePointBuild       = $buildNumber
-    CommandsLoadable      = $commandsLoadable
-    ConfigFileExists      = $configExists
-    ConfigPath            = $ConfigPath
+# Set the exit code on both paths: a caller that runs the script with & would otherwise keep the
+# $LASTEXITCODE of an earlier command and could read a Ready report as a failure.
+if ($summary.IsReady) {
+    exit 0
 }
-
-Write-Output $result
-
-if (-not $isWindowsPowerShell51) {
-    Write-Warning -Message 'SPSSiteInventory targets Windows PowerShell 5.1 (SharePoint snap-in requirement). Run it with powershell.exe, not pwsh.'
-}
-if (-not $configExists) {
-    Write-Warning -Message "Settings file not found at '$ConfigPath'. Copy config\inventory-settings.example.psd1 and adjust it."
-}
+exit 1
