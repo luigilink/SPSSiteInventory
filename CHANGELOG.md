@@ -56,7 +56,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   large sites, large lists, large-list views, checked-out files, and files with
   high version counts. CSV/JSON/HTML outputs now surface these fields and
   examples; report-pack adds `-large-content-*.json`; alerts include dedicated
-  large-content entries. (#36)
+  large-content entries. The queries that read the checked-out files, the file
+  versions, the publishing pages and the HTML files are built with the `SPQuery`
+  type of the loaded SharePoint assemblies: a name without a public key token is
+  not resolved on a farm server. (#36, #80)
 - Added SMAT workflow running-instance parity signals:
   `Workflow2010RunningInstanceCount` and `Workflow2013RunningInstanceCount`,
   including CSV/JSON/HTML/report-pack fields and dedicated alerts, with
