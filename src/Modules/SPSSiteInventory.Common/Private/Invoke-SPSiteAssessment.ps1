@@ -39,6 +39,7 @@
 
     $contentTypes = [System.Collections.Generic.List[object]]::new()
     $managedMetadataLists = [System.Collections.Generic.List[object]]::new()
+    $externalLists = [System.Collections.Generic.List[object]]::new()
     $scored = [System.Collections.Generic.List[object]]::new()
     $siteTotal = $Inventory.Count
     $siteIndex = 0
@@ -103,6 +104,9 @@
                 }
                 foreach ($managedMetadataList in $signals.ManagedMetadataLists) {
                     $managedMetadataLists.Add($managedMetadataList)
+                }
+                foreach ($externalList in $signals.ExternalLists) {
+                    $externalLists.Add($externalList)
                 }
 
                 $result = Measure-SPSSiteComplexity -Signals $signals -Scoring $Scoring
@@ -178,6 +182,8 @@
                     ManagedMetadataColumnCount = $signals['ManagedMetadataColumnCount']
                     ManagedMetadataTermSetCount = $signals['ManagedMetadataTermSetCount']
                     ManagedMetadataExamples = $signals['ManagedMetadataExamples']
+                    ExternalListCount = $signals['ExternalListCount']
+                    ExternalListExamples = $signals['ExternalListExamples']
                     InfoPathFormCount = $signals['InfoPathFormCount']
                     IrmEnabledListCount = $signals['IrmEnabledListCount']
                     IsLargeSite = $signals['IsLargeSite']
@@ -262,6 +268,8 @@
                     ManagedMetadataColumnCount = $null
                     ManagedMetadataTermSetCount = $null
                     ManagedMetadataExamples = $null
+                    ExternalListCount = $null
+                    ExternalListExamples = $null
                     InfoPathFormCount = $null
                     IrmEnabledListCount = $null
                     IsLargeSite = $null
@@ -304,5 +312,6 @@
         Inventory = $scored.ToArray()
         ContentTypes = $contentTypes.ToArray()
         ManagedMetadataLists = $managedMetadataLists.ToArray()
+        ExternalLists = $externalLists.ToArray()
     }
 }

@@ -72,6 +72,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   report with a matching HTML section, and a dedicated alert, with guidance to migrate
   these lists close to the term store. A column or list property that cannot be read
   marks the site partial instead of reporting no managed metadata or an empty value. (#44)
+- Added SMAT BCS and external list parity: `ExternalListCount` / `ExternalListExamples`
+  (External List scan: lists backed by a Business Connectivity Services external content
+  type, detected through SharePoint's external data source flag) with a per-list
+  `-externallists-*` CSV/JSON report that records the LOB system instance, entity namespace
+  and entity of each list, and the new `Get-SPSBcsApplication`, which reads the Business
+  Data Connectivity metadata store (BCS scan) through the BDC proxy of each web
+  application's service application proxy group, without needing a site collection, into a
+  `-bcs-*` CSV/JSON report with the LOB system type, instances and entities. Stores are
+  identified by their BDC service application ID, not by catalog ID. They flow to scoring, CSV/JSON/HTML (external list and BCS sections), the
+  manifest and dedicated alerts (`ExternalLists`, `BcsApplication`, `BcsInventoryPartial`),
+  with guidance that BCS is retired in SharePoint Online and that these scenarios need a
+  replacement such as Power Apps. The example configuration weights `ExternalListCount` and
+  treats it as a migration blocker like InfoPath; the run warns when external lists are
+  found and an existing configuration does not list it in `Scoring.BlockingSignals`. Nothing is read from the external
+  systems and no connection setting or credential is collected. A list, LOB system, web
+  application or metadata store that cannot be read marks the site or the BCS report
+  partial, and an external list whose binding cannot be read is still counted. (#41)
 - Zone-aware web application authentication inventory, including mixed Windows/FBA,
   membership/role provider names and explicit identity-review flags. The example
   configuration treats `HasFbaZone` as a SharePoint Online migration blocker.

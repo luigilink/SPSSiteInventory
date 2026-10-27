@@ -427,4 +427,178 @@ Describe 'Export-SPSInventoryReport content types' {
 
         Get-AlertCount -Alerts $alerts -Type 'ManagedMetadataColumns' | Should -Be 0
     }
+
+    It 'writes the per-list external list CSV and JSON, manifest entries and one high alert per site' {
+        $sites = @([PSCustomObject]@{
+            InventoryScope = 'SiteCollection'; Url = 'https://intranet/sites/team'; WebApp = 'Intranet'
+            AssessmentStatus = 'Complete'; Category = 3
+            ExternalListCount = 2; ExternalListExamples = 'Customers (Contoso.Crm.Customer); Orders (Contoso.Sap.Order)'
+        })
+        $lists = @(
+            [PSCustomObject]@{
+                SiteUrl = 'https://intranet/sites/team'; WebUrl = 'https://intranet/sites/team'
+                ListTitle = 'Customers, & Prospects'; ListUrl = '/sites/team/Lists/Customers?a=1&b=2'
+                LobSystemInstance = 'CrmInstance'; EntityNamespace = 'Contoso.Crm'; Entity = 'Customer'
+            }
+            [PSCustomObject]@{
+                SiteUrl = 'https://intranet/sites/team'; WebUrl = 'https://intranet/sites/team/sub'
+                ListTitle = 'Orders'; ListUrl = '/sites/team/sub/Lists/Orders'
+                LobSystemInstance = 'SapInstance'; EntityNamespace = 'Contoso.Sap'; Entity = 'Order'
+            }
+        )
+
+        $output = Export-SPSInventoryReport -InputObject $sites -ExternalLists $lists -OutputFolder $TestDrive -BaseName 'ExtLists'
+
+        $csvRows = @(Import-Csv $output.ExternalListsCsvPath)
+        $csvRows | Should -HaveCount 2
+        $csvRows[0].ListTitle | Should -Be 'Customers, & Prospects'
+        $csvRows[0].ListUrl | Should -Be '/sites/team/Lists/Customers?a=1&b=2'
+        $csvRows[0].LobSystemInstance | Should -Be 'CrmInstance'
+        $csvRows[1].EntityNamespace | Should -Be 'Contoso.Sap'
+        (Get-Content $output.ExternalListsCsvPath -TotalCount 1) | Should -Be '"SiteUrl","WebUrl","ListTitle","ListUrl","LobSystemInstance","EntityNamespace","Entity"'
+        $jsonRows = Get-Content $output.ExternalListsJsonPath -Raw | ConvertFrom-Json
+        Get-RowCount -Rows $jsonRows | Should -Be 2
+        $jsonRows[1].Entity | Should -Be 'Order'
+        $manifest = Get-Content $output.ManifestJsonPath -Raw | ConvertFrom-Json
+        $manifest.Files.ExternalListsCsv | Should -Be $output.ExternalListsCsvPath
+        $manifest.Files.ExternalListsJson | Should -Be $output.ExternalListsJsonPath
+        $alerts = Get-Content $output.AlertsJsonPath -Raw | ConvertFrom-Json
+        Get-AlertCount -Alerts $alerts -Type 'ExternalLists' -Url 'https://intranet/sites/team' | Should -Be 1
+        $alert = @($alerts | Where-Object { $_.AlertType -eq 'ExternalLists' })[0]
+        $alert.Value | Should -Be 2
+        $alert.Severity | Should -Be 'High'
+        $alert.Message | Should -Match 'retired in SharePoint Online'
+        $alert.Message | Should -Match 'Power Apps'
+        $alert.Message | Should -Not -Match 'hybrid'
+        $html = Get-Content $output.HtmlPath -Raw
+        $html | Should -Match '<h2 id="external-lists">External lists</h2>'
+        $html | Should -Match 'Customers, &amp; Prospects'
+        (Get-Content $output.SitesJsonPath -Raw | ConvertFrom-Json)[0].ExternalListCount | Should -Be 2
+    }
+
+    It 'writes a valid empty external list report instead of dropping the files' {
+        $output = Export-SPSInventoryReport -InputObject @() -ExternalLists @() -OutputFolder $TestDrive -BaseName 'EmptyExt'
+
+        (Get-Content $output.ExternalListsCsvPath -TotalCount 1) | Should -Match 'LobSystemInstance'
+        @(Import-Csv $output.ExternalListsCsvPath) | Should -HaveCount 0
+        Get-RowCount -Rows (Get-Content $output.ExternalListsJsonPath -Raw | ConvertFrom-Json) | Should -Be 0
+        (Get-Content $output.ManifestJsonPath -Raw | ConvertFrom-Json).Files.ExternalListsJson | Should -Be $output.ExternalListsJsonPath
+        (Get-Content $output.HtmlPath -Raw) | Should -Match 'id="external-lists"'
+    }
+
+    It 'does not create external list or BCS files when callers omit the optional parameters' {
+        $sites = @([PSCustomObject]@{ Url = 'https://intranet/sites/team'; Category = 1 })
+
+        $output = Export-SPSInventoryReport -InputObject $sites -OutputFolder $TestDrive -BaseName 'NoBcsFiles'
+
+        $output.ExternalListsCsvPath | Should -BeNullOrEmpty
+        $output.ExternalListsJsonPath | Should -BeNullOrEmpty
+        $output.BcsCsvPath | Should -BeNullOrEmpty
+        $output.BcsJsonPath | Should -BeNullOrEmpty
+        @(Get-ChildItem $TestDrive 'NoBcsFiles-externallists-*') | Should -HaveCount 0
+        @(Get-ChildItem $TestDrive 'NoBcsFiles-bcs-*') | Should -HaveCount 0
+        $manifest = Get-Content $output.ManifestJsonPath -Raw | ConvertFrom-Json
+        $manifest.Files.ExternalListsJson | Should -BeNullOrEmpty
+        $manifest.Files.BcsJson | Should -BeNullOrEmpty
+        $manifest.Summary.BcsInventoryComplete | Should -BeNullOrEmpty
+        $html = Get-Content $output.HtmlPath -Raw
+        $html | Should -Not -Match 'id="external-lists"'
+        $html | Should -Not -Match 'id="bcs-applications"'
+    }
+
+    It 'does not write an external list alert for empty counts, absent signals or web application failure rows' {
+        $records = @(
+            [PSCustomObject]@{
+                InventoryScope = 'SiteCollection'; Url = 'https://intranet/sites/plain'; WebApp = 'Intranet'
+                AssessmentStatus = 'Complete'; Category = 1; ExternalListCount = 0
+            },
+            [PSCustomObject]@{
+                InventoryScope = 'SiteCollection'; Url = 'https://intranet/sites/legacy-row'; WebApp = 'Intranet'
+                AssessmentStatus = 'Complete'; Category = 1
+            },
+            [PSCustomObject]@{
+                InventoryScope = 'WebApplication'; Url = 'https://other'; WebAppUrl = 'https://other'
+                AssessmentStatus = 'Failed'; Category = $null; ExternalListCount = 4
+            }
+        )
+
+        $output = Export-SPSInventoryReport -InputObject $records -OutputFolder $TestDrive -BaseName 'NoExtAlert'
+        $alerts = Get-Content $output.AlertsJsonPath -Raw | ConvertFrom-Json
+
+        Get-AlertCount -Alerts $alerts -Type 'ExternalLists' | Should -Be 0
+    }
+
+    It 'writes the BCS CSV and JSON, manifest entries and one alert per LOB system' {
+        $applications = @(
+            [PSCustomObject]@{
+                WebApplicationUrls = 'https://intranet; https://extranet'; BdcServiceApplicationId = '11111111-1111-1111-1111-111111111111'
+                LobSystemName = 'Crm, & Billing'
+                LobSystemType = 'Wcf'; LobSystemInstances = 'CrmDev; CrmProd'; EntityCount = 2
+                LobEntities = 'Contoso.Crm.Account; Contoso.Crm.Customer'
+            }
+            [PSCustomObject]@{
+                WebApplicationUrls = 'https://intranet'; LobSystemName = 'SapSystem'
+                LobSystemType = 'DotNetAssembly'; LobSystemInstances = 'SapInstance'; EntityCount = 0
+                LobEntities = ''
+            }
+        )
+
+        $output = Export-SPSInventoryReport -InputObject @() -BcsApplications $applications -OutputFolder $TestDrive -BaseName 'Bcs'
+
+        $csvRows = @(Import-Csv $output.BcsCsvPath)
+        $csvRows | Should -HaveCount 2
+        $csvRows[0].LobSystemName | Should -Be 'Crm, & Billing'
+        $csvRows[0].WebApplicationUrls | Should -Be 'https://intranet; https://extranet'
+        $csvRows[0].BdcServiceApplicationId | Should -Be '11111111-1111-1111-1111-111111111111'
+        $csvRows[0].EntityCount | Should -Be '2'
+        $csvRows[1].LobSystemType | Should -Be 'DotNetAssembly'
+        (Get-Content $output.BcsCsvPath -TotalCount 1) | Should -Be '"WebApplicationUrls","BdcServiceApplicationId","LobSystemName","LobSystemType","LobSystemInstances","EntityCount","LobEntities"'
+        Get-RowCount -Rows (Get-Content $output.BcsJsonPath -Raw | ConvertFrom-Json) | Should -Be 2
+        $manifest = Get-Content $output.ManifestJsonPath -Raw | ConvertFrom-Json
+        $manifest.Files.BcsCsv | Should -Be $output.BcsCsvPath
+        $manifest.Files.BcsJson | Should -Be $output.BcsJsonPath
+        $manifest.Summary.BcsInventoryComplete | Should -BeTrue
+        $alerts = Get-Content $output.AlertsJsonPath -Raw | ConvertFrom-Json
+        Get-AlertCount -Alerts $alerts -Type 'BcsApplication' | Should -Be 2
+        $first = @($alerts | Where-Object { $_.AlertType -eq 'BcsApplication' })[0]
+        $first.Url | Should -Be 'https://intranet'
+        $first.Value | Should -Be 'Crm, & Billing'
+        $first.Severity | Should -Be 'Medium'
+        $first.Message | Should -Match 'retired in SharePoint Online'
+        $first.Message | Should -Match 'Power Apps'
+        $first.Message | Should -Not -Match 'hybrid'
+        Get-AlertCount -Alerts $alerts -Type 'BcsInventoryPartial' | Should -Be 0
+        $html = Get-Content $output.HtmlPath -Raw
+        $html | Should -Match 'id="bcs-applications"'
+        $html | Should -Match 'Crm, &amp; Billing'
+        $html | Should -Not -Match 'Partial collection'
+    }
+
+    It 'writes a valid empty BCS report instead of dropping the files' {
+        $output = Export-SPSInventoryReport -InputObject @() -BcsApplications @() -OutputFolder $TestDrive -BaseName 'EmptyBcs'
+
+        (Get-Content $output.BcsCsvPath -TotalCount 1) | Should -Match 'LobSystemName'
+        @(Import-Csv $output.BcsCsvPath) | Should -HaveCount 0
+        Get-RowCount -Rows (Get-Content $output.BcsJsonPath -Raw | ConvertFrom-Json) | Should -Be 0
+        $alerts = Get-Content $output.AlertsJsonPath -Raw | ConvertFrom-Json
+        Get-AlertCount -Alerts $alerts -Type 'BcsApplication' | Should -Be 0
+        (Get-Content $output.HtmlPath -Raw) | Should -Match '<strong>0</strong> BCS LOB system'
+    }
+
+    It 'flags a partial BCS inventory in the alerts, the manifest and the HTML report' {
+        $output = Export-SPSInventoryReport -InputObject @() -BcsApplications @() -BcsInventoryComplete $false -OutputFolder $TestDrive -BaseName 'PartialBcs'
+
+        $alerts = Get-Content $output.AlertsJsonPath -Raw | ConvertFrom-Json
+        Get-AlertCount -Alerts $alerts -Type 'BcsInventoryPartial' | Should -Be 1
+        @($alerts | Where-Object { $_.AlertType -eq 'BcsInventoryPartial' })[0].Severity | Should -Be 'Medium'
+        (Get-Content $output.ManifestJsonPath -Raw | ConvertFrom-Json).Summary.BcsInventoryComplete | Should -BeFalse
+        (Get-Content $output.HtmlPath -Raw) | Should -Match 'Partial collection:</strong> some web applications or LOB systems could not be read'
+    }
+
+    It 'ignores the BCS completeness flag when no BCS rows were collected' {
+        $output = Export-SPSInventoryReport -InputObject @() -BcsInventoryComplete $false -OutputFolder $TestDrive -BaseName 'NoBcsFlag'
+
+        $alerts = Get-Content $output.AlertsJsonPath -Raw | ConvertFrom-Json
+        Get-AlertCount -Alerts $alerts -Type 'BcsInventoryPartial' | Should -Be 0
+    }
 }

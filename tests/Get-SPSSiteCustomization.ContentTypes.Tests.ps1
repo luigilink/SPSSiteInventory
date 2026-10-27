@@ -95,6 +95,7 @@ public sealed class SPSSiteInventoryThrowAfterOne : IEnumerable
             Items = @()
             BaseTemplate = 101
             Fields = @()
+            HasExternalDataSource = $false
         }
         $web = [PSCustomObject]@{
             Url = 'https://intranet.contoso.com/sites/team'
@@ -153,6 +154,7 @@ public sealed class SPSSiteInventoryThrowAfterOne : IEnumerable
             Items = @()
             BaseTemplate = 850
             Fields = @()
+            HasExternalDataSource = $false
             Batches = $Batches
             BatchIndex = 0
             Queries = [System.Collections.Generic.List[object]]::new()
@@ -188,6 +190,7 @@ public sealed class SPSSiteInventoryThrowAfterOne : IEnumerable
             Items = @()
             BaseTemplate = 100
             Fields = @()
+            HasExternalDataSource = $false
             EmailAlias = $EmailAlias
             CanReceiveEmail = $CanReceiveEmail
         }
@@ -244,6 +247,7 @@ public class SPSTestThrowingMailList
     public object Items { get; set; }
     public object BaseTemplate { get; set; }
     public object Fields { get; set; }
+    public bool HasExternalDataSource { get; set; }
     public bool CanReceiveEmail { get; set; }
     public string EmailAlias { get { throw new InvalidOperationException("alias store unavailable"); } }
 }
@@ -277,6 +281,31 @@ public class SPSTestThrowingMailList
         return $list
     }
 
+    function Get-TestExternalList {
+        param (
+            [string]$Title,
+            [string]$EntityNamespace = 'Contoso.Crm',
+            [string]$Entity = 'Customer',
+            [string]$Instance = 'CrmInstance',
+            [switch]$WithoutDataSource
+        )
+        $list = Get-TestMailList -Title $Title
+        $list.HasExternalDataSource = $true
+        $dataSource = $null
+        if (-not $WithoutDataSource) {
+            $dataSource = [PSCustomObject]@{
+                Properties = @{ LobSystemInstance = $Instance; EntityNamespace = $EntityNamespace; Entity = $Entity; SpecificFinder = 'Read Item' }
+            }
+            $dataSource | Add-Member -MemberType ScriptMethod -Name GetProperty -Value {
+                param ($Key)
+                if ($this.Properties.ContainsKey($Key)) { return $this.Properties[$Key] }
+                return $null
+            }
+        }
+        $list | Add-Member -MemberType NoteProperty -Name DataSource -Value $dataSource
+        return $list
+    }
+
     # Real .NET types: a failed SharePoint property read comes back as $null in PowerShell.
     if (-not ('SPSTestCollectorTaxonomyField' -as [type])) {
         Add-Type -TypeDefinition @'
@@ -287,6 +316,26 @@ public class SPSTestCollectorTaxonomyField
     public string TypeAsString { get { return "TaxonomyFieldType"; } }
     public bool Hidden { get { throw new InvalidOperationException("hidden state unavailable"); } }
     public Guid TermSetId { get { return Guid.NewGuid(); } }
+}
+
+public class SPSTestFailingFlagList
+{
+    public string Title { get; set; }
+    public object RootFolder { get; set; }
+    public object ContentTypes { get; set; }
+    public object WorkflowAssociations { get; set; }
+    public object EventReceivers { get; set; }
+    public object IrmEnabled { get; set; }
+    public object Views { get; set; }
+    public object CheckedOutFiles { get; set; }
+    public object EnableVersioning { get; set; }
+    public object Items { get; set; }
+    public object BaseTemplate { get; set; }
+    public object Fields { get; set; }
+    public string EmailAlias { get { return null; } }
+    public bool CanReceiveEmail { get; set; }
+    public int ItemCount { get { return 0; } }
+    public bool HasExternalDataSource { get { throw new InvalidOperationException("external flag unavailable"); } }
 }
 
 public class SPSTestFailingCountList
@@ -303,6 +352,7 @@ public class SPSTestFailingCountList
     public object Items { get; set; }
     public object BaseTemplate { get; set; }
     public object Fields { get; set; }
+    public bool HasExternalDataSource { get; set; }
     public string EmailAlias { get { return null; } }
     public bool CanReceiveEmail { get; set; }
     public int ItemCount { get { throw new InvalidOperationException("item count unavailable"); } }
@@ -2037,5 +2087,165 @@ Describe 'Get-SPSSiteCustomization content types' {
         $signals.CustomizationInventoryComplete | Should -BeFalse
         ($warnings -join ';') | Should -Match "Could not read the managed metadata columns on list 'Contracts'"
         ($warnings -join ';') | Should -Match 'item count unavailable'
+    }
+
+    It 'counts external lists and records the BCS binding of each' {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Lists = @(
+            (Get-TestExternalList -Title 'Customers' -EntityNamespace 'Contoso.Crm' -Entity 'Customer' -Instance 'CrmInstance')
+            (Get-TestExternalList -Title 'Orders' -EntityNamespace 'Contoso.Sap' -Entity 'Order' -Instance 'SapInstance')
+            (Get-TestMailList -Title 'Documents')
+        )
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -WarningVariable warnings -WarningAction SilentlyContinue
+
+        $signals.ExternalListCount | Should -Be 2
+        $signals.ExternalListExamples | Should -Be 'Customers (Contoso.Crm.Customer); Orders (Contoso.Sap.Order)'
+        $signals.ExternalLists | Should -HaveCount 2
+        $signals.ExternalLists[0].SiteUrl | Should -Be 'https://intranet.contoso.com/sites/team'
+        $signals.ExternalLists[0].WebUrl | Should -Be 'https://intranet.contoso.com/sites/team'
+        $signals.ExternalLists[0].ListTitle | Should -Be 'Customers'
+        $signals.ExternalLists[0].ListUrl | Should -Be '/sites/team/Customers'
+        $signals.ExternalLists[0].LobSystemInstance | Should -Be 'CrmInstance'
+        $signals.ExternalLists[1].LobSystemInstance | Should -Be 'SapInstance'
+        $signals.CustomizationInventoryComplete | Should -BeTrue
+        @($warnings) | Should -HaveCount 0
+    }
+
+    It 'reports no external list on a site without any' {
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @(Get-TestWeb -Definitions @() -Bindings @())
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site
+
+        $signals.ExternalListCount | Should -Be 0
+        $signals.ExternalListExamples | Should -Be ''
+        $signals.ExternalLists | Should -HaveCount 0
+        $signals.CustomizationInventoryComplete | Should -BeTrue
+    }
+
+    It 'finds external lists in every web and lists at most five examples' {
+        $first = Get-TestWeb -Definitions @() -Bindings @()
+        $first.Lists = @(1..4 | ForEach-Object { Get-TestExternalList -Title "First$_" })
+        $second = Get-TestWeb -Definitions @() -Bindings @()
+        $second.Url = 'https://intranet.contoso.com/sites/team/sub'
+        $second.Lists = @(1..3 | ForEach-Object { Get-TestExternalList -Title "Second$_" })
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($first, $second)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site
+
+        $signals.ExternalListCount | Should -Be 7
+        $signals.ExternalLists | Should -HaveCount 7
+        $signals.ExternalLists[6].WebUrl | Should -Be 'https://intranet.contoso.com/sites/team/sub'
+        ($signals.ExternalListExamples -split '; ') | Should -HaveCount 5
+    }
+
+    It 'marks an unreadable external data source flag as partial instead of reading the list as not external' {
+        $unknown = Get-TestMailList -Title 'Unknown'
+        $unknown.PSObject.Properties.Remove('HasExternalDataSource')
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Lists = @($unknown, (Get-TestExternalList -Title 'Customers'))
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -WarningVariable warnings -WarningAction SilentlyContinue
+
+        $signals.ExternalListCount | Should -Be 1
+        $signals.CustomizationInventoryComplete | Should -BeFalse
+        ($warnings -join ';') | Should -Match "Could not read the external data source of list 'Unknown' in web 'https://intranet.contoso.com/sites/team'"
+        ($warnings -join ';') | Should -Match 'external data source flag could not be read'
+    }
+
+    It 'marks a failing external data source flag getter as partial and keeps the other lists' {
+        $list = [SPSTestFailingFlagList]::new()
+        $list.Title = 'Mailbox'
+        $list.RootFolder = [PSCustomObject]@{ ServerRelativeUrl = '/sites/team/Mailbox'; Properties = @{} }
+        $list.ContentTypes = @()
+        $list.WorkflowAssociations = @()
+        $list.EventReceivers = @()
+        $list.IrmEnabled = $false
+        $list.Views = @()
+        $list.CheckedOutFiles = @()
+        $list.EnableVersioning = $false
+        $list.Items = @()
+        $list.BaseTemplate = 100
+        $list.Fields = @()
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Lists = @($list, (Get-TestExternalList -Title 'Customers'))
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -WarningVariable warnings -WarningAction SilentlyContinue
+
+        $signals.ExternalListCount | Should -Be 1
+        $signals.CustomizationInventoryComplete | Should -BeFalse
+        ($warnings -join ';') | Should -Match "Could not read the external data source of list 'Mailbox'"
+        ($warnings -join ';') | Should -Match 'external flag unavailable'
+    }
+
+    It 'counts an external list whose binding cannot be read, leaves its row out and marks the site partial' {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Lists = @(
+            (Get-TestExternalList -Title 'Broken' -WithoutDataSource)
+            (Get-TestExternalList -Title 'Customers')
+        )
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -WarningVariable warnings -WarningAction SilentlyContinue
+
+        $signals.ExternalListCount | Should -Be 2
+        $signals.ExternalLists | Should -HaveCount 1
+        $signals.ExternalLists[0].ListTitle | Should -Be 'Customers'
+        $signals.ExternalListExamples | Should -Be 'Broken (binding unreadable); Customers (Contoso.Crm.Customer)'
+        $signals.CustomizationInventoryComplete | Should -BeFalse
+        ($warnings -join ';') | Should -Match "Could not read the external data source of list 'Broken'"
+        ($warnings -join ';') | Should -Match "external data source of list 'Broken' could not be read"
+    }
+
+    It 'still counts a site whose only external lists have unreadable bindings, so the blocking signal is not lost' {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Lists = @((Get-TestExternalList -Title 'Broken' -WithoutDataSource))
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -WarningAction SilentlyContinue
+        $result = Measure-SPSSiteComplexity -Signals $signals -Scoring @{ Weights = @{ ExternalListCount = 1.0 }; Thresholds = @{ Moderate = 1.0; Complex = 6.0 }; BlockingSignals = @('ExternalListCount') }
+
+        $signals.ExternalListCount | Should -Be 1
+        $signals.ExternalLists | Should -HaveCount 0
+        $signals.CustomizationInventoryComplete | Should -BeFalse
+        $result.Category | Should -Be 4
     }
 }

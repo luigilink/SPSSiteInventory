@@ -12,7 +12,9 @@
         Get-SPSPropertyValue reads the property through reflection, so a failing getter
         raises the underlying exception while a successfully read null stays null. A
         property that is not a plain .NET property (for example a note property) is read
-        the normal way. Use it only for scalar values where null is meaningful.
+        the normal way. Use it only for scalar values where null is meaningful: a function
+        enumerates a collection it returns, so read collections directly and treat null as
+        an unreadable collection.
 
         Private because it is an implementation detail of the collectors.
 

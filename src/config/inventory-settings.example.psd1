@@ -172,6 +172,10 @@
             # migrated separately from the sites. Weighted, not blocking.
             ManagedMetadataListCount = 0.1
             ManagedMetadataTermSetCount = 0.25
+            # External lists are backed by BCS external content types. BCS is retired in
+            # SharePoint Online, so these lists cannot be migrated there and need a replacement
+            # such as Power Apps. Weighted, and listed in BlockingSignals below.
+            ExternalListCount = 1.0
             # Unsupported site templates cannot be migrated directly to SPO.
             IsUnsupportedSiteTemplate = 5.0
             # Language mismatches or unknown language metadata require readiness review.
@@ -219,6 +223,11 @@
             'IrmEnabledListCount'
             # Unsupported templates are not migration targets as-is.
             'IsUnsupportedSiteTemplate'
+            # External lists depend on BCS, which is retired in SharePoint Online: they cannot be
+            # recreated there and the scenario needs a replacement such as Power Apps. The site
+            # itself can still be migrated; remove this entry to treat the replacement as
+            # remediation of a Moderate or Complex site instead of a dedicated project.
+            'ExternalListCount'
         )
     }
 

@@ -52,6 +52,19 @@
         columns). When supplied, renders a managed metadata section with interpretation
         guidance; the term store dependency is not a migration blocker by itself.
 
+        .PARAMETER ExternalLists
+        Optional per-list external list rows (lists backed by a Business Connectivity
+        Services external content type). When supplied, renders an external list section
+        that explains these lists are not migrated.
+
+        .PARAMETER BcsApplications
+        Optional Business Connectivity Services LOB system rows from Get-SPSBcsApplication.
+        When supplied, renders a BCS section.
+
+        .PARAMETER BcsInventoryComplete
+        Whether the BCS inventory could be read in full. When false, the BCS section says
+        that BCS applications may be missing.
+
         .EXAMPLE
         $html = ConvertTo-SPSInventoryHtml -InputObject $scored -EnvName 'PROD'
         Set-Content -Path report.html -Value $html -Encoding UTF8
@@ -94,7 +107,21 @@
         [Parameter()]
         [AllowEmptyCollection()]
         [System.Object[]]
-        $ManagedMetadataLists = @()
+        $ManagedMetadataLists = @(),
+
+        [Parameter()]
+        [AllowEmptyCollection()]
+        [System.Object[]]
+        $ExternalLists = @(),
+
+        [Parameter()]
+        [AllowEmptyCollection()]
+        [System.Object[]]
+        $BcsApplications = @(),
+
+        [Parameter()]
+        [System.Boolean]
+        $BcsInventoryComplete = $true
     )
 
     # Category metadata: name and accent colour for each complexity level. A plain
@@ -153,6 +180,7 @@
         [PSCustomObject]@{ Label = 'Sites with e-mail enabled lists'; Count = @($siteRecords | Where-Object { [int]$_.EmailEnabledListCount -gt 0 }).Count }
         [PSCustomObject]@{ Label = 'Sites with HTML files'; Count = @($siteRecords | Where-Object { [int]$_.HtmlFileCount -gt 0 }).Count }
         [PSCustomObject]@{ Label = 'Sites with managed metadata columns'; Count = @($siteRecords | Where-Object { [int]$_.ManagedMetadataListCount -gt 0 }).Count }
+        [PSCustomObject]@{ Label = 'Sites with external lists'; Count = @($siteRecords | Where-Object { [int]$_.ExternalListCount -gt 0 }).Count }
         [PSCustomObject]@{ Label = 'Sites in web applications with permissive browser file handling'; Count = @($siteRecords | Where-Object { [string]$_.BrowserFileHandling -eq 'Permissive' }).Count }
         [PSCustomObject]@{ Label = 'Sites above large-size threshold'; Count = @($siteRecords | Where-Object { $_.IsLargeSite }).Count }
         [PSCustomObject]@{ Label = 'Sites with large lists'; Count = @($siteRecords | Where-Object { [int]$_.LargeListCount -gt 0 }).Count }
@@ -186,6 +214,8 @@
     $policyRecords = @($records | Where-Object { $null -ne $_.WebAppPolicyCount -or $_.BrowserFileHandling })
     $hasContentTypeSection = $PSBoundParameters.ContainsKey('ContentTypes')
     $hasManagedMetadataSection = $PSBoundParameters.ContainsKey('ManagedMetadataLists')
+    $hasExternalListSection = $PSBoundParameters.ContainsKey('ExternalLists')
+    $hasBcsSection = $PSBoundParameters.ContainsKey('BcsApplications')
 
     $encTitle = ConvertTo-SPSHtmlText -Value $Title
     $encEnv = ConvertTo-SPSHtmlText -Value $EnvName
@@ -349,6 +379,12 @@ td.muted, .muted { color: var(--muted); }
     }
     if ($hasManagedMetadataSection) {
         [void]$sb.AppendLine('<a href="#managed-metadata">Managed metadata</a>')
+    }
+    if ($hasExternalListSection) {
+        [void]$sb.AppendLine('<a href="#external-lists">External lists</a>')
+    }
+    if ($hasBcsSection) {
+        [void]$sb.AppendLine('<a href="#bcs-applications">BCS applications</a>')
     }
     [void]$sb.AppendLine('</div>')
 
@@ -587,6 +623,72 @@ td.muted, .muted { color: var(--muted); }
         [void]$sb.AppendLine('</tbody></table></div>')
     }
 
+    if ($hasExternalListSection) {
+        $incompleteSites = @($siteRecords | Where-Object { $_.CustomizationInventoryComplete -eq $false })
+        [void]$sb.AppendLine('<h2 id="external-lists">External lists</h2>')
+        [void]$sb.AppendLine(('<p><strong>{0}</strong> external list(s). They are backed by Business Connectivity Services (BCS) external content types, so their items stay in the external system. Microsoft retired BCS in SharePoint Online on 30 September 2024, so these lists cannot be recreated there and there is no direct migration. Plan a replacement for each scenario, for example with Power Apps and its connectors (the on-premises data gateway reaches on-premises data). BCS is not retired in SharePoint Server Subscription Edition. Item counts and dates are not collected because the items are not stored in SharePoint.</p>' -f $ExternalLists.Count))
+        if ($enumerationFailureCount -gt 0) {
+            [void]$sb.AppendLine(('<p><strong>Coverage warning:</strong> {0} web application(s) had site collection enumeration failures; external list results do not cover those scopes.</p>' -f $enumerationFailureCount))
+        }
+        if ($incompleteSites.Count -gt 0) {
+            [void]$sb.AppendLine(('<p><strong>Partial collection:</strong> {0} site collection(s) have an incomplete customization inventory. Rows are a lower bound; consult CustomizationInventoryComplete and the run warnings.</p>' -f $incompleteSites.Count))
+        }
+        [void]$sb.AppendLine('<div class="table-scroll"><table class="externallists">')
+        $externalListColumns = @(
+            @{ Key = 'SiteUrl'; Label = 'Site' }
+            @{ Key = 'WebUrl'; Label = 'Web' }
+            @{ Key = 'ListTitle'; Label = 'List' }
+            @{ Key = 'ListUrl'; Label = 'List URL' }
+            @{ Key = 'LobSystemInstance'; Label = 'LOB system instance' }
+            @{ Key = 'EntityNamespace'; Label = 'Entity namespace' }
+            @{ Key = 'Entity'; Label = 'Entity' }
+        )
+        [void]$sb.AppendLine('<thead><tr>')
+        foreach ($column in $externalListColumns) {
+            [void]$sb.AppendLine(('<th>{0}</th>' -f $column.Label))
+        }
+        [void]$sb.AppendLine('</tr></thead><tbody>')
+        foreach ($externalList in $ExternalLists) {
+            [void]$sb.AppendLine('<tr>')
+            foreach ($column in $externalListColumns) {
+                [void]$sb.AppendLine(('<td>{0}</td>' -f (ConvertTo-SPSHtmlText -Value $externalList.($column.Key))))
+            }
+            [void]$sb.AppendLine('</tr>')
+        }
+        [void]$sb.AppendLine('</tbody></table></div>')
+    }
+
+    if ($hasBcsSection) {
+        [void]$sb.AppendLine('<h2 id="bcs-applications">Business Connectivity Services applications</h2>')
+        [void]$sb.AppendLine(('<p><strong>{0}</strong> BCS LOB system(s). BCS is retired in SharePoint Online (30 September 2024), so BCS applications cannot be migrated there and need a replacement for each external system, for example Power Apps and its connectors. BCS is not retired in SharePoint Server Subscription Edition. Instances are the connections external lists use; match them with the LOB system instance of the external lists. Connection settings, credentials and Secure Store targets are not read.</p>' -f $BcsApplications.Count))
+        if (-not $BcsInventoryComplete) {
+            [void]$sb.AppendLine('<p><strong>Partial collection:</strong> some web applications or LOB systems could not be read, so BCS applications may be missing. Consult the run warnings.</p>')
+        }
+        [void]$sb.AppendLine('<div class="table-scroll"><table class="bcsapplications">')
+        $bcsColumns = @(
+            @{ Key = 'WebApplicationUrls'; Label = 'Web application' }
+            @{ Key = 'BdcServiceApplicationId'; Label = 'BDC service application' }
+            @{ Key = 'LobSystemName'; Label = 'LOB system' }
+            @{ Key = 'LobSystemType'; Label = 'Type' }
+            @{ Key = 'LobSystemInstances'; Label = 'Instances' }
+            @{ Key = 'EntityCount'; Label = 'Entities' }
+            @{ Key = 'LobEntities'; Label = 'Entity names' }
+        )
+        [void]$sb.AppendLine('<thead><tr>')
+        foreach ($column in $bcsColumns) {
+            [void]$sb.AppendLine(('<th>{0}</th>' -f $column.Label))
+        }
+        [void]$sb.AppendLine('</tr></thead><tbody>')
+        foreach ($bcsApplication in $BcsApplications) {
+            [void]$sb.AppendLine('<tr>')
+            foreach ($column in $bcsColumns) {
+                [void]$sb.AppendLine(('<td>{0}</td>' -f (ConvertTo-SPSHtmlText -Value $bcsApplication.($column.Key))))
+            }
+            [void]$sb.AppendLine('</tr>')
+        }
+        [void]$sb.AppendLine('</tbody></table></div>')
+    }
+
     # Filter bar.
     [void]$sb.AppendLine('<div class="filters">')
     [void]$sb.AppendLine('<button data-filter="all" class="active">All</button>')
@@ -633,6 +735,8 @@ td.muted, .muted { color: var(--muted); }
         @{ Key = 'ManagedMetadataColumnCount'; Label = 'Managed metadata columns'; Class = 'num'; Type = 'num' }
         @{ Key = 'ManagedMetadataTermSetCount'; Label = 'Term sets in use'; Class = 'num'; Type = 'num' }
         @{ Key = 'ManagedMetadataExamples'; Label = 'Managed metadata examples'; Class = 'reasons'; Type = 'text' }
+        @{ Key = 'ExternalListCount'; Label = 'External lists'; Class = 'num'; Type = 'num' }
+        @{ Key = 'ExternalListExamples'; Label = 'External list examples'; Class = 'reasons'; Type = 'text' }
         @{ Key = 'SizeGB'; Label = 'Size (GB)'; Class = 'num'; Type = 'num' }
         @{ Key = 'SubWebCount'; Label = 'Sub-webs'; Class = 'num'; Type = 'num' }
         @{ Key = 'LastModified'; Label = 'Last modified'; Class = ''; Type = 'text' }

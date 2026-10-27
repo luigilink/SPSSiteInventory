@@ -62,6 +62,7 @@ Scoring = @{
         HtmlFileCount            = 0.1
         ManagedMetadataListCount = 0.1
         ManagedMetadataTermSetCount = 0.25
+        ExternalListCount        = 1.0
         IsUnsupportedSiteTemplate = 5.0
         TemplateLanguageReviewRequired = 0.5
         InfoPathFormCount        = 3.0
@@ -212,6 +213,30 @@ migrated close to the term store migration. The weights are deliberately small b
 many sites use a few such columns; raise them if your term store migration is a project
 of its own.
 
+External list signals follow the SMAT External List and BCS scans:
+
+- `ExternalListCount` — lists backed by a Business Connectivity Services (BCS) external
+  content type, which SharePoint flags as having an external data source. Their items stay
+  in the external system. BCS is retired in SharePoint Online (see
+  [Usage](Usage#external-lists-and-bcs-applications)), so these lists and the BCS
+  applications behind them cannot be migrated there; they need a replacement such as
+  Power Apps.
+- `ExternalListExamples` — up to five lists with their entity.
+
+The binding of each list (LOB system instance, entity namespace and entity name) is read
+from the list definition, so neither the Business Data Connectivity service nor the
+external system is called; item counts and dates are not collected because the items are
+not stored in SharePoint. The BCS definitions themselves (LOB systems with their instances
+and entities) are read once for the farm by `Get-SPSBcsApplication` and are reported in
+their own file, not as a site signal. See [Usage](Usage#external-lists-and-bcs-applications).
+
+`ExternalListCount` is weighted and listed in `BlockingSignals` in the example
+configuration, like the other signals for features SharePoint Online no longer offers: a
+site with external lists is a dedicated project because the scenario has to be rebuilt. The
+site collection itself can still be migrated, without those lists. Remove
+`ExternalListCount` from `BlockingSignals` to treat the replacement as remediation of a
+Moderate or Complex site instead.
+
 `EventReceivers` counts only **custom** event receivers (those registered from a
 non-Microsoft assembly). Out-of-the-box receivers on native lists are ignored, so a stock
 site is not promoted just because SharePoint's own lists carry many built-in receivers.
@@ -234,6 +259,9 @@ non-portable as-is:
 - `IsLockedSite` — the site collection lock state is not `Unlock` (for example
   `ReadOnly`, `NoAdditions`, `NoAccess`).
 - `IrmEnabledListCount` — at least one list/library has IRM enabled.
+- `ExternalListCount` — at least one external list (backed by a BCS external content
+  type) exists. BCS is retired in SharePoint Online, so the scenario needs a replacement
+  such as Power Apps.
 - `HasFbaZone` — at least one zone of the site's web application is configured for
   forms-based authentication. This requires an identity/authentication redesign for
   SharePoint Online, not an on-premises farm repair. The signal does not prove that
