@@ -223,6 +223,9 @@ Describe 'Remove-SPSLabFixture' {
             @(
                 [PSCustomObject]@{ Path = '/sites/spslab-ok'; SiteId = [guid]'11111111-1111-1111-1111-111111111111' }
                 [PSCustomObject]@{ Path = '/sites/finance'; SiteId = [guid]'22222222-2222-2222-2222-222222222222' }
+                [PSCustomObject]@{ Path = '/sites/spslab-gone'; SiteId = [guid]'33333333-3333-3333-3333-333333333333' }
+                [PSCustomObject]@{ Path = '/sites/spslab-lookalike'; SiteId = [guid]'44444444-4444-4444-4444-444444444444' }
+                [PSCustomObject]@{ Path = '/sites/spslab-other-run'; SiteId = [guid]'55555555-5555-5555-5555-555555555555' }
             )
         }
         Mock -ModuleName $script:ModuleName Remove-SPDeletedSite { $global:LabPurged.Add([System.String]$Identity) }
@@ -270,10 +273,60 @@ Describe 'Remove-SPSLabFixture' {
         ($result | Where-Object { $_.Url -eq 'https://lab/sites/spslab-gone' }).Status | Should -Be 'Absent'
     }
 
-    It 'purges the deleted lab sites, and only those, so that the lab can be built again' {
+    It 'purges the deleted sites that it removed and those of the manifest that were removed before, so that the lab can be built again' {
         $null = Remove-SPSLabFixture -ManifestPath $script:ManifestPath -Confirm:$false
 
+        @($global:LabPurged | Sort-Object) | Should -Be @('11111111-1111-1111-1111-111111111111', '33333333-3333-3333-3333-333333333333')
+    }
+
+    It 'does not purge a lookalike that was refused, a lab site of another run, or a site that is not a lab site' {
+        $null = Remove-SPSLabFixture -ManifestPath $script:ManifestPath -Confirm:$false
+
+        $global:LabPurged | Should -Not -Contain '44444444-4444-4444-4444-444444444444'
+        $global:LabPurged | Should -Not -Contain '55555555-5555-5555-5555-555555555555'
+        $global:LabPurged | Should -Not -Contain '22222222-2222-2222-2222-222222222222'
+    }
+
+    It 'purges nothing when no removal was approved' {
+        $null = Remove-SPSLabFixture -ManifestPath $script:ManifestPath -WhatIf
+
+        $global:LabPurged.Count | Should -Be 0
+        Should -Invoke -ModuleName $script:ModuleName Remove-SPDeletedSite -Times 0 -Exactly
+    }
+
+    It 'purges only what a removal of this run produced when the lab is found by prefix' {
+        $null = Remove-SPSLabFixture -WebApplicationUrl 'https://lab' -Prefix 'spslab' -Confirm:$false
+
         $global:LabPurged | Should -Be @('11111111-1111-1111-1111-111111111111')
+    }
+
+    It 'asks before it purges a deleted site' {
+        Mock -ModuleName $script:ModuleName Remove-SPDeletedSite { $global:LabPurged.Add([System.String]$Identity) }
+
+        $null = Remove-SPSLabFixture -ManifestPath $script:ManifestPath -Confirm:$false -WhatIf
+
+        Should -Invoke -ModuleName $script:ModuleName Remove-SPSite -Times 0 -Exactly
+        $global:LabPurged.Count | Should -Be 0
+    }
+
+    It 'refuses a manifest that is for another web application, and removes nothing' {
+        Mock -ModuleName $script:ModuleName Get-SPWebApplication { [PSCustomObject]@{ Url = 'https://lab-b/' } }
+
+        { Remove-SPSLabFixture -ManifestPath $script:ManifestPath -WebApplicationUrl 'https://lab-b' -Confirm:$false } | Should -Throw "*is for the web application 'https://lab', not for 'https://lab-b'*"
+        $global:LabRemoved.Count | Should -Be 0
+        $global:LabUnlocked.Count | Should -Be 0
+        Should -Invoke -ModuleName $script:ModuleName Get-SPSite -Times 0 -Exactly
+    }
+
+    It 'refuses a manifest that is for another prefix, and removes nothing' {
+        { Remove-SPSLabFixture -ManifestPath $script:ManifestPath -WebApplicationUrl 'https://lab' -Prefix 'lab42' -Confirm:$false } | Should -Throw "*is for the prefix 'spslab', not for 'lab42'*"
+        $global:LabRemoved.Count | Should -Be 0
+    }
+
+    It 'uses a manifest that is for the web application and the prefix that are asked for' {
+        $result = Remove-SPSLabFixture -ManifestPath $script:ManifestPath -WebApplicationUrl 'https://LAB' -Prefix 'spslab' -Confirm:$false
+
+        ($result | Where-Object { $_.Status -eq 'Removed' }).Count | Should -Be 2
     }
 
     It 'removes nothing with -WhatIf' {

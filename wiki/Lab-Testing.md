@@ -23,7 +23,9 @@ By default, the script runs these steps in order (`-Action` runs one of them):
 1. **Provision**: writes the lab settings from the example configuration of the toolkit being tested (only the environment name, the web application, the report folder and the large-content thresholds change), then creates one site collection per scenario, `<web application>/sites/<prefix>-<scenario>`, and marks it as a lab site. A confirmation is asked before each one; `-Force` skips it and `-WhatIf` shows what would be created.
 2. **Inventory**: runs `Invoke-SPSSiteInventory.ps1` of the toolkit with the lab settings.
 3. **Verify**: checks the reports against the expectations of every scenario (see below) and prints the result. The exit code is 1 when a check fails.
-4. **Remove**: removes the lab site collections. It runs only with `-Cleanup`, or on its own with `-Action Remove`.
+4. **Remove**: removes the lab site collections. It runs only with `-Cleanup`, or on its own with `-Action Remove`. With `-Cleanup` it also runs when an earlier step failed, so that a half-built lab is not left behind, and the failure of that step is still the one reported.
+
+With `-WhatIf`, nothing is written: no settings file, no manifest and no site collection. The inventory and the verification are skipped too, because there is nothing for them to read.
 
 | Parameter | Meaning |
 | --- | --- |
@@ -32,7 +34,7 @@ By default, the script runs these steps in order (`-Action` runs one of them):
 | `-Action` | `Provision`, `Inventory`, `Verify`, `Remove` or `All` (the default). |
 | `-Scenario` | Builds and checks only these scenarios, for example `-Scenario subsites,infopath`. |
 | `-WorkFolder` | Where the lab settings, the manifest (`lab-manifest.json`) and the reports go. Defaults to `.\SPSLab`. |
-| `-Prefix` | The prefix of the site collection names (lowercase letters and digits). Defaults to `spslab`. |
+| `-Prefix` | The prefix of the site collection names (lowercase letters and digits). Defaults to `spslab`. When the lab is removed with the manifest of the work folder, it must be the prefix of that manifest. |
 | `-Owner` | The owner of the site collections. Defaults to the current account. |
 | `-Cleanup` | With `-Action All`, removes the lab at the end. |
 | `-Force` | Does not ask for a confirmation before each creation or removal. |
@@ -51,7 +53,9 @@ By default, the script runs these steps in order (`-Action` runs one of them):
 | `PASS` | The check is met. |
 | `FAIL` | The check is not met. It is a problem of the toolkit, or of the lab if the scenario could not be built (`Scenario built`). |
 | `INFO` | Informational: a check that depends on the farm or on the account is not met, or a site is `Partial` or `Failed`. Read it, it does not fail the run. |
-| `SKIP` | The check could not run: the scenario was skipped because the farm lacks something it needs, or there is no alerts report. |
+| `SKIP` | The check could not run: the scenario was skipped because the farm lacks something it needs, or the alerts report of the run is missing. |
+
+The verification reads the latest sites report of the work folder, and the alerts report that was written with it (same name and time stamp), never an older or a newer one. An alerts report that is missing makes the alert checks `SKIP`; one that is there but empty means that the run raised no alert, so they `FAIL`. `-Scenario` limits it to the scenarios you name.
 
 Every lab site also gets an `Assessment` line. A site whose assessment is `Partial` or `Failed` is how a problem with a real farm shows up (a property that cannot be read, for example), and its warnings are listed: those are the ones to send back. The reports are in the work folder; they hold lab data only.
 
@@ -101,8 +105,9 @@ The lab does not build these, because they need services, packages or farm-level
 
 ## Safety
 
-- The web application is explicit, and every site collection of the lab has a name prefix and a marker (a property of its root web). `Remove` touches nothing that does not have both, and `-WhatIf` and `-Confirm` are supported.
-- Removing a site collection unlocks it first, and the removed site collections are purged from the deleted sites, so that the lab can be built again with the same URLs.
+- The web application is explicit, and every site collection of the lab has a name prefix and a marker (a property of its root web). `Remove` touches nothing that does not have both, and `-WhatIf` and `-Confirm` are supported: the script passes them to every step that can change something.
+- The manifest in the work folder belongs to one web application and one prefix. `Remove` refuses a manifest that is not for the `-WebApplicationUrl` you gave (or for the `-Prefix`, when you gave one) and removes nothing, so a manifest left in a work folder cannot be used against another lab.
+- Removing a site collection unlocks it first. A removed site collection stays in the deleted sites, which blocks its URL: the script purges, after a confirmation, only the deleted sites that it removed itself or that the manifest lists as already removed, so that the lab can be built again with the same URLs. A site that merely looks like a lab site is never purged.
 - An existing site collection at a lab URL is never reused or changed: remove the lab first.
 
 ## Add a scenario

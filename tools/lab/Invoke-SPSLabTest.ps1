@@ -19,7 +19,9 @@
        INFO or SKIP for every check, with the assessment status of every lab site. The exit code is
        1 when a check fails.
     4. Remove: removes the lab site collections, and only those (the name prefix and the marker are
-       both required). With -Action All, it runs only when -Cleanup is given.
+       both required). With -Action All, it runs only when -Cleanup is given, and then it runs even
+       when an earlier step failed. A manifest in the work folder is used only if it is the one of
+       the web application (and of the prefix, when it is given) that is asked for.
 
     The scenarios are listed in the wiki page "Lab testing" and by Get-SPSLabScenario. Everything
     the script writes goes to -WorkFolder: the lab settings, the manifest and the reports.
@@ -44,7 +46,8 @@
     The owner of the site collections. Defaults to the current account.
 
     .PARAMETER Scenario
-    The scenarios to build and check. Defaults to all of them.
+    The scenarios to build and check. Defaults to all of them. Remove removes every site collection
+    of the manifest, whatever the scenario.
 
     .PARAMETER Cleanup
     With -Action All, removes the lab site collections at the end.
@@ -54,7 +57,8 @@
 
     .PARAMETER WhatIf
     Shows the site collections that would be created or removed, without creating or removing
-    anything. The inventory step does not run.
+    anything and without writing the lab settings. The inventory step does not run, and with
+    -Action All the verification does not either, because there is nothing to verify.
 
     .EXAMPLE
     .\Invoke-SPSLabTest.ps1 -WebApplicationUrl https://lab.contoso.local -ToolkitPath C:\SPSSiteInventory
@@ -122,59 +126,92 @@ foreach ($required in @($examplePath, $inventoryScript)) {
 $manifestPath = Join-Path -Path $WorkFolder -ChildPath 'lab-manifest.json'
 $settingsPath = Join-Path -Path $WorkFolder -ChildPath 'inventory-settings.lab.psd1'
 $reportFolder = Join-Path -Path $WorkFolder -ChildPath 'Reports'
+
+# The functions of the module have their own preference variables: -WhatIf and -Confirm must be passed to them.
+$preview = @{}
+if ($WhatIfPreference) {
+    $preview['WhatIf'] = $true
+}
 $confirm = @{}
 if ($Force) {
     $confirm['Confirm'] = $false
 }
 
 $runProvision = $Action -in @('Provision', 'All')
-$runInventory = $Action -in @('Inventory', 'All')
-$runVerify = $Action -in @('Verify', 'All')
+$runInventory = ($Action -in @('Inventory', 'All')) -and -not $WhatIfPreference
+$runVerify = ($Action -eq 'Verify') -or ($Action -eq 'All' -and -not $WhatIfPreference)
 $runRemove = ($Action -eq 'Remove') -or ($Action -eq 'All' -and $Cleanup)
 $failed = $false
+$stepError = $null
 
 Write-Host ''
 Write-Host ('SPSSiteInventory lab - toolkit: {0} - web application: {1}' -f $toolkit, $WebApplicationUrl) -ForegroundColor Cyan
 
-if ($runProvision -or $runInventory) {
-    $null = New-SPSLabSettings -ExamplePath $examplePath -OutputPath $settingsPath -WebApplicationUrl $WebApplicationUrl -ReportFolder $reportFolder
-    Write-Host ('Lab settings: {0}' -f $settingsPath) -ForegroundColor Cyan
-}
+try {
+    if ($runProvision -or $runInventory) {
+        $null = New-SPSLabSettings -ExamplePath $examplePath -OutputPath $settingsPath -WebApplicationUrl $WebApplicationUrl -ReportFolder $reportFolder @preview
+        Write-Host ('Lab settings: {0}' -f $settingsPath) -ForegroundColor Cyan
+    }
 
-if ($runProvision) {
-    Write-Host ''
-    Write-Host '== Provision ==' -ForegroundColor Cyan
-    $manifest = New-SPSLabFixture -WebApplicationUrl $WebApplicationUrl -ManifestPath $manifestPath -Prefix $Prefix -Owner $Owner -Scenario $Scenario @confirm
-    $manifest.Scenario | Format-Table -Property Name, Status, Detail -AutoSize | Out-String -Width 200 | Write-Host
-    Write-Host ('Manifest: {0}' -f $manifestPath) -ForegroundColor Cyan
-}
+    if ($runProvision) {
+        Write-Host ''
+        Write-Host '== Provision ==' -ForegroundColor Cyan
+        $manifest = New-SPSLabFixture -WebApplicationUrl $WebApplicationUrl -ManifestPath $manifestPath -Prefix $Prefix -Owner $Owner -Scenario $Scenario @preview @confirm
+        $manifest.Scenario | Format-Table -Property Name, Status, Detail -AutoSize | Out-String -Width 200 | Write-Host
+        Write-Host ('Manifest: {0}' -f $manifestPath) -ForegroundColor Cyan
+    }
 
-if ($runInventory -and -not $WhatIfPreference) {
-    Write-Host ''
-    Write-Host '== Inventory ==' -ForegroundColor Cyan
-    & $inventoryScript -ConfigPath $settingsPath
-}
+    if ($runInventory) {
+        Write-Host ''
+        Write-Host '== Inventory ==' -ForegroundColor Cyan
+        & $inventoryScript -ConfigPath $settingsPath
+    }
 
-if ($runVerify) {
-    Write-Host ''
-    Write-Host '== Verify ==' -ForegroundColor Cyan
-    $result = @(Test-SPSLabResult -ManifestPath $manifestPath -ReportFolder $reportFolder)
-    $count = Write-SPSLabReport -Result $result
-    if ($count.Fail -gt 0) {
-        $failed = $true
+    if ($runVerify) {
+        Write-Host ''
+        Write-Host '== Verify ==' -ForegroundColor Cyan
+        $verify = @{}
+        if ($Scenario) {
+            $verify['Scenario'] = $Scenario
+        }
+        $result = @(Test-SPSLabResult -ManifestPath $manifestPath -ReportFolder $reportFolder @verify)
+        $count = Write-SPSLabReport -Result $result
+        if ($count.Fail -gt 0) {
+            $failed = $true
+        }
     }
 }
-
-if ($runRemove) {
-    Write-Host ''
-    Write-Host '== Remove ==' -ForegroundColor Cyan
-    if (Test-Path -LiteralPath $manifestPath -PathType Leaf) {
-        $removed = Remove-SPSLabFixture -ManifestPath $manifestPath @confirm
+catch {
+    $stepError = $_
+    throw
+}
+finally {
+    # The cleanup runs even when a step failed: a lab that is left behind, a NoAccess lock included, is the worst result.
+    if ($runRemove) {
+        Write-Host ''
+        Write-Host '== Remove ==' -ForegroundColor Cyan
+        try {
+            if (Test-Path -LiteralPath $manifestPath -PathType Leaf) {
+                # The manifest of a work folder must be the one of the lab that is asked for.
+                $scope = @{ WebApplicationUrl = $WebApplicationUrl }
+                if ($PSBoundParameters.ContainsKey('Prefix')) {
+                    $scope['Prefix'] = $Prefix
+                }
+                $removed = Remove-SPSLabFixture -ManifestPath $manifestPath @scope @preview @confirm
+            }
+            else {
+                $removed = Remove-SPSLabFixture -WebApplicationUrl $WebApplicationUrl -Prefix $Prefix @preview @confirm
+            }
+            $removed | Format-Table -Property Url, Status, Detail -AutoSize | Out-String -Width 200 | Write-Host
+        }
+        catch {
+            if ($null -eq $stepError) {
+                throw
+            }
+            # Keep the failure that stopped the run: this one is only a warning.
+            Write-Warning -Message "The lab could not be removed: $($_.Exception.Message)"
+        }
     }
-    else {
-        $removed = Remove-SPSLabFixture -WebApplicationUrl $WebApplicationUrl -Prefix $Prefix @confirm
-    }
-    $removed | Format-Table -Property Url, Status, Detail -AutoSize | Out-String -Width 200 | Write-Host
 }
 
 if ($failed) {

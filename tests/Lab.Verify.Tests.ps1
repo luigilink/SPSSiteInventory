@@ -276,6 +276,57 @@ Describe 'Test-SPSLabResult' {
         { Test-SPSLabResult -ManifestPath $script:ManifestPath -ReportFolder $empty } | Should -Throw '*run the inventory first*'
     }
 
+    It 'checks only the scenarios that are asked for, and fails when none of them is in the manifest' {
+        $one = @(Test-SPSLabResult -ManifestPath $script:ManifestPath -ReportFolder (Join-Path -Path $TestDrive -ChildPath 'lab/Reports') -Scenario 'subsites')
+        $two = @(Test-SPSLabResult -ManifestPath $script:ManifestPath -ReportFolder (Join-Path -Path $TestDrive -ChildPath 'lab/Reports') -Scenario 'SUBSITES', 'baseline')
+
+        @($one | ForEach-Object { $_.Scenario } | Select-Object -Unique) | Should -Be @('subsites')
+        @($one | Where-Object { $_.Status -eq 'FAIL' }) | Should -HaveCount 0
+        @($two | ForEach-Object { $_.Scenario } | Select-Object -Unique) | Should -Be @('baseline', 'subsites')
+        { Test-SPSLabResult -ManifestPath $script:ManifestPath -ReportFolder (Join-Path -Path $TestDrive -ChildPath 'lab/Reports') -Scenario 'nothing' } | Should -Throw "*None of the scenarios 'nothing' is in the lab manifest*"
+    }
+
+    It 'reads the alerts report of the same run as the sites report, never that of another run' {
+        $folder = Join-Path -Path $TestDrive -ChildPath 'tworuns'
+        $record = New-Record 'subsites' @{ SubsiteCount = 5; MaxSubsiteDepth = 3; SubWebCount = 6; SubsiteExamples = 'a/b/c (level 3)' }
+        # The old run raised the alert. The new run wrote its sites report, then failed before it wrote its alerts report.
+        $null = Write-Json 'tworuns/Reports/SPSSiteInventory-LAB-sites-20261027-0900.json' @($record) (Get-Date).AddHours(-2)
+        $null = Write-Json 'tworuns/Reports/SPSSiteInventory-LAB-alerts-20261027-0900.json' @([PSCustomObject]@{ AlertType = 'Subsites'; Url = 'https://lab/sites/spslab-subsites' }) (Get-Date).AddHours(-2)
+        $null = Write-Json 'tworuns/Reports/SPSSiteInventory-LAB-sites-20261027-1100.json' @($record) (Get-Date)
+        $manifestPath = Write-Json 'tworuns/lab-manifest.json' ([PSCustomObject]@{ Scenario = @((New-Entry 'subsites')) })
+
+        $result = @(Test-SPSLabResult -ManifestPath $manifestPath -ReportFolder (Join-Path -Path $folder -ChildPath 'Reports'))
+
+        @($result | Where-Object { $_.Check -eq 'Alert Subsites' })[0].Status | Should -Be 'SKIP'
+    }
+
+    It 'takes the alerts report of the sites report that it uses, when both runs wrote one' {
+        $folder = Join-Path -Path $TestDrive -ChildPath 'bothruns'
+        $record = New-Record 'subsites' @{ SubsiteCount = 5; MaxSubsiteDepth = 3; SubWebCount = 6; SubsiteExamples = 'a/b/c (level 3)' }
+        $null = Write-Json 'bothruns/Reports/SPSSiteInventory-LAB-sites-20261027-0900.json' @($record) (Get-Date).AddHours(-2)
+        $null = Write-Json 'bothruns/Reports/SPSSiteInventory-LAB-alerts-20261027-0900.json' @([PSCustomObject]@{ AlertType = 'Subsites'; Url = 'https://lab/sites/spslab-subsites' }) (Get-Date).AddHours(-2)
+        $null = Write-Json 'bothruns/Reports/SPSSiteInventory-LAB-sites-20261027-1100.json' @($record) (Get-Date)
+        $null = Write-Json 'bothruns/Reports/SPSSiteInventory-LAB-alerts-20261027-1100.json' @([PSCustomObject]@{ AlertType = 'LargeLists'; Url = 'https://lab/sites/spslab-subsites' }) (Get-Date)
+        $manifestPath = Write-Json 'bothruns/lab-manifest.json' ([PSCustomObject]@{ Scenario = @((New-Entry 'subsites')) })
+
+        $result = @(Test-SPSLabResult -ManifestPath $manifestPath -ReportFolder (Join-Path -Path $folder -ChildPath 'Reports'))
+
+        @($result | Where-Object { $_.Check -eq 'Alert Subsites' })[0].Status | Should -Be 'FAIL'
+    }
+
+    It 'fails the alert checks, instead of skipping them, when the alerts report exists and is empty' {
+        $folder = Join-Path -Path $TestDrive -ChildPath 'emptyalerts'
+        $null = Write-Json 'emptyalerts/Reports/SPSSiteInventory-LAB-sites-20261027-1000.json' @((New-Record 'subsites' @{ SubsiteCount = 5; MaxSubsiteDepth = 3; SubWebCount = 6; SubsiteExamples = 'a/b/c (level 3)' }))
+        Set-Content -Path (Join-Path -Path $folder -ChildPath 'Reports/SPSSiteInventory-LAB-alerts-20261027-1000.json') -Value '[]' -Encoding UTF8
+        $manifestPath = Write-Json 'emptyalerts/lab-manifest.json' ([PSCustomObject]@{ Scenario = @((New-Entry 'subsites')) })
+
+        $result = @(Test-SPSLabResult -ManifestPath $manifestPath -ReportFolder (Join-Path -Path $folder -ChildPath 'Reports'))
+
+        $alert = @($result | Where-Object { $_.Check -eq 'Alert Subsites' })[0]
+        $alert.Status | Should -Be 'FAIL'
+        $alert.Actual | Should -Be 'not raised'
+    }
+
     It 'says what to do when there is no manifest' {
         { Test-SPSLabResult -ManifestPath (Join-Path -Path $TestDrive -ChildPath 'no-manifest.json') -ReportFolder $TestDrive } | Should -Throw '*run the Provision step first*'
     }

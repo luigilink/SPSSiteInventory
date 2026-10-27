@@ -885,11 +885,18 @@ function Test-SPSLabResult {
         Every lab site also gets an Assessment result: a site whose assessment is Partial or
         Failed is how a problem with a real farm shows up, so its warnings are listed.
 
+        The alerts report is the one that the same run wrote next to the sites report (same name and
+        time stamp), never an older or newer one: an alerts report that is missing is a skipped check,
+        and one that is there but empty means that the run raised no alert.
+
         .PARAMETER ManifestPath
         The manifest written by New-SPSLabFixture.
 
         .PARAMETER ReportFolder
         The folder the inventory wrote its reports to.
+
+        .PARAMETER Scenario
+        Checks only these scenarios of the manifest. It is an error when none of them is in it.
 
         .EXAMPLE
         Test-SPSLabResult -ManifestPath .\lab-manifest.json -ReportFolder .\Reports
@@ -904,27 +911,43 @@ function Test-SPSLabResult {
 
         [Parameter(Mandatory = $true)]
         [System.String]
-        $ReportFolder
+        $ReportFolder,
+
+        [Parameter()]
+        [System.String[]]
+        $Scenario
     )
 
     if (-not (Test-Path -LiteralPath $ManifestPath -PathType Leaf)) {
         throw "The lab manifest '$ManifestPath' does not exist: run the Provision step first."
     }
     $manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
+    $entryList = @($manifest.Scenario)
+    if ($PSBoundParameters.ContainsKey('Scenario') -and @($Scenario).Count -gt 0) {
+        $entryList = @($entryList | Where-Object { @($Scenario) -contains [System.String]$_.Name })
+        if ($entryList.Count -eq 0) {
+            throw ("None of the scenarios '{0}' is in the lab manifest." -f (@($Scenario) -join "', '"))
+        }
+    }
     $sitesFile = Get-ChildItem -LiteralPath $ReportFolder -Filter '*-sites-*.json' -ErrorAction SilentlyContinue | Sort-Object -Property LastWriteTime -Descending | Select-Object -First 1
     if ($null -eq $sitesFile) {
         throw "No '*-sites-*.json' report in '$ReportFolder': run the inventory first."
     }
-    $alertsFile = Get-ChildItem -LiteralPath $ReportFolder -Filter '*-alerts-*.json' -ErrorAction SilentlyContinue | Sort-Object -Property LastWriteTime -Descending | Select-Object -First 1
+    # The alerts report of the run that wrote this sites report: same name, same time stamp.
+    $alertsPath = Join-Path -Path $ReportFolder -ChildPath ([System.Text.RegularExpressions.Regex]::Replace($sitesFile.Name, '^(.*)-sites-(.*)$', '${1}-alerts-${2}'))
+    $hasAlerts = Test-Path -LiteralPath $alertsPath -PathType Leaf
 
     $records = Read-SPSLabJson -Path $sitesFile.FullName
-    $alerts = if ($null -ne $alertsFile) { Read-SPSLabJson -Path $alertsFile.FullName } else { $null }
+    $alerts = @()
+    if ($hasAlerts) {
+        $alerts = @(Read-SPSLabJson -Path $alertsPath)
+    }
     $catalog = @(Get-SPSLabScenario)
     $results = [System.Collections.Generic.List[object]]::new()
 
-    foreach ($entry in @($manifest.Scenario)) {
-        $scenario = $catalog | Where-Object { $_.Name -eq $entry.Name } | Select-Object -First 1
-        if ($null -eq $scenario) {
+    foreach ($entry in $entryList) {
+        $definition = $catalog | Where-Object { $_.Name -eq $entry.Name } | Select-Object -First 1
+        if ($null -eq $definition) {
             continue
         }
         $add = {
@@ -952,11 +975,11 @@ function Test-SPSLabResult {
             continue
         }
         $raisedType = $null
-        if ($null -ne $alerts) {
+        if ($hasAlerts) {
             $raisedType = @($alerts | Where-Object { [System.String]$_.Url -eq [System.String]$entry.Url } | ForEach-Object { [System.String]$_.AlertType })
         }
 
-        foreach ($expectation in @($scenario.Expect)) {
+        foreach ($expectation in @($definition.Expect)) {
             & $add (Test-SPSLabExpectation -Expectation $expectation -Record $record -Alert $raisedType)
         }
 
@@ -1075,23 +1098,33 @@ function Remove-SPSLabFixture {
         WRITES TO THE FARM. Removes the site collections of the manifest, or, without a manifest,
         those named <web application>/sites/<prefix>-*. Nothing is removed unless its URL starts
         with that prefix AND its root web carries the lab marker that New-SPSLabFixture sets, so a
-        site that merely looks like a lab site is left alone. A locked site is unlocked first, and the
-        removed sites are purged from the deleted sites, so that the lab can be built again.
+        site that merely looks like a lab site is left alone. A locked site is unlocked first.
         Confirmation is asked before each removal.
+
+        With a manifest, -WebApplicationUrl and -Prefix, when they are given, must be those of the
+        manifest: a manifest that is left in a work folder cannot be used to remove the lab of another
+        web application.
+
+        A removed site collection stays in the deleted sites, which blocks its URL. The deleted sites
+        that this run removed, and those of the manifest that were removed before, are purged, after a
+        confirmation, so that the lab can be built again. Nothing else is purged, a lookalike that was
+        refused included.
 
         .PARAMETER ManifestPath
         The manifest written by New-SPSLabFixture.
 
         .PARAMETER WebApplicationUrl
-        Without a manifest, the lab web application.
+        Without a manifest, the lab web application. With a manifest, the web application that the
+        manifest must be for.
 
         .PARAMETER Prefix
-        Without a manifest, the prefix of the lab site collections.
+        Without a manifest, the prefix of the lab site collections. With a manifest, the prefix that
+        the manifest must have, when it is given.
 
         .EXAMPLE
         Remove-SPSLabFixture -ManifestPath .\lab-manifest.json
     #>
-    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High', DefaultParameterSetName = 'Manifest')]
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High', DefaultParameterSetName = 'Prefix')]
     [OutputType([System.Management.Automation.PSObject[]])]
     param
     (
@@ -1100,10 +1133,12 @@ function Remove-SPSLabFixture {
         $ManifestPath,
 
         [Parameter(Mandatory = $true, ParameterSetName = 'Prefix')]
+        [Parameter(ParameterSetName = 'Manifest')]
         [System.String]
         $WebApplicationUrl,
 
         [Parameter(ParameterSetName = 'Prefix')]
+        [Parameter(ParameterSetName = 'Manifest')]
         [ValidatePattern('^[a-z][a-z0-9]{2,15}$')]
         [System.String]
         $Prefix = 'spslab'
@@ -1116,6 +1151,15 @@ function Remove-SPSLabFixture {
         $manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
         $baseUrl = [System.String]$manifest.WebApplicationUrl
         $prefixValue = [System.String]$manifest.Prefix
+        if ($PSBoundParameters.ContainsKey('WebApplicationUrl')) {
+            $requestedUrl = (Get-SPWebApplication -Identity $WebApplicationUrl -ErrorAction Stop).Url.TrimEnd('/')
+            if (-not [System.String]::Equals($requestedUrl, $baseUrl, [System.StringComparison]::OrdinalIgnoreCase)) {
+                throw "The lab manifest '$ManifestPath' is for the web application '$baseUrl', not for '$requestedUrl': nothing was removed. Use the work folder of the lab you want to remove."
+            }
+        }
+        if ($PSBoundParameters.ContainsKey('Prefix') -and $Prefix -cne $prefixValue) {
+            throw "The lab manifest '$ManifestPath' is for the prefix '$prefixValue', not for '$Prefix': nothing was removed. Use the work folder of the lab you want to remove."
+        }
         $urlList = @($manifest.Scenario | ForEach-Object { [System.String]$_.Url })
     }
     else {
@@ -1125,6 +1169,7 @@ function Remove-SPSLabFixture {
     }
     $required = '{0}/sites/{1}-' -f $baseUrl, $prefixValue
     $result = [System.Collections.Generic.List[object]]::new()
+    $purgeable = [System.Collections.Generic.List[string]]::new()
 
     foreach ($url in $urlList) {
         if (-not $url.StartsWith($required, [System.StringComparison]::OrdinalIgnoreCase)) {
@@ -1152,6 +1197,10 @@ function Remove-SPSLabFixture {
         }
         if ($null -eq $marked) {
             $result.Add([PSCustomObject]@{ Url = $url; Status = 'Absent'; Detail = 'The site collection does not exist.' })
+            if ($PSCmdlet.ParameterSetName -eq 'Manifest') {
+                # It is a lab site of the manifest that was removed before: its entry in the deleted sites may still be there.
+                $purgeable.Add(([System.Uri]$url).AbsolutePath)
+            }
             continue
         }
         if (-not $marked) {
@@ -1166,19 +1215,27 @@ function Remove-SPSLabFixture {
             Set-SPSite -Identity $url -LockState Unlock -ErrorAction SilentlyContinue
             Remove-SPSite -Identity $url -Confirm:$false -ErrorAction Stop
             $result.Add([PSCustomObject]@{ Url = $url; Status = 'Removed'; Detail = '' })
+            $purgeable.Add(([System.Uri]$url).AbsolutePath)
         }
         catch {
             $result.Add([PSCustomObject]@{ Url = $url; Status = 'Failed'; Detail = $_.Exception.Message })
         }
     }
 
-    # A removed site collection stays in the deleted sites, which blocks its URL: purge the lab ones.
-    foreach ($deleted in @(Get-SPDeletedSite -WebApplication $baseUrl -ErrorAction SilentlyContinue | Where-Object { ([System.String]$_.Path) -like ('*/sites/{0}-*' -f $prefixValue) })) {
-        try {
-            Remove-SPDeletedSite -Identity $deleted.SiteId -Confirm:$false -ErrorAction Stop
-        }
-        catch {
-            Write-Verbose -Message "The deleted site '$($deleted.Path)' could not be purged: $($_.Exception.Message)"
+    if ($purgeable.Count -gt 0) {
+        foreach ($deleted in @(Get-SPDeletedSite -WebApplication $baseUrl -ErrorAction SilentlyContinue)) {
+            if ($purgeable -notcontains [System.String]$deleted.Path) {
+                continue
+            }
+            if (-not $PSCmdlet.ShouldProcess([System.String]$deleted.Path, 'Purge the deleted lab site collection')) {
+                continue
+            }
+            try {
+                Remove-SPDeletedSite -Identity $deleted.SiteId -Confirm:$false -ErrorAction Stop
+            }
+            catch {
+                Write-Verbose -Message "The deleted site '$($deleted.Path)' could not be purged: $($_.Exception.Message)"
+            }
         }
     }
     return $result.ToArray()
