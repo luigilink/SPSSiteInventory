@@ -149,8 +149,8 @@
         .PARAMETER PermissionLevels
         Optional permission-level settings. BuiltInNames lists permission level names to
         treat as provisioned by SharePoint, in addition to the English names built in
-        (View Only, Approve, Manage Hierarchy, Restricted Interfaces for Translation,
-        Moderate, Records Center Web Service Submitters). Add the localized names on a
+        (View Only, Approve, Manage Hierarchy, Restricted Read, Restricted Interfaces for
+        Translation, Moderate, Records Center Web Service Submitters). Add the localized names on a
         non-English farm, otherwise those levels are reported as custom.
 
         .PARAMETER SharePointAlertSettings
@@ -301,7 +301,7 @@
     $maxAlertRows = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'MaxAlertRowsPerSite' -DefaultValue 5000 -MinimumValue 1)
     # Names SharePoint provisions with a None type, in English; PermissionLevels.BuiltInNames adds localized ones.
     $builtInPermissionLevelNames = @(
-        'View Only', 'Approve', 'Manage Hierarchy', 'Restricted Interfaces for Translation',
+        'View Only', 'Approve', 'Manage Hierarchy', 'Restricted Read', 'Restricted Interfaces for Translation',
         'Moderate', 'Records Center Web Service Submitters'
     )
     if ($PermissionLevels.Contains('BuiltInNames') -and $null -ne $PermissionLevels['BuiltInNames']) {

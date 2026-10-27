@@ -395,12 +395,12 @@ PermissionLevels = @{
 }
 ```
 
-SharePoint gives Limited Access, Read, Contribute, Design, Full Control, Edit and
-Restricted Read a base type, so they are never custom, even when renamed. Other levels
+SharePoint gives Limited Access, Read, Contribute, Design, Full Control and Edit a
+base type, so they are never custom, even when renamed. Other levels
 have no base type: the ones a user creates, and the ones SharePoint provisions for
 features and site templates. The provisioned levels are recognized by name, using these
-English names: View Only, Approve, Manage Hierarchy, Restricted Interfaces for
-Translation, Moderate and Records Center Web Service Submitters.
+English names: View Only, Approve, Manage Hierarchy, Restricted Read, Restricted
+Interfaces for Translation, Moderate and Records Center Web Service Submitters.
 
 Permission level names are localized, so on a farm that is not in English the
 provisioned levels have other names and would be reported as custom on almost every
