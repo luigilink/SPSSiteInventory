@@ -26,7 +26,9 @@
         .PARAMETER ExampleConfigPath
         Path to the example settings file of the toolkit. When it exists, the settings are
         compared with it, to show the blocking signals and the weights that an older settings
-        file does not have yet.
+        file does not have yet. When a path is given but the file does not exist, the
+        'Comparison with the example' check is Skipped, with the path in its detail. Without
+        a path, the settings are not compared and no result is added.
 
         .PARAMETER SkipSharePoint
         Skips the checks that need SharePoint, to check the host and the settings file on a
@@ -192,6 +194,9 @@
                     Add-ReadinessResult -Section 'Settings' -Name 'Signal weights' -Status 'OK' -Detail 'Every signal of the example configuration has a weight.'
                 }
             }
+        }
+        elseif (-not [System.String]::IsNullOrEmpty($ExampleConfigPath)) {
+            Add-ReadinessResult -Section 'Settings' -Name 'Comparison with the example' -Status 'Skipped' -Detail ('The example settings file was not found at {0}: the blocking signals and the weights were not compared.' -f $ExampleConfigPath)
         }
     }
 
