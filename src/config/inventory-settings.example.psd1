@@ -198,6 +198,13 @@
             IsUnsupportedSiteTemplate = 5.0
             # Language mismatches or unknown language metadata require readiness review.
             TemplateLanguageReviewRequired = 0.5
+            # Subsites are supported in SharePoint Online, but modern SharePoint favors one site
+            # collection per unit of work, connected by hub sites. A large or deep hierarchy is a
+            # restructuring topic to plan, not a blocker, so it is weighted lightly and is not in
+            # BlockingSignals. SubsiteCount counts the webs below the root web and MaxSubsiteDepth
+            # the deepest level (1 = directly below the root web).
+            SubsiteCount = 0.05
+            MaxSubsiteDepth = 0.25
             # InfoPath forms (retired, no SharePoint Online equivalent) must be rebuilt in
             # Power Apps. Weighted heavily and listed as a blocking signal below.
             InfoPathFormCount        = 3.0

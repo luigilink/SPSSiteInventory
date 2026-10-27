@@ -199,6 +199,24 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $html | Should -Match '<div class="num">1</div><div class="lbl">Sites with external lists</div>'
     }
 
+    It 'shows the subsite structure in a summary card and table columns, and counts only the sites that have subsites' {
+        $records = @(
+            [PSCustomObject]@{ Url = 'https://intranet/sites/a'; Category = 1; CategoryName = 'Simple'; Wave = 1; WaveName = 'Quick wins'; SubWebCount = 4; SubsiteCount = 3; MaxSubsiteDepth = 2; SubsiteExamples = 'payroll/<2026> (level 2); payroll (level 1)' }
+            [PSCustomObject]@{ Url = 'https://intranet/sites/b'; Category = 1; CategoryName = 'Simple'; Wave = 1; WaveName = 'Quick wins'; SubWebCount = 1; SubsiteCount = 0; MaxSubsiteDepth = 0; SubsiteExamples = '' }
+            [PSCustomObject]@{ Url = 'https://intranet/sites/c'; Category = 1; CategoryName = 'Simple'; Wave = 1; WaveName = 'Quick wins' }
+        )
+
+        $html = ConvertTo-SPSInventoryHtml -InputObject $records
+
+        $html | Should -Match '<div class="num">1</div><div class="lbl">Sites with subsites</div>'
+        $html | Should -Match '>Webs <span class="arrow">'
+        $html | Should -Match '>Subsites <span class="arrow">'
+        $html | Should -Match '>Subsite depth <span class="arrow">'
+        $html | Should -Match '>Subsite examples <span class="arrow">'
+        $html | Should -Match 'payroll/&lt;2026&gt; \(level 2\); payroll \(level 1\)'
+        $html | Should -Not -Match '>Sub-webs <span class="arrow">'
+    }
+
     It 'shows the NoAccess lock in a summary card and a table column' {
         $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
 

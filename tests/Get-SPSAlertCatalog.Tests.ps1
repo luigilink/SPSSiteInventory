@@ -137,6 +137,19 @@ Describe 'Get-SPSAlertCatalog' {
         $locked.Reference | Should -Match 'powershell/module/microsoft\.sharepoint\.powershell/set-spsite\?view=sharepoint-ps$'
     }
 
+    It 'gives restructuring guidance for subsites without treating them as a problem SharePoint Online cannot handle' {
+        $entry = $script:Catalog['Subsites']
+
+        $entry.Severity | Should -Be 'Low'
+        $entry.Message | Should -Match 'SharePoint Online supports them'
+        $entry.Message | Should -Match 'hub sites'
+        $entry.Remediation | Should -Match 'becomes a site collection of its own'
+        $entry.Remediation | Should -Match 'part of the URL of its content'
+        $entry.Remediation | Should -Match 'SubsiteCount, MaxSubsiteDepth and SubsiteExamples'
+        $entry.Remediation | Should -Not -Match 'cannot be migrated|must be removed|retired'
+        $entry.Reference | Should -Be 'https://learn.microsoft.com/en-us/sharepoint/planning-hub-sites'
+    }
+
     It 'is documented in the alerts wiki page, with the same remediation' {
         foreach ($key in $script:Catalog.Keys) {
             $script:WikiAlerts | Should -Match ('\| `{0}` \|' -f $key) -Because "alert $key must be documented"

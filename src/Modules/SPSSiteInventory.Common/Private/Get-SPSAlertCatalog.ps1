@@ -225,6 +225,12 @@
             Remediation = 'Decide whether all versions must be kept: the migration time grows with the number of versions.'
             Reference   = 'https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-file-versions'
         }
+        Subsites = @{
+            Severity    = 'Low'
+            Message     = 'This site collection has subsites. SharePoint Online supports them, but modern SharePoint favors one site collection per unit of work, connected by hub sites.'
+            Remediation = 'Decide with the site owners, before the migration, whether each subsite stays where it is or becomes a site collection of its own, connected to the others by a hub site. A subsite is part of the URL of its content, so reorganizing it later breaks the links to it, and the policies of a site collection (retention, classification, features) apply to all its subsites. Restructuring changes URLs, navigation and permissions, so plan the redirects and the communication. SubsiteCount, MaxSubsiteDepth and SubsiteExamples in the inventory show where to start.'
+            Reference   = 'https://learn.microsoft.com/en-us/sharepoint/planning-hub-sites'
+        }
         WebApplicationPolicies = @{
             Severity    = 'Medium'
             Message     = 'Web application policies are not migrated to SharePoint Online; replace them with site-collection permissions.'

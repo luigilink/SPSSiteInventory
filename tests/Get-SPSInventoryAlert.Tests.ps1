@@ -34,6 +34,7 @@ BeforeDiscovery {
         @{ Type = 'LargeListViews'; Severity = 'Medium'; Signals = @{ LargeListViewCount = 2 }; Value = 2 }
         @{ Type = 'CheckedOutFiles'; Severity = 'Medium'; Signals = @{ CheckedOutFileCount = 9 }; Value = 9 }
         @{ Type = 'FileVersions'; Severity = 'Medium'; Signals = @{ FileVersionCount = 3 }; Value = 3 }
+        @{ Type = 'Subsites'; Severity = 'Low'; Signals = @{ SubsiteCount = 4 }; Value = 4 }
     )
 }
 
@@ -77,6 +78,18 @@ Describe 'Get-SPSInventoryAlert' {
 
     It 'raises nothing for a site collection without any signal' {
         Get-Alert -Record @((New-Site)) | Should -HaveCount 0
+    }
+
+    It 'raises the Subsites alert for a single subsite, and not for a site collection that has only its root web' {
+        $one = Get-Alert -Record @((New-Site -Signals @{ SubsiteCount = 1; MaxSubsiteDepth = 1 }))
+        $none = Get-Alert -Record @((New-Site -Signals @{ SubsiteCount = 0; MaxSubsiteDepth = 0 }))
+        $failed = Get-Alert -Record @((New-Site -Signals @{ SubsiteCount = $null; MaxSubsiteDepth = $null }))
+
+        $one | Should -HaveCount 1
+        $one[0].AlertType | Should -Be 'Subsites'
+        $one[0].Value | Should -Be 1
+        $none | Should -HaveCount 0
+        $failed | Should -HaveCount 0
     }
 
     It 'raises nothing for an empty inventory' {

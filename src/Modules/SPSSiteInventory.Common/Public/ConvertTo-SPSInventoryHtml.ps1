@@ -195,6 +195,7 @@
         [PSCustomObject]@{ Label = 'Sites with managed metadata columns'; Count = @($siteRecords | Where-Object { [int]$_.ManagedMetadataListCount -gt 0 }).Count }
         [PSCustomObject]@{ Label = 'Sites with external lists'; Count = @($siteRecords | Where-Object { [int]$_.ExternalListCount -gt 0 }).Count }
         [PSCustomObject]@{ Label = 'Sites with SharePoint alerts'; Count = @($siteRecords | Where-Object { [int]$_.SharePointAlertCount -gt 0 }).Count }
+        [PSCustomObject]@{ Label = 'Sites with subsites'; Count = @($siteRecords | Where-Object { [int]$_.SubsiteCount -gt 0 }).Count }
         [PSCustomObject]@{ Label = 'Sites in web applications with permissive browser file handling'; Count = @($siteRecords | Where-Object { [string]$_.BrowserFileHandling -eq 'Permissive' }).Count }
         [PSCustomObject]@{ Label = 'Sites above large-size threshold'; Count = @($siteRecords | Where-Object { $_.IsLargeSite }).Count }
         [PSCustomObject]@{ Label = 'Sites with large lists'; Count = @($siteRecords | Where-Object { [int]$_.LargeListCount -gt 0 }).Count }
@@ -807,7 +808,10 @@ td.muted, .muted { color: var(--muted); }
         @{ Key = 'ExternalListExamples'; Label = 'External list examples'; Class = 'reasons'; Type = 'text' }
         @{ Key = 'SharePointAlertCount'; Label = 'SharePoint alerts'; Class = 'num'; Type = 'num' }
         @{ Key = 'SizeGB'; Label = 'Size (GB)'; Class = 'num'; Type = 'num' }
-        @{ Key = 'SubWebCount'; Label = 'Sub-webs'; Class = 'num'; Type = 'num' }
+        @{ Key = 'SubWebCount'; Label = 'Webs'; Class = 'num'; Type = 'num' }
+        @{ Key = 'SubsiteCount'; Label = 'Subsites'; Class = 'num'; Type = 'num' }
+        @{ Key = 'MaxSubsiteDepth'; Label = 'Subsite depth'; Class = 'num'; Type = 'num' }
+        @{ Key = 'SubsiteExamples'; Label = 'Subsite examples'; Class = 'reasons'; Type = 'text' }
         @{ Key = 'LastModified'; Label = 'Last modified'; Class = ''; Type = 'text' }
         @{ Key = 'AssessmentStatus'; Label = 'Assessment status'; Class = ''; Type = 'text' }
         @{ Key = 'SiteInventoryComplete'; Label = 'Site inventory complete'; Class = ''; Type = 'text' }

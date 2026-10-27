@@ -2577,3 +2577,138 @@ Describe 'Get-SPSSiteCustomization content types' {
         ($warnings -join ';') | Should -Match 'The alert data could not be loaded'
     }
 }
+
+Describe 'Get-SPSSiteCustomization subsites' {
+    BeforeAll {
+        function Get-TestSubsite {
+            param ([System.String] $Url, [System.Boolean] $IsRootWeb = $false)
+
+            $subsite = Get-TestWeb -Definitions @() -Bindings @()
+            $subsite.Url = $Url
+            $subsite.IsRootWeb = $IsRootWeb
+            return $subsite
+        }
+
+        function Get-TestSite {
+            param ([System.Object[]] $Web, [System.String] $Url = 'https://intranet.contoso.com/sites/team')
+
+            return [PSCustomObject]@{
+                Url      = $Url
+                Features = @()
+                Solutions = @()
+                AllWebs  = $Web
+            }
+        }
+    }
+
+    It 'counts the webs below the root web, the deepest level and the deepest subsites' {
+        $site = Get-TestSite -Web @(
+            Get-TestSubsite -Url 'https://intranet.contoso.com/sites/team' -IsRootWeb $true
+            Get-TestSubsite -Url 'https://intranet.contoso.com/sites/team/a'
+            Get-TestSubsite -Url 'https://intranet.contoso.com/sites/team/a/b'
+            Get-TestSubsite -Url 'https://intranet.contoso.com/sites/team/c'
+        )
+
+        $signals = Get-SPSSiteCustomization -Site $site
+
+        $signals.SubsiteCount | Should -Be 3
+        $signals.MaxSubsiteDepth | Should -Be 2
+        $signals.SubsiteExamples | Should -Be 'a/b (level 2); a (level 1); c (level 1)'
+        $signals.CustomizationInventoryComplete | Should -BeTrue
+    }
+
+    It 'reports no subsite for a site collection that has only its root web' {
+        $site = Get-TestSite -Web @(Get-TestSubsite -Url 'https://intranet.contoso.com/sites/team' -IsRootWeb $true)
+
+        $signals = Get-SPSSiteCustomization -Site $site
+
+        $signals.SubsiteCount | Should -Be 0
+        $signals.MaxSubsiteDepth | Should -Be 0
+        $signals.SubsiteExamples | Should -Be ''
+        $signals.CustomizationInventoryComplete | Should -BeTrue
+    }
+
+    It 'counts the subsites of the root site collection of a web application' {
+        $site = Get-TestSite -Url 'https://intranet.contoso.com' -Web @(
+            Get-TestSubsite -Url 'https://intranet.contoso.com' -IsRootWeb $true
+            Get-TestSubsite -Url 'https://intranet.contoso.com/news'
+            Get-TestSubsite -Url 'https://intranet.contoso.com/news/archive'
+        )
+
+        $signals = Get-SPSSiteCustomization -Site $site
+
+        $signals.SubsiteCount | Should -Be 2
+        $signals.MaxSubsiteDepth | Should -Be 2
+    }
+
+    It 'does not count the app webs that add-ins create' {
+        $appWeb = Get-TestSubsite -Url 'https://intranet.contoso.com/sites/team/MyApp'
+        $appWeb | Add-Member -MemberType NoteProperty -Name IsAppWeb -Value $true
+        $site = Get-TestSite -Web @(
+            Get-TestSubsite -Url 'https://intranet.contoso.com/sites/team' -IsRootWeb $true
+            $appWeb
+            Get-TestSubsite -Url 'https://intranet.contoso.com/sites/team/real'
+        )
+
+        $signals = Get-SPSSiteCustomization -Site $site
+
+        $signals.AppWebCount | Should -Be 1
+        $signals.SubsiteCount | Should -Be 1
+        $signals.SubsiteExamples | Should -Be 'real (level 1)'
+    }
+
+    It 'lists at most five subsites, the deepest first' {
+        $webs = @(Get-TestSubsite -Url 'https://intranet.contoso.com/sites/team' -IsRootWeb $true)
+        foreach ($name in @('a', 'b', 'c', 'd', 'e', 'f')) {
+            $webs += Get-TestSubsite -Url "https://intranet.contoso.com/sites/team/$name"
+        }
+        $webs += Get-TestSubsite -Url 'https://intranet.contoso.com/sites/team/z/y/x'
+        $site = Get-TestSite -Web $webs
+
+        $signals = Get-SPSSiteCustomization -Site $site
+
+        $signals.SubsiteCount | Should -Be 7
+        $signals.MaxSubsiteDepth | Should -Be 3
+        $signals.SubsiteExamples | Should -Be 'z/y/x (level 3); a (level 1); b (level 1); c (level 1); d (level 1)'
+    }
+
+    It 'marks the collection partial, with a warning, when a web is not below the site collection' {
+        $site = Get-TestSite -Web @(
+            Get-TestSubsite -Url 'https://intranet.contoso.com/sites/team' -IsRootWeb $true
+            Get-TestSubsite -Url 'https://elsewhere.contoso.com/other'
+            Get-TestSubsite -Url 'https://intranet.contoso.com/sites/team/a'
+        )
+
+        $signals = Get-SPSSiteCustomization -Site $site -WarningVariable warnings -WarningAction SilentlyContinue
+
+        $signals.SubsiteCount | Should -Be 1
+        $signals.CustomizationInventoryComplete | Should -BeFalse
+        ($warnings -join ';') | Should -Match "Could not place web 'https://elsewhere.contoso.com/other' in the structure of the site collection"
+    }
+
+    It 'marks the collection partial, and counts nothing, for a web with the same path on another host' {
+        $site = Get-TestSite -Web @(
+            Get-TestSubsite -Url 'https://intranet.contoso.com/sites/team' -IsRootWeb $true
+            Get-TestSubsite -Url 'https://elsewhere.contoso.com/sites/team/payroll'
+        )
+
+        $signals = Get-SPSSiteCustomization -Site $site -WarningVariable warnings -WarningAction SilentlyContinue
+
+        $signals.SubsiteCount | Should -Be 0
+        $signals.MaxSubsiteDepth | Should -Be 0
+        $signals.CustomizationInventoryComplete | Should -BeFalse
+        ($warnings -join ';') | Should -Match "Could not place web 'https://elsewhere.contoso.com/sites/team/payroll'"
+    }
+
+    It 'marks the collection partial when the URL of a web cannot be read' {
+        $site = Get-TestSite -Web @(
+            Get-TestSubsite -Url 'https://intranet.contoso.com/sites/team' -IsRootWeb $true
+            Get-TestSubsite -Url ''
+        )
+
+        $signals = Get-SPSSiteCustomization -Site $site -WarningAction SilentlyContinue
+
+        $signals.SubsiteCount | Should -Be 0
+        $signals.CustomizationInventoryComplete | Should -BeFalse
+    }
+}

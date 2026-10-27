@@ -66,6 +66,8 @@ Scoring = @{
         ExternalListCount        = 1.0
         IsUnsupportedSiteTemplate = 5.0
         TemplateLanguageReviewRequired = 0.5
+        SubsiteCount             = 0.05
+        MaxSubsiteDepth          = 0.25
         InfoPathFormCount        = 3.0
         IrmEnabledListCount      = 2.5
         IsLargeSite              = 1.5
@@ -134,6 +136,24 @@ heavily and listed in `BlockingSignals` in the example configuration.
 `IrmEnabledListCount` counts lists/libraries where IRM is enabled. IRM typically requires
 records-protection and compliance remediation during migration, so the example
 configuration keeps it as both weighted and blocking.
+
+Subsites are supported in SharePoint Online, but modern SharePoint favors one site collection
+per unit of work, connected by hub sites. A large or deep hierarchy is therefore a restructuring
+topic to plan, not a blocker: the example configuration weights it lightly and does not list it
+in `BlockingSignals`.
+
+- `SubsiteCount` — the webs below the root web of the site collection. The root web itself
+  and the app webs that add-ins create are not counted (`SubWebCount` counts every web,
+  the root web included).
+- `MaxSubsiteDepth` — the deepest level of the hierarchy: 1 for a web directly below the
+  root web, 2 for one more level, and so on.
+
+With the example weights, subsites alone make a site Moderate from 15 subsites directly below
+the root web, or from four levels of subsites; in between, the deeper the hierarchy, the fewer
+subsites it takes. The `Subsites` alert (`Low`, see
+[Alerts](Alerts)) carries the restructuring guidance, and `SubsiteExamples` in the reports lists
+up to five of the deepest subsites. Set both weights to `0` to ignore the structure, or raise
+them to plan the restructuring first.
 
 Large-content parity signals are threshold-driven:
 
