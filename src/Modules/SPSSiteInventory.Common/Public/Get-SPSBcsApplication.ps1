@@ -8,17 +8,23 @@
         be migrated there: the LOB systems, their entities (external content types) and
         their instances (the connections that external lists use) need a replacement, for
         example with Power Apps. BCS is not retired in SharePoint Server Subscription
-        Edition. The function reads the Business Data Connectivity metadata
-        store and returns one row per LOB system, like the SMAT BCS report: its name, type,
+        Edition. The function reads the Business Data Connectivity (BDC) metadata store and
+        returns one row per LOB system, like the SMAT BCS report: its name, type,
         instances and entities.
 
-        Each web application is read through its own default service context, so a web
-        application without any site collection is read too. Web applications that share a
-        metadata store return the same LOB systems; they are reported once, with every web
-        application that sees them. A web application or LOB system that cannot be read adds
-        a warning and marks the result incomplete, so a failure is never reported as an
-        empty store. No connection setting, credential or Secure Store target application
-        is read, and the external systems are not contacted.
+        The BDC service application of each web application is found through the service
+        application proxy group of the web application and read through its proxy, for the
+        default (non-tenant) partition. No site collection is needed, so a web application
+        without any site collection is read too, and a web application whose proxy group has
+        no BDC proxy simply has no BCS.
+
+        Web applications that share a BDC service application are read once and reported
+        once, with every web application that sees it. A store is identified by the ID of
+        its BDC service application: the ID of a catalog only identifies an object inside
+        one store, so two stores can share it. A web application, proxy or LOB system that
+        cannot be read adds a warning and marks the result incomplete, so a failure is never
+        reported as an empty store. No connection setting, credential or Secure Store
+        target application is read, and the external systems are not contacted.
 
         The function is read-only.
 
@@ -46,6 +52,7 @@
         $WebApplicationUrl = @()
     )
 
+    $bdcProxyTypeName = 'Microsoft.SharePoint.BusinessData.SharedService.BdcServiceApplicationProxy'
     $warnings = [System.Collections.Generic.List[string]]::new()
     $complete = $true
 
@@ -61,47 +68,69 @@
         $webApplicationText = [string]$webApplication.Url
         $isReadable = -not [string]::IsNullOrWhiteSpace($webApplicationText)
         $label = if ($isReadable) { $webApplicationText } else { '(unknown web application)' }
+
         try {
             if (-not $isReadable) {
                 throw 'The web application URL could not be read.'
             }
-            $serviceContext = Get-SPSWebApplicationServiceContext -WebApplication $webApplication
-            $catalog = Get-SPBusinessDataCatalogMetadataObject -BdcObjectType Catalog -ServiceContext $serviceContext -ErrorAction Stop
-            if ($null -eq $catalog) {
-                throw 'The metadata store is unavailable.'
+            $proxyGroup = $webApplication.ServiceApplicationProxyGroup
+            if ($null -eq $proxyGroup) {
+                throw 'The service application proxy group could not be read.'
             }
-            $storeId = [string](Get-SPSPropertyValue -InputObject $catalog -Name 'Id')
-            if ([string]::IsNullOrWhiteSpace($storeId)) {
-                throw 'The metadata store has no readable ID.'
-            }
-            if ($stores.ContainsKey($storeId)) {
-                $stores[$storeId].WebApplications.Add($label)
-                continue
-            }
-
-            $lobSystems = $catalog.GetLobSystems('*')
-            if ($null -eq $lobSystems) {
-                throw 'The list of LOB systems is unavailable.'
-            }
-            $store = [PSCustomObject]@{
-                WebApplications = [System.Collections.Generic.List[string]]::new()
-                Rows            = [System.Collections.Generic.List[object]]::new()
-            }
-            $store.WebApplications.Add($label)
-            $stores[$storeId] = $store
-            foreach ($lobSystem in $lobSystems) {
-                try {
-                    $store.Rows.Add((ConvertTo-SPSBcsApplicationRecord -LobSystem $lobSystem))
-                }
-                catch {
-                    $complete = $false
-                    $warnings.Add("A BCS LOB system could not be read for web application '$label': $($_.Exception.Message)")
-                }
+            $proxies = $proxyGroup.Proxies
+            if ($null -eq $proxies) {
+                throw 'The service application proxies could not be read.'
             }
         }
         catch {
             $complete = $false
-            $warnings.Add("The BCS metadata store could not be read for web application '$label': $($_.Exception.Message)")
+            $warnings.Add("The BCS service application proxies could not be read for web application '$label': $($_.Exception.Message)")
+            continue
+        }
+
+        foreach ($proxy in @($proxies | Where-Object { $null -ne $_ -and $_.PSObject.TypeNames -contains $bdcProxyTypeName })) {
+            try {
+                $serviceApplicationId = $proxy.GetServiceApplicationId()
+                if ($null -eq $serviceApplicationId -or [guid]$serviceApplicationId -eq [guid]::Empty) {
+                    throw 'The BDC service application ID could not be read.'
+                }
+                $storeId = ([guid]$serviceApplicationId).ToString()
+                if ($stores.ContainsKey($storeId)) {
+                    if (-not $stores[$storeId].WebApplications.Contains($label)) {
+                        $stores[$storeId].WebApplications.Add($label)
+                    }
+                    continue
+                }
+
+                $catalog = $proxy.GetAdministrationMetadataCatalog()
+                if ($null -eq $catalog) {
+                    throw 'The metadata store is unavailable.'
+                }
+                $lobSystems = $catalog.GetLobSystems('*')
+                if ($null -eq $lobSystems) {
+                    throw 'The list of LOB systems is unavailable.'
+                }
+                $store = [PSCustomObject]@{
+                    ServiceApplicationId = $storeId
+                    WebApplications      = [System.Collections.Generic.List[string]]::new()
+                    Rows                 = [System.Collections.Generic.List[object]]::new()
+                }
+                $store.WebApplications.Add($label)
+                $stores[$storeId] = $store
+                foreach ($lobSystem in $lobSystems) {
+                    try {
+                        $store.Rows.Add((ConvertTo-SPSBcsApplicationRecord -LobSystem $lobSystem))
+                    }
+                    catch {
+                        $complete = $false
+                        $warnings.Add("A BCS LOB system could not be read for web application '$label': $($_.Exception.Message)")
+                    }
+                }
+            }
+            catch {
+                $complete = $false
+                $warnings.Add("The BCS metadata store could not be read for web application '$label': $($_.Exception.Message)")
+            }
         }
     }
 
@@ -109,12 +138,13 @@
     foreach ($store in $stores.Values) {
         foreach ($row in @($store.Rows | Sort-Object -Property LobSystemName)) {
             $applications.Add([PSCustomObject]@{
-                    WebApplicationUrls = ($store.WebApplications -join '; ')
-                    LobSystemName      = $row.LobSystemName
-                    LobSystemType      = $row.LobSystemType
-                    LobSystemInstances = $row.LobSystemInstances
-                    EntityCount        = $row.EntityCount
-                    LobEntities        = $row.LobEntities
+                    WebApplicationUrls      = ($store.WebApplications -join '; ')
+                    BdcServiceApplicationId = $store.ServiceApplicationId
+                    LobSystemName           = $row.LobSystemName
+                    LobSystemType           = $row.LobSystemType
+                    LobSystemInstances      = $row.LobSystemInstances
+                    EntityCount             = $row.EntityCount
+                    LobEntities             = $row.LobEntities
                 })
         }
     }

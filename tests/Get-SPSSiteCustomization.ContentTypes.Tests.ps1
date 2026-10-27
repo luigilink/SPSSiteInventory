@@ -2206,7 +2206,7 @@ Describe 'Get-SPSSiteCustomization content types' {
         ($warnings -join ';') | Should -Match 'external flag unavailable'
     }
 
-    It 'marks an external list whose binding cannot be read as partial instead of counting it without a binding' {
+    It 'counts an external list whose binding cannot be read, leaves its row out and marks the site partial' {
         $web = Get-TestWeb -Definitions @() -Bindings @()
         $web.Lists = @(
             (Get-TestExternalList -Title 'Broken' -WithoutDataSource)
@@ -2221,10 +2221,31 @@ Describe 'Get-SPSSiteCustomization content types' {
 
         $signals = Get-SPSSiteCustomization -Site $site -WarningVariable warnings -WarningAction SilentlyContinue
 
-        $signals.ExternalListCount | Should -Be 1
+        $signals.ExternalListCount | Should -Be 2
+        $signals.ExternalLists | Should -HaveCount 1
         $signals.ExternalLists[0].ListTitle | Should -Be 'Customers'
+        $signals.ExternalListExamples | Should -Be 'Broken (binding unreadable); Customers (Contoso.Crm.Customer)'
         $signals.CustomizationInventoryComplete | Should -BeFalse
         ($warnings -join ';') | Should -Match "Could not read the external data source of list 'Broken'"
         ($warnings -join ';') | Should -Match "external data source of list 'Broken' could not be read"
+    }
+
+    It 'still counts a site whose only external lists have unreadable bindings, so the blocking signal is not lost' {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Lists = @((Get-TestExternalList -Title 'Broken' -WithoutDataSource))
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -WarningAction SilentlyContinue
+        $result = Measure-SPSSiteComplexity -Signals $signals -Scoring @{ Weights = @{ ExternalListCount = 1.0 }; Thresholds = @{ Moderate = 1.0; Complex = 6.0 }; BlockingSignals = @('ExternalListCount') }
+
+        $signals.ExternalListCount | Should -Be 1
+        $signals.ExternalLists | Should -HaveCount 0
+        $signals.CustomizationInventoryComplete | Should -BeFalse
+        $result.Category | Should -Be 4
     }
 }

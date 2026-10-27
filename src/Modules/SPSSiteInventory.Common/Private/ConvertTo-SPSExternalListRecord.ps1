@@ -7,8 +7,8 @@
         An external list is backed by a Business Connectivity Services (BCS) external
         content type: its items stay in the external system. BCS is retired in SharePoint
         Online, so neither the list nor the BCS definition behind it can be migrated there.
-        SharePoint flags such a list as having an external data source. Returns $null for
-        any other list.
+        The caller decides which lists are external (see Test-SPSExternalList): a list that
+        is not external has no data source, so it is rejected.
 
         The row identifies the list and the BCS binding SharePoint stores with it: the
         LOB system instance, the entity namespace and the entity name. They are read from
@@ -17,9 +17,10 @@
         not collected because the items are not stored in SharePoint, and the list
         creator that SMAT reports is not collected either.
 
-        A property that cannot be read raises an error instead of being read as "not an
-        external list" or as an empty binding (PowerShell turns a failing .NET getter
-        into $null), so the collector can mark the inventory partial.
+        A property that cannot be read raises an error instead of being read as an empty
+        binding (PowerShell turns a failing .NET getter into $null), so the collector can
+        mark the inventory partial. The collector counts the list before projecting it, so
+        an unreadable binding never hides an external list.
 
         Private because it is an implementation detail of Get-SPSSiteCustomization.
 
@@ -51,14 +52,6 @@
         [System.String]
         $WebUrl
     )
-
-    $hasExternalDataSource = Get-SPSPropertyValue -InputObject $List -Name 'HasExternalDataSource'
-    if ($null -eq $hasExternalDataSource) {
-        throw 'The external data source flag could not be read.'
-    }
-    if (-not [bool]$hasExternalDataSource) {
-        return $null
-    }
 
     $listTitle = [string](Get-SPSPropertyValue -InputObject $List -Name 'Title')
     if ([string]::IsNullOrWhiteSpace($listTitle)) {

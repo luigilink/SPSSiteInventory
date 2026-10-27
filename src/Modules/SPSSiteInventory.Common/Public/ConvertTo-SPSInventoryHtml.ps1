@@ -667,6 +667,7 @@ td.muted, .muted { color: var(--muted); }
         [void]$sb.AppendLine('<div class="table-scroll"><table class="bcsapplications">')
         $bcsColumns = @(
             @{ Key = 'WebApplicationUrls'; Label = 'Web application' }
+            @{ Key = 'BdcServiceApplicationId'; Label = 'BDC service application' }
             @{ Key = 'LobSystemName'; Label = 'LOB system' }
             @{ Key = 'LobSystemType'; Label = 'Type' }
             @{ Key = 'LobSystemInstances'; Label = 'Instances' }

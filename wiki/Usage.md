@@ -189,17 +189,23 @@ The `*-externallists-*` files hold one row per external list: `SiteUrl`, `WebUrl
 definition, so neither the Business Data Connectivity (BDC) service nor the external
 system is called. Item counts and dates are not collected because the items are not stored
 in SharePoint, and the list creator that SMAT reports is not collected. A list whose
-binding cannot be read marks the site `Partial` with a warning and is left out of the
-files, so check `CustomizationInventoryComplete`.
+binding cannot be read is still counted in `ExternalListCount`, so it cannot hide a
+blocking signal, but its row is left out of the files and the site is marked `Partial`
+with a warning: check `CustomizationInventoryComplete`.
 
 The `*-bcs-*` files hold one row per BCS LOB system defined in the farm, like the SMAT BCS
-report: `WebApplicationUrls`, `LobSystemName`, `LobSystemType` (`Database`, `WebService`,
-`Wcf`, `DotNetAssembly`, `Custom` or `OData`), `LobSystemInstances`, `EntityCount` and
-`LobEntities` (`namespace.name`, at most 20 names). Each web application is read through
-its own default service context, so a web application without any site collection is read
-too; web applications that share a metadata store report the same LOB systems once, with
-every web application that sees them. Connection settings, credentials and Secure Store
-targets are not read, and the external systems are not contacted. A web application or LOB system that cannot be read
+report: `WebApplicationUrls`, `BdcServiceApplicationId`, `LobSystemName`, `LobSystemType`
+(`Database`, `WebService`, `Wcf`, `DotNetAssembly`, `Custom` or `OData`),
+`LobSystemInstances`, `EntityCount` and `LobEntities` (`namespace.name`, at most 20 names).
+The BDC service application of each web application is found through the service
+application proxy group of the web application and read through its proxy, for the default
+(non-tenant) partition, so a web application without any site collection is read too, and
+a web application whose proxy group has no BDC proxy simply has no BCS. Web applications
+that share a BDC service application report its LOB systems once, with every web
+application that sees it; a store is identified by `BdcServiceApplicationId`, never by a
+catalog ID, which only identifies an object inside one store. Connection settings,
+credentials and Secure Store targets are not read, and the external systems are not
+contacted. A web application or LOB system that cannot be read
 is reported as a warning in the run log and marks the BCS report partial: the
 `BcsInventoryPartial` alert, `Summary.BcsInventoryComplete` in the manifest and a note in
 the HTML report say that BCS applications may be missing.

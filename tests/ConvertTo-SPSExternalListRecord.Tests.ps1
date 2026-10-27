@@ -32,9 +32,7 @@ public class SPSTestExternalList
     public string Title { get; set; }
     public object RootFolder { get; set; }
     public object DataSourceValue { get; set; }
-    public bool FailFlag { get; set; }
     public bool FailDataSource { get; set; }
-    public bool HasExternalDataSource { get { if (FailFlag) { throw new InvalidOperationException("flag unavailable"); } return true; } }
     public object DataSource { get { if (FailDataSource) { throw new InvalidOperationException("data source store unavailable"); } return DataSourceValue; } }
 }
 '@
@@ -73,12 +71,6 @@ public class SPSTestExternalList
 }
 
 Describe 'ConvertTo-SPSExternalListRecord' {
-    It 'returns null for a list without an external data source' {
-        $list = [PSCustomObject]@{ Title = 'Documents'; RootFolder = [PSCustomObject]@{ ServerRelativeUrl = '/sites/team/Documents' }; HasExternalDataSource = $false; DataSource = $null }
-
-        Convert-List -List $list | Should -BeNullOrEmpty
-    }
-
     It 'projects the list and the BCS binding SharePoint stores with it' {
         $record = Convert-List -List (Get-TestExternalList)
 
@@ -99,24 +91,10 @@ Describe 'ConvertTo-SPSExternalListRecord' {
         $record.PSObject.Properties.Name | Should -Not -Contain 'ListCreator'
     }
 
-    It 'does not read the list identity or the data source of a list that is not external' {
-        $list = [PSCustomObject]@{ Title = ''; RootFolder = $null; HasExternalDataSource = $false }
+    It 'rejects a list that is not external because it has no data source' {
+        $list = [PSCustomObject]@{ Title = 'Documents'; RootFolder = [PSCustomObject]@{ ServerRelativeUrl = '/sites/team/Documents' }; HasExternalDataSource = $false; DataSource = $null }
 
-        Convert-List -List $list | Should -BeNullOrEmpty
-    }
-
-    It 'rejects a missing external data source flag instead of reading the list as not external' {
-        $list = [PSCustomObject]@{ Title = 'Customers'; RootFolder = [PSCustomObject]@{ ServerRelativeUrl = '/x' } }
-
-        { Convert-List -List $list } | Should -Throw '*external data source flag could not be read*'
-    }
-
-    It 'lets a failing flag getter propagate instead of reading the list as not external' {
-        $list = [SPSTestExternalList]::new()
-        $list.Title = 'Customers'
-        $list.FailFlag = $true
-
-        { Convert-List -List $list } | Should -Throw '*flag unavailable*'
+        { Convert-List -List $list } | Should -Throw "*external data source of list 'Documents' could not be read*"
     }
 
     It 'rejects an external list whose title or URL cannot be read' {

@@ -77,7 +77,9 @@
         ExternalLists holds one row per list with the BCS binding SharePoint stores with
         it (LOB system instance, entity namespace and entity name), like the SMAT
         External List report. The binding is read from the list definition, so neither
-        the Business Data Connectivity service nor the external system is called.
+        the Business Data Connectivity service nor the external system is called. A list
+        whose binding cannot be read is still counted, so it cannot hide a blocking
+        signal; its row is left out and the collection is marked partial.
 
         The returned hashtable is designed to be passed straight to
         Measure-SPSSiteComplexity. CustomizationInventoryComplete is false when a signal
@@ -233,6 +235,7 @@
     $managedMetadataTermSets = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     $externalLists = [System.Collections.Generic.List[object]]::new()
     $externalListExamples = [System.Collections.Generic.List[string]]::new()
+    $externalListCount = 0
     $publishingLayouts = [System.Collections.Generic.Dictionary[string, object]]::new([System.StringComparer]::OrdinalIgnoreCase)
 
     $largeListItemThreshold = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'LargeListItemCount' -DefaultValue 5000 -MinimumValue 1)
@@ -934,11 +937,21 @@
                         }
 
                         try {
-                            $externalListRecord = ConvertTo-SPSExternalListRecord -List $list -SiteUrl $Site.Url -WebUrl $web.Url
-                            if ($null -ne $externalListRecord) {
-                                $externalLists.Add($externalListRecord)
+                            if (Test-SPSExternalList -List $list) {
+                                # Count the list before reading its binding: an unreadable binding must not hide a blocking signal.
+                                $externalListCount++
+                                $externalListExample = '{0} (binding unreadable)' -f $listTitle
+                                try {
+                                    $externalListRecord = ConvertTo-SPSExternalListRecord -List $list -SiteUrl $Site.Url -WebUrl $web.Url
+                                    $externalLists.Add($externalListRecord)
+                                    $externalListExample = '{0} ({1}.{2})' -f $listTitle, $externalListRecord.EntityNamespace, $externalListRecord.Entity
+                                }
+                                catch {
+                                    $signals.CustomizationInventoryComplete = $false
+                                    Write-Warning -Message "Could not read the external data source of list '$listTitle' in web '$($web.Url)': $($_.Exception.Message)"
+                                }
                                 if ($externalListExamples.Count -lt 5) {
-                                    $externalListExamples.Add(('{0} ({1}.{2})' -f $listTitle, $externalListRecord.EntityNamespace, $externalListRecord.Entity))
+                                    $externalListExamples.Add($externalListExample)
                                 }
                             }
                         }
@@ -1079,7 +1092,7 @@
     $signals.ManagedMetadataTermSetCount = $managedMetadataTermSets.Count
     $signals.ManagedMetadataExamples = $managedMetadataExamples -join '; '
     $signals.ManagedMetadataLists = $managedMetadataLists.ToArray()
-    $signals.ExternalListCount = $externalLists.Count
+    $signals.ExternalListCount = $externalListCount
     $signals.ExternalListExamples = $externalListExamples -join '; '
     $signals.ExternalLists = $externalLists.ToArray()
     $signals.PublishingPageLayoutCount = $publishingLayouts.Count

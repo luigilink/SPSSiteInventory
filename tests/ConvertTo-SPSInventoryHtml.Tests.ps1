@@ -594,7 +594,8 @@ Describe 'ConvertTo-SPSInventoryHtml' {
 
     It 'renders encoded BCS applications with guidance' {
         $applications = @([PSCustomObject]@{
-            WebApplicationUrls = 'https://intranet; https://extranet'; LobSystemName = 'Crm & <Billing>'
+            WebApplicationUrls = 'https://intranet; https://extranet'; BdcServiceApplicationId = '11111111-1111-1111-1111-111111111111'
+            LobSystemName = 'Crm & <Billing>'
             LobSystemType = 'Wcf'; LobSystemInstances = 'CrmProd; CrmDev'; EntityCount = 2
             LobEntities = 'Contoso.Crm.Account; Contoso.Crm.Customer'
         })
@@ -608,7 +609,8 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $html | Should -Match 'for example Power Apps and its connectors'
         $html | Should -Not -Match 'hybrid'
         $html | Should -Match 'credentials and Secure Store targets are not read'
-        $html | Should -Match '(?s)<th>Web application</th>.*<th>LOB system</th>.*<th>Type</th>.*<th>Instances</th>.*<th>Entities</th>.*<th>Entity names</th>'
+        $html | Should -Match '(?s)<th>Web application</th>.*<th>BDC service application</th>.*<th>LOB system</th>.*<th>Type</th>.*<th>Instances</th>.*<th>Entities</th>.*<th>Entity names</th>'
+        $html | Should -Match '11111111-1111-1111-1111-111111111111'
         $html | Should -Match 'Crm &amp; &lt;Billing&gt;'
         $html | Should -Match 'https://intranet; https://extranet'
         $html | Should -Match '<td>2</td>'

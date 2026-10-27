@@ -680,8 +680,8 @@
         $bcsCsvPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-bcs-{1}.csv' -f $BaseName, $timestamp)
         $bcsJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-bcs-{1}.json' -f $BaseName, $timestamp)
         $bcsColumns = @(
-            'WebApplicationUrls', 'LobSystemName', 'LobSystemType', 'LobSystemInstances',
-            'EntityCount', 'LobEntities'
+            'WebApplicationUrls', 'BdcServiceApplicationId', 'LobSystemName', 'LobSystemType',
+            'LobSystemInstances', 'EntityCount', 'LobEntities'
         )
         if ($BcsApplications.Count -gt 0) {
             $BcsApplications | Select-Object -Property $bcsColumns |

@@ -531,7 +531,8 @@ Describe 'Export-SPSInventoryReport content types' {
     It 'writes the BCS CSV and JSON, manifest entries and one alert per LOB system' {
         $applications = @(
             [PSCustomObject]@{
-                WebApplicationUrls = 'https://intranet; https://extranet'; LobSystemName = 'Crm, & Billing'
+                WebApplicationUrls = 'https://intranet; https://extranet'; BdcServiceApplicationId = '11111111-1111-1111-1111-111111111111'
+                LobSystemName = 'Crm, & Billing'
                 LobSystemType = 'Wcf'; LobSystemInstances = 'CrmDev; CrmProd'; EntityCount = 2
                 LobEntities = 'Contoso.Crm.Account; Contoso.Crm.Customer'
             }
@@ -548,9 +549,10 @@ Describe 'Export-SPSInventoryReport content types' {
         $csvRows | Should -HaveCount 2
         $csvRows[0].LobSystemName | Should -Be 'Crm, & Billing'
         $csvRows[0].WebApplicationUrls | Should -Be 'https://intranet; https://extranet'
+        $csvRows[0].BdcServiceApplicationId | Should -Be '11111111-1111-1111-1111-111111111111'
         $csvRows[0].EntityCount | Should -Be '2'
         $csvRows[1].LobSystemType | Should -Be 'DotNetAssembly'
-        (Get-Content $output.BcsCsvPath -TotalCount 1) | Should -Be '"WebApplicationUrls","LobSystemName","LobSystemType","LobSystemInstances","EntityCount","LobEntities"'
+        (Get-Content $output.BcsCsvPath -TotalCount 1) | Should -Be '"WebApplicationUrls","BdcServiceApplicationId","LobSystemName","LobSystemType","LobSystemInstances","EntityCount","LobEntities"'
         Get-RowCount -Rows (Get-Content $output.BcsJsonPath -Raw | ConvertFrom-Json) | Should -Be 2
         $manifest = Get-Content $output.ManifestJsonPath -Raw | ConvertFrom-Json
         $manifest.Files.BcsCsv | Should -Be $output.BcsCsvPath
