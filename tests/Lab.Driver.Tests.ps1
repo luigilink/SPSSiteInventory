@@ -259,6 +259,24 @@ function Remove-SPSLabFixture {
         @($run.Call | ForEach-Object { ($_ -split ' ')[0] }) | Should -Be @('verify')
     }
 
+    It 'prints the settings file and the report folder that the inventory uses, before it starts' {
+        $harness = New-Harness
+
+        $run = Invoke-Steps $harness @('-Force')
+
+        $settings = Join-Path -Path $harness.Work -ChildPath 'inventory-settings.lab.psd1'
+        $reports = Join-Path -Path $harness.Work -ChildPath 'Reports'
+        $run.Output | Should -Match ([regex]::Escape(('Settings file: {0}' -f $settings)))
+        $run.Output | Should -Match ([regex]::Escape(('Report folder: {0}' -f $reports)))
+        $run.Output.IndexOf('Settings file: ') | Should -BeGreaterThan $run.Output.IndexOf('== Inventory ==')
+    }
+
+    It 'does not print the inventory settings when the inventory does not run' {
+        $run = Invoke-Steps (New-Harness) @('-Action', 'Verify')
+
+        $run.Output | Should -Not -Match 'Settings file: '
+    }
+
     It 'passes the scenarios to the provisioning and to the verification' {
         $run = Invoke-Steps (New-Harness) @('-Force', '-Scenario', 'subsites,infopath')
 

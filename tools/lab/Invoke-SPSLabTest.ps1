@@ -13,8 +13,9 @@
     1. Provision: writes the lab settings from the example configuration of the toolkit being
        tested, then creates one small site collection per scenario, named
        <web application>/sites/<prefix>-<scenario>, and marks it as a lab site.
-    2. Inventory: runs Invoke-SPSSiteInventory.ps1 of the toolkit with the lab settings. The whole
-       web application is scanned, so use a lab web application.
+    2. Inventory: runs Invoke-SPSSiteInventory.ps1 of the toolkit with the lab settings, after
+       printing the settings file and the report folder that it uses. The whole web application
+       is scanned, so use a lab web application.
     3. Verify: checks the reports against what each scenario must produce and prints PASS, FAIL,
        INFO or SKIP for every check, with the assessment status of every lab site. The exit code is
        1 when a check fails.
@@ -164,6 +165,9 @@ try {
     if ($runInventory) {
         Write-Host ''
         Write-Host '== Inventory ==' -ForegroundColor Cyan
+        # The inventory must read the lab settings, not the settings of another environment: show which ones it uses.
+        Write-Host ('Settings file: {0}' -f $settingsPath) -ForegroundColor Cyan
+        Write-Host ('Report folder: {0}' -f $reportFolder) -ForegroundColor Cyan
         & $inventoryScript -ConfigPath $settingsPath
     }
 

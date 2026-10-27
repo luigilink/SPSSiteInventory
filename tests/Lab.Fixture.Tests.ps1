@@ -137,6 +137,42 @@ Describe 'New-SPSLabFixture' {
         $global:LabCreated[0].Url | Should -Be 'https://lab/sites/lab42-ok'
     }
 
+    It 'prints a line before each creation and a result line with the status and the elapsed seconds after it' {
+        $null = New-SPSLabFixture -WebApplicationUrl 'https://lab' -ManifestPath $script:ManifestPath -Confirm:$false -InformationVariable progress
+
+        $line = @($progress | ForEach-Object { [System.String]$_.MessageData })
+        $line | Should -HaveCount 6
+        $line[0] | Should -Be '[1/3] Creating https://lab/sites/spslab-ok ...'
+        $line[1] | Should -Match '^\[1/3\] Created in \d+ s$'
+        $line[2] | Should -Be '[2/3] Creating https://lab/sites/spslab-needs-engine ...'
+        $line[3] | Should -Match '^\[2/3\] Skipped in \d+ s: no 2010 engine on this farm\.$'
+        $line[4] | Should -Be '[3/3] Creating https://lab/sites/spslab-broken ...'
+        $line[5] | Should -Match '^\[3/3\] Failed in \d+ s: The list could not be created\.$'
+    }
+
+    It 'prints a failure to create the site collection on one line' {
+        Mock -ModuleName $script:ModuleName New-SPSite { throw "The URL is`r`n  already in use." }
+
+        $null = New-SPSLabFixture -WebApplicationUrl 'https://lab' -ManifestPath $script:ManifestPath -Scenario 'ok' -Confirm:$false -InformationVariable progress
+
+        [System.String]@($progress)[1].MessageData | Should -Match '^\[1/1\] Failed in \d+ s: The URL is already in use\.$'
+    }
+
+    It 'prints that a site collection that already exists is skipped, without announcing a creation' {
+        Mock -ModuleName $script:ModuleName Get-SPSite { if ($Identity -eq 'https://lab/sites/spslab-ok') { New-LabFakeSite -Url $Identity } }
+
+        $null = New-SPSLabFixture -WebApplicationUrl 'https://lab' -ManifestPath $script:ManifestPath -Scenario 'ok' -Confirm:$false -InformationVariable progress
+
+        @($progress) | Should -HaveCount 1
+        [System.String]@($progress)[0].MessageData | Should -Be '[1/1] Skipped: The site collection already exists: remove the lab first.'
+    }
+
+    It 'prints nothing with -WhatIf, beyond what ShouldProcess prints' {
+        $null = New-SPSLabFixture -WebApplicationUrl 'https://lab' -ManifestPath $script:ManifestPath -WhatIf -InformationVariable progress
+
+        @($progress) | Should -HaveCount 0
+    }
+
     It 'creates nothing and writes no manifest with -WhatIf' {
         $null = New-SPSLabFixture -WebApplicationUrl 'https://lab' -ManifestPath $script:ManifestPath -WhatIf
 
@@ -408,6 +444,34 @@ Describe 'Remove-SPSLabFixture' {
         $result[0].Status | Should -Be 'Refused'
         $result[0].Detail | Should -Match 'root web of the site collection cannot be read'
         $global:LabRemoved.Count | Should -Be 0
+    }
+
+    It 'prints a line before each removal and a result line with the elapsed seconds, and says what it does not remove' {
+        $null = Remove-SPSLabFixture -ManifestPath $script:ManifestPath -Confirm:$false -InformationVariable progress
+
+        $line = @($progress | ForEach-Object { [System.String]$_.MessageData })
+        $line | Should -Contain '[1/5] Removing https://lab/sites/spslab-ok ...'
+        @($line | Where-Object { $_ -match '^\[1/5\] Removed in \d+ s$' }) | Should -HaveCount 1
+        $line | Should -Contain '[2/5] Removing https://lab/sites/spslab-locked ...'
+        $line | Should -Contain '[3/5] Refused: The root web does not carry the lab marker: this is not a lab site.'
+        $line | Should -Contain '[4/5] Absent: The site collection does not exist.'
+        $line | Should -Contain "[5/5] Refused: The URL does not start with 'https://lab/sites/spslab-'."
+        $line | Should -Not -Contain '[3/5] Removing https://lab/sites/spslab-lookalike ...'
+    }
+
+    It 'prints a failed removal with the elapsed seconds' {
+        Mock -ModuleName $script:ModuleName Remove-SPSite { throw 'The site is in use.' }
+
+        $null = Remove-SPSLabFixture -ManifestPath $script:ManifestPath -Confirm:$false -InformationVariable progress
+
+        $line = @($progress | ForEach-Object { [System.String]$_.MessageData })
+        @($line | Where-Object { $_ -match '^\[1/5\] Failed in \d+ s: The site is in use\.$' }) | Should -HaveCount 1
+    }
+
+    It 'prints nothing with -WhatIf, beyond what ShouldProcess prints' {
+        $null = Remove-SPSLabFixture -ManifestPath $script:ManifestPath -WhatIf -InformationVariable progress
+
+        @($progress) | Should -HaveCount 0
     }
 
     It 'reports a failed removal and goes on' {

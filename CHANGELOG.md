@@ -167,7 +167,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   scenario must produce (PASS, FAIL, INFO or SKIP, with the actual values and the assessment of
   every lab site), and removes the lab, and only the lab, on request. Tests keep the expectations
   in line with the inventory record and the alert catalog. The wiki page "Lab testing" documents
-  the scenarios and what stays manual. (#75)
+  the scenarios and what stays manual. (#75) The `event-receiver` scenario is skipped when SharePoint
+  cannot load the assembly of the receiver (it needs a deployed assembly), the `event-receiver` and
+  `custom-master` scenarios read the `EventReceivers` and `CustomMasterPage` columns, the script
+  prints a line per site collection while it creates or removes the lab, and it prints the settings
+  file and the report folder before the inventory. (#87)
 - Zone-aware web application authentication inventory, including mixed Windows/FBA,
   membership/role provider names and explicit identity-review flags. The example
   configuration treats `HasFbaZone` as a SharePoint Online migration blocker.

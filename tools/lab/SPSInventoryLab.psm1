@@ -111,6 +111,108 @@ function Add-SPSLabList {
     return $Web.Lists[$id]
 }
 
+function Test-SPSLabAssemblyLoadFailure {
+    <#
+        .SYNOPSIS
+        Tells whether an error is a failure to load an assembly.
+
+        .DESCRIPTION
+        SharePoint loads the assembly of an event receiver when the receiver is registered. A
+        missing assembly shows up as a FileNotFoundException or a FileLoadException, usually
+        wrapped in the exception of the method call, with "Could not load file or assembly" as
+        message. Any other error is not a load failure.
+    #>
+    [CmdletBinding()]
+    [OutputType([System.Boolean])]
+    param
+    (
+        [Parameter(Mandatory = $true)]
+        [System.Management.Automation.ErrorRecord]
+        $ErrorRecord
+    )
+
+    $exception = $ErrorRecord.Exception
+    while ($null -ne $exception) {
+        if ($exception -is [System.IO.FileNotFoundException] -or
+            $exception -is [System.IO.FileLoadException] -or
+            $exception.Message -like '*Could not load file or assembly*') {
+            return $true
+        }
+        $exception = $exception.InnerException
+    }
+    return $false
+}
+
+function Write-SPSLabProgress {
+    <#
+        .SYNOPSIS
+        Writes one progress line, "[position/total] text", while the lab is built or removed.
+
+        .DESCRIPTION
+        Creating and Removing announce the work on a site collection (the detail is its URL). Any
+        other status is the outcome: the status, the elapsed seconds when they are given, and the
+        detail, on one line. -Quiet prints nothing, for -WhatIf.
+    #>
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingWriteHost', '',
+        Justification = 'This is operator-facing progress whose purpose is colored console output.')]
+    [CmdletBinding()]
+    [OutputType([System.Void])]
+    param
+    (
+        [Parameter(Mandatory = $true)]
+        [System.Int32]
+        $Position,
+
+        [Parameter(Mandatory = $true)]
+        [System.Int32]
+        $Total,
+
+        [Parameter(Mandatory = $true)]
+        [System.String]
+        $Status,
+
+        [Parameter()]
+        [System.String]
+        $Detail,
+
+        [Parameter()]
+        [System.Double]
+        $Seconds = -1,
+
+        [Parameter()]
+        [switch]
+        $Quiet
+    )
+
+    if ($Quiet) {
+        return
+    }
+    if ($Status -in @('Creating', 'Removing')) {
+        $text = '{0} {1} ...' -f $Status, $Detail
+    }
+    else {
+        $text = $Status
+        if ($Seconds -ge 0) {
+            $text += ' in {0} s' -f [System.Math]::Round($Seconds)
+        }
+        if (-not [System.String]::IsNullOrWhiteSpace($Detail)) {
+            # A message can span several lines: keep the progress on one.
+            $text += ': ' + (($Detail -replace '\s+', ' ').Trim())
+        }
+    }
+    $color = switch ($Status) {
+        'Created' { 'Green' }
+        'Removed' { 'Green' }
+        'Failed' { 'Red' }
+        'Skipped' { 'DarkGray' }
+        'Absent' { 'DarkGray' }
+        'Refused' { 'Yellow' }
+        'NotRemoved' { 'Yellow' }
+        default { 'Cyan' }
+    }
+    Write-Host ('[{0}/{1}] {2}' -f $Position, $Total, $text) -ForegroundColor $color
+}
+
 function Get-SPSLabScenario {
     <#
         .SYNOPSIS
@@ -365,22 +467,30 @@ function Get-SPSLabScenario {
 
     $scenario.Add([PSCustomObject]@{
             Name        = 'event-receiver'
-            Description = 'A list with an event receiver registered from a custom assembly that does not exist. It never fires: it is only registered. The signal is scored but is not a column of the inventory, so the lab reads it in the score reasons.'
+            Description = 'A list with an event receiver registered from the assembly Contoso.Lab.Receivers. SharePoint loads the assembly to register a receiver, so the scenario is skipped unless an assembly of that name is deployed on the farm. The receiver never fires: it is only registered.'
             Template    = 'STS#0'
             Provision   = {
                 param ($Context)
                 $list = Add-SPSLabList -Web $Context.Web -Title 'LabReceivers'
                 $assembly = 'Contoso.Lab.Receivers, Version=1.0.0.0, Culture=neutral, PublicKeyToken=0123456789abcdef'
-                $list.EventReceivers.Add([Microsoft.SharePoint.SPEventReceiverType]::ItemDeleting, $assembly, 'Contoso.Lab.Receivers.ItemReceiver')
+                try {
+                    $list.EventReceivers.Add([Microsoft.SharePoint.SPEventReceiverType]::ItemDeleting, $assembly, 'Contoso.Lab.Receivers.ItemReceiver')
+                }
+                catch {
+                    if (Test-SPSLabAssemblyLoadFailure -ErrorRecord $_) {
+                        throw 'SKIP: SharePoint loads the assembly to register an event receiver: deploy one to test this signal.'
+                    }
+                    throw
+                }
             }
             Expect      = @(
-                (Get-SPSLabExpectation Reasons like '*EventReceivers=*')
+                (Get-SPSLabExpectation EventReceivers ge 1)
             )
         })
 
     $scenario.Add([PSCustomObject]@{
             Name        = 'custom-master'
-            Description = 'A custom master page, set as the master page of the site. The signal is scored but is not a column of the inventory, so the lab reads it in the score reasons.'
+            Description = 'A custom master page, set as the master page of the site.'
             Template    = 'STS#0'
             Provision   = {
                 param ($Context)
@@ -395,7 +505,7 @@ function Get-SPSLabScenario {
                 $web.Update()
             }
             Expect      = @(
-                (Get-SPSLabExpectation Reasons like '*CustomMasterPage=1*')
+                (Get-SPSLabExpectation CustomMasterPage eq $true)
             )
         })
 
@@ -671,8 +781,11 @@ function New-SPSLabFixture {
     $baseUrl = $webApplication.Url.TrimEnd('/')
     $threshold = Get-SPSLabThreshold
     $entry = [System.Collections.Generic.List[object]]::new()
+    $total = $scenarioList.Count
+    $position = 0
 
     foreach ($item in $scenarioList) {
+        $position++
         $url = '{0}/sites/{1}-{2}' -f $baseUrl, $Prefix, $item.Name
         $status = 'Created'
         $detail = ''
@@ -686,13 +799,15 @@ function New-SPSLabFixture {
         if ($null -ne $existing) {
             $existing.Dispose()
             $entry.Add([PSCustomObject]@{ Name = $item.Name; Url = $url; Status = 'Skipped'; Detail = 'The site collection already exists: remove the lab first.' })
+            Write-SPSLabProgress -Position $position -Total $total -Status 'Skipped' -Detail 'The site collection already exists: remove the lab first.'
             continue
         }
 
         $site = $null
         $web = $null
+        $timer = [System.Diagnostics.Stopwatch]::StartNew()
+        Write-SPSLabProgress -Position $position -Total $total -Status 'Creating' -Detail $url
         try {
-            Write-Verbose -Message "Creating $url"
             $site = New-SPSite -Url $url -OwnerAlias $Owner -Template $item.Template -Name ('SPS lab: ' + $item.Name) -Language 1033 -ErrorAction Stop
             $web = $site.RootWeb
             $web.AllProperties[$script:LabMarkerName] = 'true'
@@ -728,6 +843,7 @@ function New-SPSLabFixture {
             $status = 'Failed'
         }
         $entry.Add([PSCustomObject]@{ Name = $item.Name; Url = $url; Status = $status; Detail = $detail })
+        Write-SPSLabProgress -Position $position -Total $total -Status $status -Detail $detail -Seconds $timer.Elapsed.TotalSeconds
     }
 
     $manifest = [PSCustomObject]@{
@@ -1171,9 +1287,16 @@ function Remove-SPSLabFixture {
     $result = [System.Collections.Generic.List[object]]::new()
     $purgeable = [System.Collections.Generic.List[string]]::new()
 
+    $total = $urlList.Count
+    $position = 0
+    # Nothing is printed with -WhatIf beyond what ShouldProcess prints.
+    $quiet = [bool]$WhatIfPreference
+
     foreach ($url in $urlList) {
+        $position++
         if (-not $url.StartsWith($required, [System.StringComparison]::OrdinalIgnoreCase)) {
             $result.Add([PSCustomObject]@{ Url = $url; Status = 'Refused'; Detail = "The URL does not start with '$required'." })
+            Write-SPSLabProgress -Position $position -Total $total -Quiet:$quiet -Status 'Refused' -Detail "The URL does not start with '$required'."
             continue
         }
         $marked = $null
@@ -1184,6 +1307,7 @@ function Remove-SPSLabFixture {
             # A NoAccess lock makes the site unreadable. The name says it is a lab site: unlock it to read its marker.
             if (-not $PSCmdlet.ShouldProcess($url, 'Unlock the locked lab site collection to read its marker')) {
                 $result.Add([PSCustomObject]@{ Url = $url; Status = 'NotRemoved'; Detail = 'The site is locked and cannot be read: not confirmed.' })
+                Write-SPSLabProgress -Position $position -Total $total -Quiet:$quiet -Status 'NotRemoved' -Detail 'The site is locked and cannot be read: not confirmed.'
                 continue
             }
             Set-SPSite -Identity $url -LockState Unlock -ErrorAction SilentlyContinue
@@ -1192,11 +1316,13 @@ function Remove-SPSLabFixture {
             }
             catch {
                 $result.Add([PSCustomObject]@{ Url = $url; Status = 'Refused'; Detail = "The site cannot be read, so its lab marker cannot be checked: $($_.Exception.Message)" })
+                Write-SPSLabProgress -Position $position -Total $total -Quiet:$quiet -Status 'Refused' -Detail "The site cannot be read, so its lab marker cannot be checked: $($_.Exception.Message)"
                 continue
             }
         }
         if ($null -eq $marked) {
             $result.Add([PSCustomObject]@{ Url = $url; Status = 'Absent'; Detail = 'The site collection does not exist.' })
+            Write-SPSLabProgress -Position $position -Total $total -Quiet:$quiet -Status 'Absent' -Detail 'The site collection does not exist.'
             if ($PSCmdlet.ParameterSetName -eq 'Manifest') {
                 # It is a lab site of the manifest that was removed before: its entry in the deleted sites may still be there.
                 $purgeable.Add(([System.Uri]$url).AbsolutePath)
@@ -1205,20 +1331,26 @@ function Remove-SPSLabFixture {
         }
         if (-not $marked) {
             $result.Add([PSCustomObject]@{ Url = $url; Status = 'Refused'; Detail = 'The root web does not carry the lab marker: this is not a lab site.' })
+            Write-SPSLabProgress -Position $position -Total $total -Quiet:$quiet -Status 'Refused' -Detail 'The root web does not carry the lab marker: this is not a lab site.'
             continue
         }
         if (-not $PSCmdlet.ShouldProcess($url, 'Remove the lab site collection')) {
             $result.Add([PSCustomObject]@{ Url = $url; Status = 'NotRemoved'; Detail = 'Not confirmed.' })
+            Write-SPSLabProgress -Position $position -Total $total -Quiet:$quiet -Status 'NotRemoved' -Detail 'Not confirmed.'
             continue
         }
+        $timer = [System.Diagnostics.Stopwatch]::StartNew()
+        Write-SPSLabProgress -Position $position -Total $total -Quiet:$quiet -Status 'Removing' -Detail $url
         try {
             Set-SPSite -Identity $url -LockState Unlock -ErrorAction SilentlyContinue
             Remove-SPSite -Identity $url -Confirm:$false -ErrorAction Stop
             $result.Add([PSCustomObject]@{ Url = $url; Status = 'Removed'; Detail = '' })
             $purgeable.Add(([System.Uri]$url).AbsolutePath)
+            Write-SPSLabProgress -Position $position -Total $total -Quiet:$quiet -Status 'Removed' -Seconds $timer.Elapsed.TotalSeconds
         }
         catch {
             $result.Add([PSCustomObject]@{ Url = $url; Status = 'Failed'; Detail = $_.Exception.Message })
+            Write-SPSLabProgress -Position $position -Total $total -Quiet:$quiet -Status 'Failed' -Detail $_.Exception.Message -Seconds $timer.Elapsed.TotalSeconds
         }
     }
 

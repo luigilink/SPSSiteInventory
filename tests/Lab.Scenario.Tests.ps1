@@ -131,7 +131,7 @@ Describe 'The lab scenarios' {
     }
 
     It 'say that they are skipped, not failed, when the farm lacks what they need' {
-        foreach ($name in @('workflow-2010', 'email-enabled', 'irm', 'html-files', 'custom-master', 'customized-page')) {
+        foreach ($name in @('workflow-2010', 'email-enabled', 'irm', 'html-files', 'custom-master', 'customized-page', 'event-receiver')) {
             (& $script:SourceOf $name) | Should -Match "SKIP:" -Because $name
         }
     }
@@ -141,6 +141,34 @@ Describe 'The lab scenarios' {
             $scenario = $script:Scenario | Where-Object { $_.Name -eq $name }
             @($scenario.Expect | Where-Object { -not $_.Info }).Count | Should -Be 0 -Because $name
         }
+    }
+
+    It 'read the classic customization signals in the columns of the inventory, not in the reasons of the score' {
+        foreach ($scenario in $script:Scenario) {
+            @($scenario.Expect | Where-Object { $_.Property -eq 'Reasons' }) | Should -HaveCount 0 -Because "scenario $($scenario.Name)"
+        }
+        $receiver = $script:Scenario | Where-Object { $_.Name -eq 'event-receiver' }
+        $master = $script:Scenario | Where-Object { $_.Name -eq 'custom-master' }
+        $receiver.Expect | Should -HaveCount 1
+        $receiver.Expect[0].Property | Should -Be 'EventReceivers'
+        $receiver.Expect[0].Operator | Should -Be 'ge'
+        $receiver.Expect[0].Value | Should -Be 1
+        $master.Expect | Should -HaveCount 1
+        $master.Expect[0].Property | Should -Be 'CustomMasterPage'
+        $master.Expect[0].Operator | Should -Be 'eq'
+        $master.Expect[0].Value | Should -BeTrue
+    }
+
+    It 'meet the expectations on the columns with the values that the inventory writes' {
+        $receiver = $script:Scenario | Where-Object { $_.Name -eq 'event-receiver' }
+        $master = $script:Scenario | Where-Object { $_.Name -eq 'custom-master' }
+
+        (Test-SPSLabExpectation -Expectation $receiver.Expect[0] -Record ([PSCustomObject]@{ EventReceivers = 2 }) -Alert @()).Status | Should -Be 'PASS'
+        (Test-SPSLabExpectation -Expectation $receiver.Expect[0] -Record ([PSCustomObject]@{ EventReceivers = 0 }) -Alert @()).Status | Should -Be 'FAIL'
+        (Test-SPSLabExpectation -Expectation $receiver.Expect[0] -Record ([PSCustomObject]@{ EventReceivers = $null }) -Alert @()).Status | Should -Be 'FAIL'
+        (Test-SPSLabExpectation -Expectation $master.Expect[0] -Record ([PSCustomObject]@{ CustomMasterPage = $true }) -Alert @()).Status | Should -Be 'PASS'
+        (Test-SPSLabExpectation -Expectation $master.Expect[0] -Record ([PSCustomObject]@{ CustomMasterPage = $false }) -Alert @()).Status | Should -Be 'FAIL'
+        (Test-SPSLabExpectation -Expectation $master.Expect[0] -Record ([PSCustomObject]@{ CustomMasterPage = 'True' }) -Alert @()).Status | Should -Be 'PASS'
     }
 
     It 'are all documented in the lab testing wiki page, with their description' {
@@ -156,6 +184,91 @@ Describe 'The lab scenarios' {
         @($some | ForEach-Object { $_.Name }) | Should -Be @('subsites', 'infopath')
         @(Get-SPSLabScenario -Name 'nothing') | Should -HaveCount 0
         @(Get-SPSLabScenario -Name $null).Count | Should -Be $script:Scenario.Count
+    }
+}
+
+Describe 'The event-receiver scenario' {
+    BeforeAll {
+        # The receiver type of SharePoint, as a stand-in: the scenario only needs the enumeration to exist.
+        if (-not ('Microsoft.SharePoint.SPEventReceiverType' -as [type])) {
+            Add-Type -TypeDefinition 'namespace Microsoft.SharePoint { public enum SPEventReceiverType { ItemDeleting = 4 } }'
+        }
+        $script:Receiver = $script:Scenario | Where-Object { $_.Name -eq 'event-receiver' }
+
+        function global:New-LabReceiverContext {
+            param ($Failure)
+            $global:LabReceiverFailure = $Failure
+            $events = [PSCustomObject]@{}
+            $events | Add-Member -MemberType ScriptMethod -Name Add -Value {
+                param ($Type, $Assembly, $Class)
+                $global:LabReceiverCall = '{0}|{1}|{2}' -f $Type, $Assembly, $Class
+                if ($null -ne $global:LabReceiverFailure) { throw $global:LabReceiverFailure }
+            }
+            $list = [PSCustomObject]@{ EventReceivers = $events }
+            $global:LabReceiverList = $list
+            return [PSCustomObject]@{ Web = [PSCustomObject]@{} }
+        }
+    }
+
+    BeforeEach {
+        $global:LabReceiverCall = $null
+        Mock -ModuleName SPSInventoryLab Add-SPSLabList { $global:LabReceiverList }
+    }
+
+    AfterAll {
+        Remove-Item -Path 'function:global:New-LabReceiverContext' -ErrorAction SilentlyContinue
+        Remove-Variable -Name LabReceiverFailure, LabReceiverCall, LabReceiverList -Scope Global -ErrorAction SilentlyContinue
+    }
+
+    It 'registers the receiver when the assembly can be loaded' {
+        $context = New-LabReceiverContext -Failure $null
+
+        { & $script:Receiver.Provision $context } | Should -Not -Throw
+
+        $global:LabReceiverCall | Should -BeLike 'ItemDeleting|Contoso.Lab.Receivers, *|Contoso.Lab.Receivers.ItemReceiver'
+    }
+
+    It 'is skipped, with the reason, when SharePoint cannot load the assembly (<Name>)' -ForEach @(
+        @{ Name = 'a call that wraps a FileNotFoundException'; Failure = [System.Management.Automation.MethodInvocationException]::new('Exception calling "Add" with "3" argument(s): "Could not load file or assembly ''Contoso.Lab.Receivers''."', [System.IO.FileNotFoundException]::new('The system cannot find the file specified.')) }
+        @{ Name = 'a call that wraps a FileLoadException'; Failure = [System.Management.Automation.MethodInvocationException]::new('Exception calling "Add" with "3" argument(s): "The assembly cannot be used."', [System.IO.FileLoadException]::new('The located assembly''s manifest definition does not match.')) }
+        @{ Name = 'a FileNotFoundException'; Failure = [System.IO.FileNotFoundException]::new('Contoso.Lab.Receivers') }
+        @{ Name = 'a message that says the assembly could not be loaded'; Failure = [System.InvalidOperationException]::new('Could not load file or assembly ''Contoso.Lab.Receivers, Version=1.0.0.0'' or one of its dependencies.') }
+    ) {
+        $context = New-LabReceiverContext -Failure $Failure
+
+        { & $script:Receiver.Provision $context } | Should -Throw 'SKIP: SharePoint loads the assembly to register an event receiver: deploy one to test this signal*'
+    }
+
+    It 'stays a failure for any other error (<Name>)' -ForEach @(
+        @{ Name = 'access denied'; Failure = [System.UnauthorizedAccessException]::new('Access is denied.') }
+        @{ Name = 'a wrapped invalid operation'; Failure = [System.Management.Automation.MethodInvocationException]::new('Exception calling "Add" with "3" argument(s): "The list is read only."', [System.InvalidOperationException]::new('The list is read only.')) }
+    ) {
+        $context = New-LabReceiverContext -Failure $Failure
+        $message = $null
+
+        try { & $script:Receiver.Provision $context } catch { $message = $_.Exception.Message }
+
+        $message | Should -Not -BeNullOrEmpty
+        $message | Should -Not -BeLike 'SKIP:*'
+    }
+}
+
+Describe 'Test-SPSLabAssemblyLoadFailure' {
+    It 'recognizes a FileNotFoundException, a FileLoadException and the message of a failed load, at any depth' {
+        $inner = [System.IO.FileLoadException]::new('The assembly cannot be used.')
+        $outer = [System.Exception]::new('outer', [System.InvalidOperationException]::new('middle', $inner))
+
+        foreach ($exception in @([System.IO.FileNotFoundException]::new('x'), $inner, $outer, [System.Exception]::new('Could not load file or assembly ''x''.'))) {
+            $record = [System.Management.Automation.ErrorRecord]::new($exception, 'Id', [System.Management.Automation.ErrorCategory]::NotSpecified, $null)
+            & (Get-Module -Name SPSInventoryLab) { param ($Record) Test-SPSLabAssemblyLoadFailure -ErrorRecord $Record } $record | Should -BeTrue
+        }
+    }
+
+    It 'does not recognize another error' {
+        foreach ($exception in @([System.UnauthorizedAccessException]::new('Access is denied.'), [System.IO.IOException]::new('The file is locked.'), [System.ArgumentException]::new('Bad value.'))) {
+            $record = [System.Management.Automation.ErrorRecord]::new($exception, 'Id', [System.Management.Automation.ErrorCategory]::NotSpecified, $null)
+            & (Get-Module -Name SPSInventoryLab) { param ($Record) Test-SPSLabAssemblyLoadFailure -ErrorRecord $Record } $record | Should -BeFalse
+        }
     }
 }
 
