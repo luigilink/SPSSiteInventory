@@ -170,7 +170,7 @@
             catch { Write-Verbose -Message "Ignoring non-numeric SizeGB '$($record.SizeGB)': $($_.Exception.Message)" }
         }
     }
-    $totalSize = [math]::Round($totalSize, 2)
+    $totalSizeText = ConvertTo-SPSSizeText -SizeGB $totalSize
     $riskCards = @(
         [PSCustomObject]@{ Label = 'Sites with full-trust code'; Count = @($siteRecords | Where-Object { $_.UsesFullTrustCode }).Count }
         [PSCustomObject]@{ Label = 'Sites with custom farm features'; Count = @($siteRecords | Where-Object { $_.UsesCustomFarmFeature }).Count }
@@ -413,7 +413,7 @@ td.muted, .muted { color: var(--muted); }
 
     # Summary box.
     [void]$sb.AppendLine('<div class="summary" id="summary">')
-    [void]$sb.AppendLine(('<div class="summary-total"><strong>{0}</strong> site collection(s) &middot; <strong>{1} GB</strong> total content &middot; <strong>{2}</strong> partial &middot; <strong>{3}</strong> failed</div>' -f $total, $totalSize.ToString($invariant), $partialCount, $failedCount))
+    [void]$sb.AppendLine(('<div class="summary-total"><strong>{0}</strong> site collection(s) &middot; <strong>{1} GB</strong> total content &middot; <strong>{2}</strong> partial &middot; <strong>{3}</strong> failed</div>' -f $total, (ConvertTo-SPSHtmlText -Value $totalSizeText), $partialCount, $failedCount))
     if ($enumerationFailureCount -gt 0) {
         [void]$sb.AppendLine(('<div class="summary-total"><strong>{0}</strong> web application enumeration failure(s)</div>' -f $enumerationFailureCount))
     }
@@ -496,7 +496,7 @@ td.muted, .muted { color: var(--muted); }
         foreach ($key in $waveKeys) {
             $agg = $waveAgg[$key]
             $waveLabel = if ($agg.Wave -eq 0) { '-' } else { [string]$agg.Wave }
-            [void]$sb.AppendLine(('<tr><td class="num">{0}</td><td>{1}</td><td class="num">{2}</td><td class="num">{3}</td></tr>' -f $waveLabel, (ConvertTo-SPSHtmlText -Value $agg.Name), $agg.Count, ([math]::Round($agg.SizeGB, 2)).ToString($invariant)))
+            [void]$sb.AppendLine(('<tr><td class="num">{0}</td><td>{1}</td><td class="num">{2}</td><td class="num">{3}</td></tr>' -f $waveLabel, (ConvertTo-SPSHtmlText -Value $agg.Name), $agg.Count, (ConvertTo-SPSHtmlText -Value (ConvertTo-SPSSizeText -SizeGB $agg.SizeGB))))
         }
         [void]$sb.AppendLine('</tbody>')
         [void]$sb.AppendLine('</table>')

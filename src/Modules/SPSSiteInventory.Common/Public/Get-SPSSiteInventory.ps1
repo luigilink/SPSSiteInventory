@@ -240,7 +240,8 @@
                         if ($null -eq $storageBytes) {
                             throw 'Storage usage is unavailable.'
                         }
-                        $record.SizeGB = [math]::Round($storageBytes / 1GB, 2)
+                        # Four decimals (about 100 KB): with two, every site collection under 5 MB is 0 and so is their total.
+                        $record.SizeGB = [math]::Round($storageBytes / 1GB, 4)
                     }
                     catch {
                         $warnings.Add("Storage usage could not be read: $($_.Exception.Message)")

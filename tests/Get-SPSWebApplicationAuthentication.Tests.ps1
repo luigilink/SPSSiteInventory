@@ -268,6 +268,42 @@ Describe 'Get-SPSWebApplicationAuthentication' {
         $inventory[0].SiteInventoryWarnings | Should -Match 'Storage usage is unavailable'
     }
 
+    It 'keeps four decimals of a GB, so that a small site collection is not recorded as 0' {
+        $root = [PSCustomObject]@{
+            Title = 'Team'; WebTemplate = 'STS'; Configuration = 0
+            LastItemModifiedDate = [datetime]'2026-01-01'
+        }
+        $root | Add-Member -MemberType ScriptMethod -Name Dispose -Value { }
+        $sites = foreach ($case in @(@{ Name = 'small'; Bytes = 3MB }, @{ Name = 'large'; Bytes = 150GB })) {
+            $site = [PSCustomObject]@{
+                Url = "https://intranet.contoso.com/sites/$($case.Name)"
+                RootWeb = $root
+                ContentDatabase = [PSCustomObject]@{ Name = 'WSS_Content' }
+                Usage = [PSCustomObject]@{ Storage = [int64]$case.Bytes }
+                AllWebs = @($root)
+            }
+            $site | Add-Member -MemberType ScriptMethod -Name Dispose -Value { }
+            $site
+        }
+        $script:webApp | Add-Member -NotePropertyName Name -NotePropertyValue 'Intranet' -Force
+        $script:webApp | Add-Member -NotePropertyName Sites -NotePropertyValue @($sites) -Force
+        Mock Get-SPWebApplication -ModuleName SPSSiteInventory.Common { $script:webApp }
+        Mock Get-SPSWebApplicationAuthentication -ModuleName SPSSiteInventory.Common {
+            [PSCustomObject]@{
+                AuthenticationModes = 'Windows'; AuthenticationZones = 'Default: Windows'
+                HasFbaZone = $false; AuthenticationReviewRequired = $false
+            }
+        }
+        Mock Add-SPSInventoryEvent -ModuleName SPSSiteInventory.Common { }
+        Mock Write-Progress -ModuleName SPSSiteInventory.Common { }
+
+        $inventory = @(Get-SPSSiteInventory)
+
+        $inventory | Should -HaveCount 2
+        $inventory[0].SizeGB | Should -Be 0.0029
+        $inventory[1].SizeGB | Should -Be 150
+    }
+
     It 'continues with later web applications when one site collection list is inaccessible' {
         $root = [PSCustomObject]@{
             Title = 'Other web app'; WebTemplate = 'STS'; Configuration = 0

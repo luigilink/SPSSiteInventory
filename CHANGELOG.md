@@ -45,7 +45,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reporting now emits a modular JSON report pack (`-sites-`, `-auth-`,
   `-workflows-`, `-irm-locks-`, `-alerts-`) with a `-manifest-` file while
   preserving the existing CSV/JSON/HTML outputs. The HTML report now includes
-  navigation shortcuts and risk indicator cards for key migration blockers. (#51)
+  navigation shortcuts and risk indicator cards for key migration blockers. `SizeGB`
+  keeps four decimals instead of two, so a farm of small site collections no longer
+  reports 0 GB of content. (#51, #84)
 - Added SMAT-parity large-content signals with configurable thresholds:
   large sites, large lists, large-list views, checked-out files, and files with
   high version counts. CSV/JSON/HTML outputs now surface these fields and
