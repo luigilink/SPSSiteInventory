@@ -66,6 +66,9 @@
         if ($scope -eq 'SiteCollection' -and [int]$record.Workflow2010RunningInstanceCount -gt 0) {
             $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'Workflow2010Running' -Url $($record.Url) -Value $([int]$record.Workflow2010RunningInstanceCount)))
         }
+        if ($scope -eq 'SiteCollection' -and [int]$record.Workflow2013Count -gt 0) {
+            $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'Workflow2013' -Url $($record.Url) -Value $([int]$record.Workflow2013Count)))
+        }
         if ($scope -eq 'SiteCollection' -and [int]$record.Workflow2013RunningInstanceCount -gt 0) {
             $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'Workflow2013Running' -Url $($record.Url) -Value $([int]$record.Workflow2013RunningInstanceCount)))
         }

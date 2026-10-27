@@ -6,7 +6,8 @@ BeforeDiscovery {
         @{ Type = 'AssessmentPartial'; Severity = 'Medium'; Signals = @{ AssessmentStatus = 'Partial'; AssessmentWarnings = 'Lists could not be read' }; Value = 'Lists could not be read' }
         @{ Type = 'Workflow2010'; Severity = 'High'; Signals = @{ Workflow2010Count = 2 }; Value = 2 }
         @{ Type = 'Workflow2010Running'; Severity = 'High'; Signals = @{ Workflow2010RunningInstanceCount = 3 }; Value = 3 }
-        @{ Type = 'Workflow2013Running'; Severity = 'Medium'; Signals = @{ Workflow2013RunningInstanceCount = 4 }; Value = 4 }
+        @{ Type = 'Workflow2013'; Severity = 'High'; Signals = @{ Workflow2013Count = 2 }; Value = 2 }
+        @{ Type = 'Workflow2013Running'; Severity = 'High'; Signals = @{ Workflow2013RunningInstanceCount = 4 }; Value = 4 }
         @{ Type = 'AppInstances'; Severity = 'Medium'; Signals = @{ AppInstanceCount = 5 }; Value = 5 }
         @{ Type = 'AppWebs'; Severity = 'Medium'; Signals = @{ AppWebCount = 6 }; Value = 6 }
         @{ Type = 'PublishingSite'; Severity = 'Medium'; Signals = @{ PublishingInfrastructureEnabled = $true; PublishingWebCount = 0 }; Value = 0 }
@@ -103,7 +104,7 @@ Describe 'Get-SPSInventoryAlert' {
     It 'raises the enumeration failure of a web application and no site alert for its row' {
         $row = [PSCustomObject]@{
             InventoryScope = 'WebApplication'; Url = 'https://other'; WebAppUrl = 'https://other'; AssessmentStatus = 'Failed'
-            SiteInventoryWarnings = 'Access denied'; Workflow2010Count = 5; InfoPathFormCount = 2; SharePointAlertCount = 4
+            SiteInventoryWarnings = 'Access denied'; Workflow2010Count = 5; Workflow2013Count = 3; InfoPathFormCount = 2; SharePointAlertCount = 4
         }
 
         $alerts = Get-Alert -Record @($row)

@@ -184,6 +184,7 @@ Describe 'Export-SPSInventoryReport content types' {
                 AssessmentWarnings = 'Assessment failed: Access denied'
                 Category = $null
                 Workflow2010RunningInstanceCount = 3
+                Workflow2013Count = 2
                 Workflow2013RunningInstanceCount = 4
                 Template = 'CUSTOM#42'
                 IsUnsupportedSiteTemplate = $false
@@ -213,6 +214,7 @@ Describe 'Export-SPSInventoryReport content types' {
         @($alerts | Where-Object { $_.AlertType -eq 'AssessmentFailed' -and $_.Url -eq 'https://intranet/sites/failed-fba' }).Count | Should -Be 1
         @($alerts | Where-Object { $_.AlertType -eq 'FbaConfigured' -and $_.Url -eq 'https://intranet/sites/failed-fba' }).Count | Should -Be 1
         @($alerts | Where-Object { $_.AlertType -eq 'Workflow2010Running' -and $_.Url -eq 'https://intranet/sites/failed-fba' }).Count | Should -Be 1
+        @($alerts | Where-Object { $_.AlertType -eq 'Workflow2013' -and $_.Url -eq 'https://intranet/sites/failed-fba' }).Count | Should -Be 1
         @($alerts | Where-Object { $_.AlertType -eq 'Workflow2013Running' -and $_.Url -eq 'https://intranet/sites/failed-fba' }).Count | Should -Be 1
         @($alerts | Where-Object { $_.AlertType -eq 'TemplateCompatibilityReview' -and $_.Url -eq 'https://intranet/sites/failed-fba' }).Count | Should -Be 1
         @($alerts | Where-Object { $_.AlertType -eq 'TemplateLanguageReview' -and $_.Url -eq 'https://intranet/sites/failed-fba' }).Count | Should -Be 1
