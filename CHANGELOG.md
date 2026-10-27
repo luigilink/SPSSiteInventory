@@ -10,7 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Site scans now retain web-application enumeration failures and collector warning
   details in exported reports, preserve authentication metadata for inaccessible
   applications, keep progress messages in the transcript, and mark unknown storage
-  values as partial rather than zero. (#28)
+  values as partial rather than zero. The warnings of a site collection that differ
+  only by the names between quotes (list titles, web URLs) are grouped into one entry
+  with the number of similar warnings, in `AssessmentWarnings` and `Reasons`. (#28, #86)
 - Pull request template now aligns with contribution guidelines by making
   validation expectations explicit (Pester, ScriptAnalyzer, docs/wiki updates,
   changelog, and Windows PowerShell 5.1 compatibility). (#30)
