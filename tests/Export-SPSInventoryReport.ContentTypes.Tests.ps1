@@ -48,7 +48,7 @@ Describe 'Export-SPSInventoryReport content types' {
             CustomPermissionLevelCount = 2; CustomPermissionLevelExamples = 'Project Manager (https://intranet/sites/team)'
             EmailEnabledListCount = 1; EmailEnabledListExamples = 'Invoices (/sites/team/Invoices)'
             HtmlFileCount = 4; HtmlFileExamples = '/sites/team/Docs/a.htm'
-            IrmEnabledListCount = 2; SiteLockState = 'ReadOnly'; IsLockedSite = $true
+            IrmEnabledListCount = 2; SiteLockState = 'ReadOnly'; IsLockedSite = $true; HasNoAccessLock = $false
             IsLargeSite = $true
             LargeListCount = 1; LargeListExamples = 'Documents (7000)'
             LargeListViewCount = 1; LargeListViewExamples = 'Documents/All Items (7000)'
@@ -162,6 +162,28 @@ Describe 'Export-SPSInventoryReport content types' {
         Test-Path $output.ManifestJsonPath | Should -BeTrue
         (Get-Content $output.ManifestJsonPath -Raw | ConvertFrom-Json).Files.ContentTypesJson | Should -BeNullOrEmpty
         (Get-Content $output.HtmlPath -Raw) | Should -Not -Match 'Content types and list bindings'
+    }
+
+    It 'writes the lock signals in the report pack and one lock alert that follows the lock state' {
+        $records = @(
+            [PSCustomObject]@{ InventoryScope = 'SiteCollection'; Url = 'https://intranet/sites/noaccess'; WebApp = 'Intranet'; AssessmentStatus = 'Complete'; Category = 4; SiteLockState = 'NoAccess'; IsLockedSite = $true; HasNoAccessLock = $true }
+            [PSCustomObject]@{ InventoryScope = 'SiteCollection'; Url = 'https://intranet/sites/readonly'; WebApp = 'Intranet'; AssessmentStatus = 'Complete'; Category = 1; SiteLockState = 'ReadOnly'; IsLockedSite = $true; HasNoAccessLock = $false }
+            [PSCustomObject]@{ InventoryScope = 'SiteCollection'; Url = 'https://intranet/sites/open'; WebApp = 'Intranet'; AssessmentStatus = 'Complete'; Category = 1; SiteLockState = 'Unlock'; IsLockedSite = $false; HasNoAccessLock = $false }
+        )
+
+        $output = Export-SPSInventoryReport -InputObject $records -OutputFolder $TestDrive -BaseName 'Locks'
+        $locks = Get-Content $output.IrmLocksJsonPath -Raw | ConvertFrom-Json
+        $alerts = Get-Content $output.AlertsJsonPath -Raw | ConvertFrom-Json
+
+        ($locks | Where-Object { $_.Url -eq 'https://intranet/sites/noaccess' }).HasNoAccessLock | Should -BeTrue
+        ($locks | Where-Object { $_.Url -eq 'https://intranet/sites/readonly' }).HasNoAccessLock | Should -BeFalse
+        Get-AlertCount -Alerts $alerts -Type 'NoAccessSite' -Url 'https://intranet/sites/noaccess' | Should -Be 1
+        Get-AlertCount -Alerts $alerts -Type 'LockedSite' -Url 'https://intranet/sites/noaccess' | Should -Be 0
+        Get-AlertCount -Alerts $alerts -Type 'LockedSite' -Url 'https://intranet/sites/readonly' | Should -Be 1
+        Get-AlertCount -Alerts $alerts -Type 'NoAccessSite' -Url 'https://intranet/sites/readonly' | Should -Be 0
+        Get-AlertCount -Alerts $alerts -Type 'LockedSite' -Url 'https://intranet/sites/open' | Should -Be 0
+        @($alerts | Where-Object { $_.AlertType -eq 'NoAccessSite' })[0].Severity | Should -Be 'High'
+        @($alerts | Where-Object { $_.AlertType -eq 'LockedSite' })[0].Severity | Should -Be 'Medium'
     }
 
     It 'writes scope-aware alerts for web-app enumeration failures and failed FBA sites' {

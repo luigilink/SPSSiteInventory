@@ -64,6 +64,27 @@ Describe 'Example settings file' {
         $without.Category | Should -Be 1
     }
 
+    It 'blocks only the sites locked with NoAccess, not the ones that are read-only' {
+        $settings = Import-PowerShellDataFile -Path $script:ExamplePath
+
+        $settings.Scoring.BlockingSignals | Should -Contain 'HasNoAccessLock'
+        $settings.Scoring.BlockingSignals | Should -Not -Contain 'IsLockedSite'
+        $settings.Scoring.Weights.ContainsKey('IsLockedSite') | Should -BeFalse
+    }
+
+    It 'classifies a NoAccess site as Blocking and a ReadOnly or NoAdditions site as Simple' {
+        $settings = Import-PowerShellDataFile -Path $script:ExamplePath
+
+        $noAccess = Measure-SPSSiteComplexity -Signals @{ IsLockedSite = $true; HasNoAccessLock = $true; SiteLockState = 'NoAccess' } -Scoring $settings.Scoring
+        $readOnly = Measure-SPSSiteComplexity -Signals @{ IsLockedSite = $true; HasNoAccessLock = $false; SiteLockState = 'ReadOnly' } -Scoring $settings.Scoring
+        $noAdditions = Measure-SPSSiteComplexity -Signals @{ IsLockedSite = $true; HasNoAccessLock = $false; SiteLockState = 'NoAdditions' } -Scoring $settings.Scoring
+
+        $noAccess.Category | Should -Be 4
+        $noAccess.Reasons | Should -Contain 'blocking: HasNoAccessLock'
+        $readOnly.Category | Should -Be 1
+        $noAdditions.Category | Should -Be 1
+    }
+
     It 'documents the alert row cap and keeps SharePoint alerts informational' {
         $settings = Import-PowerShellDataFile -Path $script:ExamplePath
 

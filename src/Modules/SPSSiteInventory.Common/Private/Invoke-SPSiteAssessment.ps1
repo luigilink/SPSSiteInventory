@@ -201,6 +201,7 @@
                     FileVersionCount = $signals['FileVersionCount']
                     FileVersionExamples = $signals['FileVersionExamples']
                     IsLockedSite = $signals['IsLockedSite']
+                    HasNoAccessLock = $signals['HasNoAccessLock']
                     SiteLockState = $signals['SiteLockState']
                     UsesFullTrustCode = $signals['UsesFullTrustCode']
                     ContentTypeCount = $signals['ContentTypeCount']
@@ -288,6 +289,7 @@
                     FileVersionCount = $null
                     FileVersionExamples = $null
                     IsLockedSite = $null
+                    HasNoAccessLock = $null
                     SiteLockState = $null
                     UsesFullTrustCode = $null
                     ContentTypeCount = $null

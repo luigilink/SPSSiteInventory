@@ -120,7 +120,10 @@
         if ([bool]$record.HasFbaZone) {
             $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'FbaConfigured' -Url $($record.Url) -Value $($true)))
         }
-        if ($scope -eq 'SiteCollection' -and [bool]$record.IsLockedSite) {
+        if ($scope -eq 'SiteCollection' -and [bool]$record.HasNoAccessLock) {
+            $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'NoAccessSite' -Url $($record.Url) -Value $($record.SiteLockState)))
+        }
+        elseif ($scope -eq 'SiteCollection' -and [bool]$record.IsLockedSite) {
             $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'LockedSite' -Url $($record.Url) -Value $($record.SiteLockState)))
         }
         if ($scope -eq 'SiteCollection' -and [int]$record.IrmEnabledListCount -gt 0) {

@@ -86,7 +86,7 @@ Scoring = @{
         'UsesCustomFarmFeature'
         'UsesFullTrustCode'
         'InfoPathFormCount'
-        'IsLockedSite'
+        'HasNoAccessLock'
         'IrmEnabledListCount'
         'HasFbaZone'
         'IsUnsupportedSiteTemplate'
@@ -270,8 +270,11 @@ non-portable as-is:
 - `UsesFullTrustCode` — the site activates a feature from a custom **full-trust** solution
   (a WSP deploying a global assembly to the GAC), correlated through the farm-solution map.
 - `InfoPathFormCount` — the site uses InfoPath forms.
-- `IsLockedSite` — the site collection lock state is not `Unlock` (for example
-  `ReadOnly`, `NoAdditions`, `NoAccess`).
+- `HasNoAccessLock` — the site collection is locked with `NoAccess`: nobody can read it,
+  so the migration tools skip it until it is unlocked. `ReadOnly` and `NoAdditions` locks
+  only restrict changes, so they are not blocking: the content can still be read and
+  migrated, and the lock is often a deliberate freeze. They are reported by `IsLockedSite`
+  (true for any lock) and `SiteLockState`, and raise the `LockedSite` alert.
 - `IrmEnabledListCount` — at least one list/library has IRM enabled.
 - `ExternalListCount` — at least one external list (backed by a BCS external content
   type) exists. BCS is retired in SharePoint Online, so the scenario needs a replacement
@@ -283,9 +286,11 @@ non-portable as-is:
 - `IsUnsupportedSiteTemplate` — template compatibility mapping identified the
   root-web template as unsupported for direct migration.
 
-Existing settings files are not rewritten. Add `HasFbaZone`, `IsLockedSite`,
+Existing settings files are not rewritten. Add `HasFbaZone`, `HasNoAccessLock`,
 `IrmEnabledListCount` and `IsUnsupportedSiteTemplate` to your existing
-`Scoring.BlockingSignals` to apply these blocker overrides.
+`Scoring.BlockingSignals` to apply these blocker overrides. A settings file that lists
+`IsLockedSite` keeps blocking every lock state; replace it with `HasNoAccessLock` to block
+only the sites that cannot be read.
 
 ## TemplateParity section
 

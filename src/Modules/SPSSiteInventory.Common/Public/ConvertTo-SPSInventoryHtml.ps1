@@ -180,6 +180,7 @@
         [PSCustomObject]@{ Label = 'Sites with InfoPath forms'; Count = @($siteRecords | Where-Object { [int]$_.InfoPathFormCount -gt 0 }).Count }
         [PSCustomObject]@{ Label = 'Sites with IRM-enabled lists'; Count = @($siteRecords | Where-Object { [int]$_.IrmEnabledListCount -gt 0 }).Count }
         [PSCustomObject]@{ Label = 'Sites with locked state'; Count = @($siteRecords | Where-Object { $_.IsLockedSite }).Count }
+        [PSCustomObject]@{ Label = 'Sites locked with NoAccess'; Count = @($siteRecords | Where-Object { $_.HasNoAccessLock }).Count }
         [PSCustomObject]@{ Label = 'Sites with Workflow 2010'; Count = @($siteRecords | Where-Object { [int]$_.Workflow2010Count -gt 0 }).Count }
         [PSCustomObject]@{ Label = 'Sites with running Workflow 2010'; Count = @($siteRecords | Where-Object { [int]$_.Workflow2010RunningInstanceCount -gt 0 }).Count }
         [PSCustomObject]@{ Label = 'Sites with running Workflow 2013'; Count = @($siteRecords | Where-Object { [int]$_.Workflow2013RunningInstanceCount -gt 0 }).Count }
@@ -817,6 +818,7 @@ td.muted, .muted { color: var(--muted); }
         @{ Key = 'IsLargeSite'; Label = 'Large site'; Class = ''; Type = 'text' }
         @{ Key = 'SiteLockState'; Label = 'Site lock state'; Class = ''; Type = 'text' }
         @{ Key = 'IsLockedSite'; Label = 'Site locked'; Class = ''; Type = 'text' }
+        @{ Key = 'HasNoAccessLock'; Label = 'NoAccess lock'; Class = ''; Type = 'text' }
         @{ Key = 'IrmEnabledListCount'; Label = 'IRM-enabled lists'; Class = 'num'; Type = 'num' }
         @{ Key = 'Workflow2010RunningInstanceCount'; Label = 'Running WF 2010'; Class = 'num'; Type = 'num' }
         @{ Key = 'Workflow2013RunningInstanceCount'; Label = 'Running WF 2013'; Class = 'num'; Type = 'num' }

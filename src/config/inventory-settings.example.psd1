@@ -221,9 +221,10 @@
             # FBA on any zone requires identity/authentication remediation for SPO.
             # This is a configured capability, not a measurement of active users.
             'HasFbaZone'
-            # Site lock states (ReadOnly / NoAdditions / NoAccess) indicate migration
-            # blockers until the lock is removed or changed.
-            'IsLockedSite'
+            # A NoAccess lock makes the site unreadable: the migration tools skip it until it
+            # is unlocked. NoAdditions and ReadOnly locks only restrict changes, so they are
+            # reported (IsLockedSite) but not blocking.
+            'HasNoAccessLock'
             # IRM protection on lists/libraries requires migration remediation.
             'IrmEnabledListCount'
             # Unsupported templates are not migration targets as-is.

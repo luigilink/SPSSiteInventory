@@ -35,9 +35,13 @@
         InfoPath Forms Services is retired and has no equivalent in SharePoint Online, so
         those forms must be rebuilt (Power Apps) - often a migration blocker.
 
-        IrmEnabledListCount counts lists and libraries where IRM is enabled. IsLockedSite
-        and SiteLockState surface site lock status (ReadOnly / NoAdditions / NoAccess),
-        which can block or delay migration.
+        IrmEnabledListCount counts lists and libraries where IRM is enabled. SiteLockState
+        is the lock state of the site collection (Unlock, NoAdditions, ReadOnly, NoAccess or
+        Unknown) and IsLockedSite is true for any state other than Unlock and Unknown. Only a
+        NoAccess lock makes the site unreadable, so that the migration tools skip it:
+        HasNoAccessLock flags it, and the example configuration treats it as blocking.
+        NoAdditions and ReadOnly restrict changes, not reading, and are often a deliberate
+        migration freeze.
 
         PublishingInfrastructureEnabled, PublishingWebCount, PublishingPageCount and
         PublishingPageLayoutCount describe classic publishing dependencies: the
@@ -217,6 +221,7 @@
         FileVersionCount         = 0
         FileVersionExamples      = ''
         IsLockedSite             = $false
+        HasNoAccessLock          = $false
         SiteLockState            = 'Unknown'
         SandboxSolutions         = 0
         CustomMasterPage         = $false
@@ -369,6 +374,7 @@
         $signals.IsLockedSite = -not (
             $lockState.Equals('Unlock', [System.StringComparison]::OrdinalIgnoreCase) -or
             $lockState.Equals('Unknown', [System.StringComparison]::OrdinalIgnoreCase))
+        $signals.HasNoAccessLock = $lockState.Equals('NoAccess', [System.StringComparison]::OrdinalIgnoreCase)
     }
     catch {
         $signals.CustomizationInventoryComplete = $false
