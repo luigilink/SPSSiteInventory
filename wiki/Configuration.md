@@ -219,7 +219,9 @@ Managed metadata signals follow the SMAT Managed Metadata Columns report:
 - `ManagedMetadataListCount` — lists and libraries with at least one visible managed
   metadata column, that is a field of type `TaxonomyFieldType` or
   `TaxonomyFieldTypeMulti` (the Enterprise Keywords column included). Hidden columns,
-  and the hidden helper fields SharePoint adds for each column, are ignored.
+  and the hidden helper fields SharePoint adds for each column, are ignored, and so are
+  the hidden lists: the newsfeed list (`MicroFeed`) of every site has a managed metadata
+  column for hashtags, which says nothing about the use of the term store.
 - `ManagedMetadataColumnCount` — those columns, counted once per list. It is reported
   but not scored, because it follows the list count.
 - `ManagedMetadataTermSetCount` — distinct term sets, by ID, that those columns use

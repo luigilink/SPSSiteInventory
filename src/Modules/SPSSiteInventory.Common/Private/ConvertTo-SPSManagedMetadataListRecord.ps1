@@ -7,7 +7,10 @@
         A managed metadata column is a field of type TaxonomyFieldType or
         TaxonomyFieldTypeMulti, which includes the Enterprise Keywords column. Hidden
         fields are ignored, so the helper fields SharePoint adds for each column are not
-        counted. Returns $null when the list has no managed metadata column.
+        counted. A hidden list is a system list that users do not see, such as the newsfeed
+        list (MicroFeed, template 544), whose HashTags column is a managed metadata column on
+        every site: it says nothing about the use of the term store, so it is skipped.
+        Returns $null when the list has no managed metadata column to report.
 
         The row follows the SMAT "Managed Metadata Columns" list report. Term set IDs are
         read from the field definition, without calling the term store service, so term
@@ -100,6 +103,11 @@
         return $null
     }
 
+    $hiddenList = Get-SPSPropertyValue -InputObject $List -Name 'Hidden'
+    if ($null -ne $hiddenList -and [bool]$hiddenList) {
+        return $null
+    }
+
     $listTitle = [string]$List.Title
     if ([string]::IsNullOrWhiteSpace($listTitle)) {
         throw 'The list title could not be read.'
@@ -117,6 +125,10 @@
     $listTemplate = Get-SPSPropertyValue -InputObject $List -Name 'BaseTemplate'
     if ($null -eq $listTemplate) {
         throw "The template of list '$listTitle' could not be read."
+    }
+    # The newsfeed list, in case SharePoint does not flag it as hidden.
+    if ([string]$listTemplate -eq '544') {
+        return $null
     }
     $listType = Get-SPSPropertyValue -InputObject $List -Name 'BaseType'
     if ($null -eq $listType) {

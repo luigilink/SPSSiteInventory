@@ -110,7 +110,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   scoring (weighted, not blocking), CSV/JSON/HTML, a per-list `-managedmetadata-*` CSV/JSON
   report with a matching HTML section, and a dedicated alert, with guidance to migrate
   these lists close to the term store. A column or list property that cannot be read
-  marks the site partial instead of reporting no managed metadata or an empty value. (#44)
+  marks the site partial instead of reporting no managed metadata or an empty value.
+  Hidden lists are skipped, so the newsfeed list that every site has (`MicroFeed`, with its
+  hashtags column) is not reported as a use of the term store. (#44, #81)
 - Added SMAT BCS and external list parity: `ExternalListCount` / `ExternalListExamples`
   (External List scan: lists backed by a Business Connectivity Services external content
   type, detected through SharePoint's external data source flag) with a per-list

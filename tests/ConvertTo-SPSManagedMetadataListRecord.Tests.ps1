@@ -41,6 +41,18 @@ public class SPSTestDescriptiveList
     public DateTime LastItemModifiedDate { get { if (FailDate) { throw new InvalidOperationException("date unavailable"); } return new DateTime(2026, 3, 4, 10, 20, 30); } }
 }
 
+public class SPSTestHiddenList
+{
+    public object Fields { get; set; }
+    public string Title { get; set; }
+    public object RootFolder { get; set; }
+    public bool FailHidden { get; set; }
+    public int ItemCount { get { return 5; } }
+    public string BaseTemplate { get { return "GenericList"; } }
+    public string BaseType { get { return "GenericList"; } }
+    public bool Hidden { get { if (FailHidden) { throw new InvalidOperationException("hidden state of the list unavailable"); } return false; } }
+}
+
 public class SPSTestCountingList
 {
     public object Fields { get; set; }
@@ -70,16 +82,20 @@ public class SPSTestCountingList
     }
 
     function Get-TestList {
-        param ([object[]]$Fields = @())
-        [PSCustomObject]@{
+        param ([object[]]$Fields = @(), $Hidden = $null, $BaseTemplate = 'DocumentLibrary')
+        $list = [PSCustomObject]@{
             Title = 'Contracts'
             RootFolder = [PSCustomObject]@{ ServerRelativeUrl = '/sites/team/Contracts' }
             Fields = $Fields
             ItemCount = 42
-            BaseTemplate = 'DocumentLibrary'
+            BaseTemplate = $BaseTemplate
             BaseType = 'DocumentLibrary'
             LastItemModifiedDate = [datetime]'2026-03-04T10:20:30'
         }
+        if ($null -ne $Hidden) {
+            $list | Add-Member -NotePropertyName Hidden -NotePropertyValue $Hidden
+        }
+        $list
     }
 
     function Get-TestDescriptiveList {
@@ -106,6 +122,46 @@ Describe 'ConvertTo-SPSManagedMetadataListRecord' {
             (Get-TestField -Title 'Owner' -Type 'Lookup')
             (Get-TestField -Title 'Notes' -Type 'Note')
         )
+
+        Convert-List -List $list | Should -BeNullOrEmpty
+    }
+
+    It 'returns null for a hidden list, whatever its columns' {
+        $list = Get-TestList -Fields @((Get-TestField -Title 'HashTags' -Type 'TaxonomyFieldTypeMulti')) -Hidden $true
+
+        Convert-List -List $list | Should -BeNullOrEmpty
+    }
+
+    It 'returns null for the newsfeed list (template 544) even when it is not flagged as hidden' {
+        foreach ($template in @(544, '544')) {
+            $list = Get-TestList -Fields @((Get-TestField -Title 'HashTags' -Type 'TaxonomyFieldTypeMulti')) -BaseTemplate $template -Hidden $false
+
+            Convert-List -List $list | Should -BeNullOrEmpty
+        }
+    }
+
+    It 'still reports a visible list, flagged or not' {
+        foreach ($hidden in @($null, $false)) {
+            $list = Get-TestList -Fields @((Get-TestField)) -Hidden $hidden
+
+            (Convert-List -List $list).ListTitle | Should -Be 'Contracts'
+        }
+    }
+
+    It 'lets a failing hidden-state getter of the list propagate instead of reading it as visible' {
+        $list = [SPSTestHiddenList]::new()
+        $list.Title = 'Contracts'
+        $list.RootFolder = [PSCustomObject]@{ ServerRelativeUrl = '/sites/team/Contracts' }
+        $list.Fields = @((Get-TestField))
+        $list.FailHidden = $true
+
+        { Convert-List -List $list } | Should -Throw '*hidden state of the list unavailable*'
+    }
+
+    It 'does not read the hidden state of a list that has no managed metadata column' {
+        $list = [SPSTestHiddenList]::new()
+        $list.Fields = @((Get-TestField -Type 'Text'))
+        $list.FailHidden = $true
 
         Convert-List -List $list | Should -BeNullOrEmpty
     }
