@@ -7,7 +7,8 @@
         Reads a PowerShell data file (see inventory-settings.example.psd1) and returns it
         as a hashtable. The function fails fast with a clear message when the file is
         missing or when the mandatory Scoring section is absent, so the orchestrator does
-        not run with an incomplete configuration.
+        not run with an incomplete configuration. The optional SharePointAlerts section is
+        validated too: it must be a hashtable and IncludeUserLogin must be $true or $false.
 
         .PARAMETER Path
         Full path to the settings .psd1 file.
@@ -32,6 +33,18 @@
 
     if (-not $settings.ContainsKey('Scoring')) {
         throw "Inventory settings file '$Path' is missing the mandatory 'Scoring' section."
+    }
+
+    if ($settings.ContainsKey('SharePointAlerts')) {
+        if ($settings['SharePointAlerts'] -isnot [System.Collections.IDictionary]) {
+            throw "Inventory settings file '$Path': the 'SharePointAlerts' section must be a hashtable."
+        }
+        try {
+            $null = Get-SPSSharePointAlertOption -Settings $settings['SharePointAlerts']
+        }
+        catch {
+            throw "Inventory settings file '$Path': $($_.Exception.Message)"
+        }
     }
 
     return $settings

@@ -34,8 +34,15 @@
 
         [Parameter()]
         [System.Collections.IDictionary]
-        $PermissionLevels = @{}
+        $PermissionLevels = @{},
+
+        [Parameter()]
+        [System.Collections.IDictionary]
+        $SharePointAlertSettings = @{}
     )
+
+    # Fail before any site is read when the alert settings are invalid.
+    $null = Get-SPSSharePointAlertOption -Settings $SharePointAlertSettings
 
     $contentTypes = [System.Collections.Generic.List[object]]::new()
     $managedMetadataLists = [System.Collections.Generic.List[object]]::new()
@@ -81,7 +88,7 @@
                 $customizationWarnings = @()
                 # HTML files only matter where browser file handling is Permissive; SharePoint Online enforces Strict.
                 $scanHtmlFile = [string]$item.BrowserFileHandling -eq 'Permissive'
-                $signals = Get-SPSSiteCustomization -Site $site -CustomFeatureId $CustomFeatureId -FullTrustFeatureId $FullTrustFeatureId -LargeContentThresholds $LargeContentThresholds -PermissionLevels $PermissionLevels -ScanHtmlFile:$scanHtmlFile -WarningVariable customizationWarnings
+                $signals = Get-SPSSiteCustomization -Site $site -CustomFeatureId $CustomFeatureId -FullTrustFeatureId $FullTrustFeatureId -LargeContentThresholds $LargeContentThresholds -PermissionLevels $PermissionLevels -SharePointAlertSettings $SharePointAlertSettings -ScanHtmlFile:$scanHtmlFile -WarningVariable customizationWarnings
                 foreach ($warning in $customizationWarnings) {
                     $siteWarnings.Add([string]$warning)
                 }

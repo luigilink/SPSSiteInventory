@@ -462,4 +462,46 @@ Describe 'Invoke-SPSiteAssessment' {
             $result.Inventory[2].WebAppPolicyCount | Should -Be 3
         }
     }
+
+    It 'passes the SharePoint alert settings to the collector of every site' {
+        InModuleScope SPSSiteInventory.Common {
+            Mock Get-SPSite {
+                $site = [PSCustomObject]@{ Url = $Identity }
+                $site | Add-Member -MemberType ScriptMethod -Name Dispose -Value { }
+                $site
+            }
+            Mock Get-SPSSiteCustomization {
+                @{ ContentTypeInventoryComplete = $true; CustomizationInventoryComplete = $true; ContentTypes = @() }
+            }
+            Mock Add-SPSInventoryEvent { }
+            Mock Write-Progress { }
+
+            $inventory = @(
+                [PSCustomObject]@{ Url = 'https://intranet/sites/a'; Title = 'A'; SiteInventoryComplete = $true; SiteInventoryWarnings = '' }
+                [PSCustomObject]@{ Url = 'https://intranet/sites/b'; Title = 'B'; SiteInventoryComplete = $true; SiteInventoryWarnings = '' }
+            )
+            $scoring = @{ Weights = @{}; Thresholds = @{}; BlockingSignals = @() }
+
+            $null = Invoke-SPSiteAssessment -Inventory $inventory -Scoring $scoring -SharePointAlertSettings @{ IncludeUserLogin = $false }
+
+            Should -Invoke Get-SPSSiteCustomization -Times 2 -Exactly -ParameterFilter { $SharePointAlertSettings.IncludeUserLogin -eq $false }
+        }
+    }
+
+    It 'rejects invalid SharePoint alert settings before it reads any site' {
+        InModuleScope SPSSiteInventory.Common {
+            Mock Get-SPSite { throw 'No site should be read.' }
+            Mock Get-SPSSiteCustomization { @{} }
+            Mock Add-SPSInventoryEvent { }
+            Mock Write-Progress { }
+
+            $inventory = @([PSCustomObject]@{ Url = 'https://intranet/sites/a'; Title = 'A'; SiteInventoryComplete = $true; SiteInventoryWarnings = '' })
+            $scoring = @{ Weights = @{}; Thresholds = @{}; BlockingSignals = @() }
+
+            { Invoke-SPSiteAssessment -Inventory $inventory -Scoring $scoring -SharePointAlertSettings @{ IncludeUserLogin = 'no' } } | Should -Throw -ExpectedMessage '*SharePointAlerts.IncludeUserLogin must be*'
+
+            Should -Invoke Get-SPSite -Times 0 -Exactly
+            Should -Invoke Get-SPSSiteCustomization -Times 0 -Exactly
+        }
+    }
 }

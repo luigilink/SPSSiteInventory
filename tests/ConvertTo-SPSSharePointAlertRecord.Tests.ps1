@@ -166,13 +166,12 @@ public sealed class SPSSiteInventoryTestAlert
     }
 
     function ConvertTo-Record {
-        param ([object]$Alert, [hashtable]$Cache)
-        if ($PSBoundParameters.ContainsKey('Cache')) {
-            & $script:Module { param ($Source, $Users) ConvertTo-SPSSharePointAlertRecord -Alert $Source -SiteUrl 'https://intranet/sites/team' -WebUrl 'https://intranet/sites/team/sub' -UserLoginCache $Users } $Alert $Cache
-        }
-        else {
-            & $script:Module { param ($Source) ConvertTo-SPSSharePointAlertRecord -Alert $Source -SiteUrl 'https://intranet/sites/team' -WebUrl 'https://intranet/sites/team/sub' } $Alert
-        }
+        param ([object]$Alert, [hashtable]$Cache, [bool]$IncludeUserLogin)
+        # Only the parameters the caller gives are passed, so the defaults of the function are tested too.
+        $optional = @{}
+        if ($PSBoundParameters.ContainsKey('Cache')) { $optional['UserLoginCache'] = $Cache }
+        if ($PSBoundParameters.ContainsKey('IncludeUserLogin')) { $optional['IncludeUserLogin'] = $IncludeUserLogin }
+        & $script:Module { param ($Source, $Extra) ConvertTo-SPSSharePointAlertRecord -Alert $Source -SiteUrl 'https://intranet/sites/team' -WebUrl 'https://intranet/sites/team/sub' @Extra } $Alert $optional
     }
 }
 
@@ -314,6 +313,34 @@ Describe 'ConvertTo-SPSSharePointAlertRecord' {
 
         [SPSSiteInventoryTestAlert]::UserLookups | Should -Be 0
         $cache.Count | Should -Be 0
+    }
+
+    It 'leaves the login name out and does not look the owner up when it is turned off' {
+        [SPSSiteInventoryTestAlert]::UserLookups = 0
+        $cache = @{}
+
+        $record = ConvertTo-Record -Alert (New-TestAlert -UserId 7) -Cache $cache -IncludeUserLogin $false
+        $withoutCache = ConvertTo-Record -Alert (New-TestAlert -UserId 8) -IncludeUserLogin $false
+
+        [SPSSiteInventoryTestAlert]::UserLookups | Should -Be 0
+        $record.UserLoginName | Should -Be ''
+        $record.UserId | Should -Be 7
+        $withoutCache.UserLoginName | Should -Be ''
+        $withoutCache.UserId | Should -Be 8
+        $cache.Count | Should -Be 0
+        $record.AlertId | Should -Be '11111111-1111-1111-1111-111111111111'
+        $record.Title | Should -Be 'Documents: all changes'
+    }
+
+    It 'resolves the owner when the login name is included, which is the default' {
+        [SPSSiteInventoryTestAlert]::UserLookups = 0
+
+        $explicit = ConvertTo-Record -Alert (New-TestAlert -UserId 7) -IncludeUserLogin $true
+        $default = ConvertTo-Record -Alert (New-TestAlert -UserId 7)
+
+        [SPSSiteInventoryTestAlert]::UserLookups | Should -Be 2
+        $explicit.UserLoginName | Should -Be 'i:0#.w|contoso\user7'
+        $default.UserLoginName | Should -Be 'i:0#.w|contoso\user7'
     }
 
     It 'accepts the values that are legitimately empty' {

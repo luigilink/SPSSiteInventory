@@ -18,6 +18,7 @@ and adjust it. No client-specific value ships in the repository.
 | `LargeContentThresholds` | hashtable | Thresholds for large-content parity signals (large site/list/view, checked-out files, file versions). Optional; defaults apply when omitted. |
 | `TemplateParity` | hashtable | Template compatibility and language rules (supported/unsupported/review mapping, optional language allow-list). Optional; built-in defaults apply when omitted. |
 | `PermissionLevels` | hashtable | Permission-level names SharePoint provisions, used to tell custom permission levels apart (`BuiltInNames`, added to the built-in English names). Optional. |
+| `SharePointAlerts` | hashtable | Options of the SharePoint alerts report (`IncludeUserLogin`, default `$true`). Optional. |
 | `Scoring` | hashtable | The scoring engine configuration (see below). **Mandatory.** |
 | `MigrationWaves` | hashtable[] | The category-to-wave mapping (see below). Optional; a one-wave-per-category default applies when omitted. |
 
@@ -363,6 +364,27 @@ site collection. List those names in `BuiltInNames`; they are added to the Engli
 The scan logs a warning when half or more of the site collections report custom
 permission levels, which usually means the names are missing. The
 `CustomPermissionLevelExamples` field shows which levels were flagged.
+
+## SharePointAlerts section
+
+```powershell
+SharePointAlerts = @{
+    # Collect the login name of the owner of each alert (default $true)
+    IncludeUserLogin = $true
+}
+```
+
+The SharePoint alerts report (`*-sharepointalerts-*`, see
+[Usage](Usage#sharepoint-alerts)) lists the "Alert Me" subscriptions of the users, with the
+login name of each owner so that you can tell them which alerts to recreate. A login name is
+personal data. Set `IncludeUserLogin` to `$false` to leave it out: `UserLoginName` stays
+empty and the owner of an alert is not looked up at all, which also saves a query per owner.
+`UserId`, a number local to the site collection that does not name anybody, is kept.
+
+The value must be `$true` or `$false`. Anything else, such as the string `'false'`, is
+rejected when the settings file is loaded: it would otherwise count as `$true` and collect
+the names you meant to leave out. While the login names are collected, the scan logs a notice
+saying that the alert files contain them.
 
 ## LargeContentThresholds section
 
