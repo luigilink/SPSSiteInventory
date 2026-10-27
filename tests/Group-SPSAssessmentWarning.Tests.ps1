@@ -93,6 +93,52 @@ Describe 'Group-SPSAssessmentWarning' {
         $result[1] | Should -BeExactly 'Content-type inventory partial; content-type counts may be incomplete.'
     }
 
+    It 'groups a list title that has an apostrophe with the others' {
+        $warnings = @(
+            "Could not read checked-out files on 'Manager's Documents' in web 'https://contoso/sites/a': $script:Reason"
+            "Could not read checked-out files on 'appfiles' in web 'https://contoso/sites/a': $script:Reason"
+            "Could not read checked-out files on 'Director's Files' in web 'https://contoso/sites/b': $script:Reason"
+            "Could not read checked-out files on 'Q&A 'draft'' in web 'https://contoso/sites/b': $script:Reason"
+        )
+
+        $result = @(Group-Warning -Warning $warnings)
+
+        $result | Should -HaveCount 1
+        $result[0] | Should -BeExactly "Could not read checked-out files on 'Manager's Documents' in web 'https://contoso/sites/a': $script:Reason [+3 similar]"
+    }
+
+    It 'does not merge warnings whose reasons differ by a quoted value' {
+        $warnings = @(
+            "Could not read managed metadata on 'a' in web 'https://contoso/sites/a': Column 'Department' does not exist."
+            "Could not read managed metadata on 'b' in web 'https://contoso/sites/a': Column 'Region' does not exist."
+            "Could not read managed metadata on 'c' in web 'https://contoso/sites/a': Column 'Department' does not exist."
+        )
+
+        $result = @(Group-Warning -Warning $warnings)
+
+        $result | Should -HaveCount 2
+        $result[0] | Should -BeExactly "Could not read managed metadata on 'a' in web 'https://contoso/sites/a': Column 'Department' does not exist. [+1 similar]"
+        $result[1] | Should -BeExactly "Could not read managed metadata on 'b' in web 'https://contoso/sites/a': Column 'Region' does not exist."
+    }
+
+    It 'replaces the quoted names of a warning that has no reason after a colon' {
+        $stop = "File-version scan stopped on '{0}' in web 'https://contoso/sites/{1}' after 2000 item(s). Increase LargeContentThresholds.MaxItemsForVersionScanPerLibrary to scan more items."
+
+        $result = @(Group-Warning -Warning @(($stop -f 'Docs', 'a'), ($stop -f 'Manager''s Files', 'b'), ($stop -f 'Pages', 'c').Replace('2000', '500')))
+
+        $result | Should -HaveCount 2
+        $result[0] | Should -BeExactly (($stop -f 'Docs', 'a') + ' [+1 similar]')
+        $result[1] | Should -Match 'after 500 item\(s\)'
+    }
+
+    It 'leaves a warning with an unbalanced quote as it is' {
+        $result = @(Group-Warning -Warning @("Could not read 'abc", "Could not read 'abc", "Could not read 'abd"))
+
+        $result | Should -HaveCount 2
+        $result[0] | Should -BeExactly "Could not read 'abc [+1 similar]"
+        $result[1] | Should -BeExactly "Could not read 'abd"
+    }
+
     It 'ignores null and empty entries when it groups the others' {
         $result = @(Group-Warning -Warning @($null, "Lists unreadable on 'a': Access denied", '', "Lists unreadable on 'b': Access denied"))
 
