@@ -52,6 +52,54 @@ Describe 'Get-SPSAlertCatalog' {
         $script:Catalog['BcsApplication'].Remediation | Should -Match 'Power Apps'
     }
 
+    It 'does not tell users to restart workflows in SharePoint Online, where both workflow engines are retired' {
+        foreach ($key in @('Workflow2010Running', 'Workflow2013Running')) {
+            $entry = $script:Catalog[$key]
+
+            $entry.Remediation | Should -Match 'finish the running workflows on the source' -Because "alert $key"
+            $entry.Remediation | Should -Match 'engine (is |was )retired in SharePoint Online' -Because "alert $key"
+            $entry.Remediation | Should -Match 'cannot be restarted there' -Because "alert $key"
+            $entry.Remediation | Should -Match 'Power Automate' -Because "alert $key"
+            $entry.Remediation | Should -Not -Match 'users must restart' -Because "alert $key"
+            $entry.Reference | Should -Match 'migrate-from-classic-workflows-to-power-automate-flows' -Because "alert $key"
+        }
+        $script:Catalog['Workflow2013Running'].Remediation | Should -Match '2 April 2026'
+    }
+
+    It 'does not tell users to reinstall add-ins in SharePoint Online, where the add-in model is retired' {
+        foreach ($key in @('AppInstances', 'AppWebs')) {
+            $entry = $script:Catalog[$key]
+
+            $entry.Remediation | Should -Match 'cannot be reinstalled' -Because "alert $key"
+            $entry.Remediation | Should -Not -Match 'reinstalled cleanly|Reinstall or replace' -Because "alert $key"
+            $entry.Reference | Should -Match 'sp-add-ins/retirement-announcement-for-add-ins' -Because "alert $key"
+        }
+        $script:Catalog['AppInstances'].Remediation | Should -Match 'SharePoint Framework'
+        $script:Catalog['AppInstances'].Remediation | Should -Match 'only applies to a target that still supports them'
+        $script:Catalog['AppWebs'].Remediation | Should -Match 'preserve'
+    }
+
+    It 'replaces InfoPath browser forms instead of offering to repair them for SharePoint Online' {
+        $remediation = $script:Catalog['InfoPath'].Remediation
+
+        $remediation | Should -Match 'supported replacement for every InfoPath form'
+        $remediation | Should -Match 'Power Apps'
+        $remediation | Should -Match 'InfoPath Forms Services is retired in SharePoint Online'
+        $remediation | Should -Match 'does not make a form work there'
+    }
+
+    It 'tells a read-only or no-additions lock from a no-access lock' {
+        $entry = $script:Catalog['LockedSite']
+
+        $entry.Remediation | Should -Match 'ReadOnly or NoAdditions'
+        $entry.Remediation | Should -Match 'restricts changes, not reading'
+        $entry.Remediation | Should -Match 'only if your migration method requires it'
+        $entry.Remediation | Should -Match 'NoAccess lock makes the site unreadable'
+        $entry.Remediation | Should -Not -Match 'a locked site cannot be read'
+        $entry.Message | Should -Match 'NoAccess'
+        $entry.Message | Should -Match 'ReadOnly and NoAdditions only restrict changes'
+    }
+
     It 'is documented in the alerts wiki page, with the same remediation' {
         foreach ($key in $script:Catalog.Keys) {
             $script:WikiAlerts | Should -Match ('\| `{0}` \|' -f $key) -Because "alert $key must be documented"

@@ -58,26 +58,26 @@
         Workflow2010Running = @{
             Severity    = 'High'
             Message     = 'Active SharePoint 2010 workflow instances were detected.'
-            Remediation = 'Ask the site owners to finish the running workflows before the migration: running instances are not migrated and appear as never started afterwards, so users must restart them.'
-            Reference   = 'https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-workflow-running-solutions-2010'
+            Remediation = 'Ask the site owners to finish the running workflows on the source before the migration: running instances are not migrated and appear as never started afterwards, and the SharePoint 2010 workflow engine is retired in SharePoint Online, so they cannot be restarted there. Plan a supported replacement, for example with Power Automate, for any work that is still unfinished.'
+            Reference   = 'https://learn.microsoft.com/en-us/sharepoint/dev/business-apps/power-automate/guidance/migrate-from-classic-workflows-to-power-automate-flows'
         }
         Workflow2013Running = @{
             Severity    = 'Medium'
             Message     = 'Active SharePoint 2013 workflow instances were detected.'
-            Remediation = 'Ask the site owners to finish the running workflows before the migration: running instances are not migrated, so users must restart the workflows afterwards.'
-            Reference   = 'https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-workflow-running-solutions-2013'
+            Remediation = 'Ask the site owners to finish the running workflows on the source before the migration: running instances are not migrated and appear as never started afterwards, and the SharePoint 2013 workflow engine was retired in SharePoint Online on 2 April 2026, so they cannot be restarted there. Plan a supported replacement, for example with Power Automate, for any work that is still unfinished.'
+            Reference   = 'https://learn.microsoft.com/en-us/sharepoint/dev/business-apps/power-automate/guidance/migrate-from-classic-workflows-to-power-automate-flows'
         }
         AppInstances = @{
             Severity    = 'Medium'
             Message     = 'SharePoint add-ins were detected and require migration compatibility review.'
-            Remediation = 'List the add-ins with the site owners: site content migrates but add-ins do not. Reinstall or replace each one after the migration, and reclaim the license of purchased add-ins.'
-            Reference   = 'https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-apps'
+            Remediation = 'List the add-ins with the site owners and agree on a supported replacement for each one before the cutover: the SharePoint Add-In model was retired in SharePoint Online on 2 April 2026, so add-ins cannot be reinstalled there. Rebuild custom add-ins as SharePoint Framework solutions and ask the vendor of a purchased add-in for a version that does not depend on the add-in model. Reinstalling an add-in only applies to a target that still supports them, such as a SharePoint Server farm with an app catalog.'
+            Reference   = 'https://learn.microsoft.com/en-us/sharepoint/dev/sp-add-ins/retirement-announcement-for-add-ins'
         }
         AppWebs = @{
             Severity    = 'Medium'
             Message     = 'App webs were detected and should be assessed for SharePoint Online replacement paths.'
-            Remediation = 'Check what each app web stores: data kept there is not carried over, because the add-in is reinstalled cleanly. Plan a replacement with the owners.'
-            Reference   = 'https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-apps'
+            Remediation = 'Check what each app web stores and agree with the owners how to preserve it before the cutover: the data kept there is not carried over, and the add-in cannot be reinstalled in SharePoint Online, so export the data that must be kept, for example to a list or library of the host site, and plan the replacement of the add-in.'
+            Reference   = 'https://learn.microsoft.com/en-us/sharepoint/dev/sp-add-ins/retirement-announcement-for-add-ins'
         }
         PublishingSite = @{
             Severity    = 'Medium'
@@ -148,7 +148,7 @@
         InfoPath = @{
             Severity    = 'High'
             Message     = 'InfoPath forms are not supported in SharePoint Online.'
-            Remediation = 'Remediate the forms that use SOAP data connections, managed code or people pickers, or rebuild them, for example with Power Apps. Test the forms during user acceptance testing.'
+            Remediation = 'Plan a supported replacement for every InfoPath form that users fill in a browser, for example with Power Apps: InfoPath Forms Services is retired in SharePoint Online, so repairing SOAP data connections, managed code or people pickers does not make a form work there. Inventory the forms with their owners, rebuild them and test the replacements during user acceptance testing.'
             Reference   = 'https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-infopath'
         }
         FullTrustCode = @{
@@ -165,8 +165,8 @@
         }
         LockedSite = @{
             Severity    = 'High'
-            Message     = 'Site lock state blocks or delays migration.'
-            Remediation = 'Check that the lock is intended. Unlock the sites that must migrate: a locked site cannot be read, so it is skipped.'
+            Message     = 'The site collection is locked: a NoAccess lock makes it unreadable for the migration tools, while ReadOnly and NoAdditions only restrict changes.'
+            Remediation = 'Check that the lock is intended. A ReadOnly or NoAdditions lock restricts changes, not reading, so the content can still be migrated and the lock is often a deliberate migration freeze: change it only if your migration method requires it. A NoAccess lock makes the site unreadable and the migration tools skip it: unlock the sites that must migrate.'
             Reference   = 'https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-locked-sites'
         }
         IrmEnabledLists = @{
