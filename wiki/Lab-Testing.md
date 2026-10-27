@@ -76,8 +76,8 @@ Each scenario is a site collection built to trigger known signals, and what the 
 | `publishing` | The SharePoint Server Publishing features, and a page when the publishing API allows it. | `PublishingInfrastructureEnabled = true`; `PublishingWebCount >= 1`; `PublishingPageCount >= 1` (info); alert `PublishingSite` |
 | `template-blog` | A blog site: its template is mapped to Review. | `TemplateCompatibility = "Review"`; alert `TemplateCompatibilityReview` |
 | `infopath` | An InfoPath form library: a blocker in the example configuration. | `InfoPathFormCount >= 1`; `Category = 4`; alert `InfoPath` |
-| `event-receiver` | A list with an event receiver registered from a custom assembly that does not exist. It never fires: it is only registered. The signal is scored but is not a column of the inventory, so the lab reads it in the score reasons. | `Reasons like "*EventReceivers=*"` |
-| `custom-master` | A custom master page, set as the master page of the site. The signal is scored but is not a column of the inventory, so the lab reads it in the score reasons. | `Reasons like "*CustomMasterPage=1*"` |
+| `event-receiver` | A list with an event receiver registered from the assembly Contoso.Lab.Receivers. SharePoint loads the assembly to register a receiver, so the scenario is skipped unless an assembly of that name is deployed on the farm. The receiver never fires: it is only registered. | `EventReceivers >= 1` |
+| `custom-master` | A custom master page, set as the master page of the site. | `CustomMasterPage = true` |
 | `customized-page` | The default page of the root web, edited. The inventory ignores edits of the System Account, which is the farm account: run the lab with another account for this one. | `CustomizedPageCount >= 1` (info); alert `CustomizedPages` (info) |
 | `workflow-2010` | A SharePoint 2010 workflow association on a list, from an out-of-the-box template. | `Workflow2010Count >= 1`; alert `Workflow2010` |
 | `email-enabled` | A list with an incoming e-mail address. Needs the incoming e-mail service of the farm. | `EmailEnabledListCount >= 1` (info); alert `EmailEnabledLists` (info) |
@@ -87,7 +87,10 @@ Each scenario is a site collection built to trigger known signals, and what the 
 Notes:
 
 - The large-content thresholds are lowered in the lab settings (`LargeListItemCount` 200, `LargeListViewRowLimit` 100, `CheckedOutFileCount` 1, `FileVersionCount` 5) so that small fixtures trigger the signals. They are not lowered further, because the system lists of a new site (the Master Page Gallery, for example) have a hundred items.
-- `EventReceivers` and `CustomMasterPage` are scored but are not columns of the inventory, so the lab reads them in the `Reasons` of the score.
+- `event-receiver` is skipped on a farm where no assembly named `Contoso.Lab.Receivers` is deployed: SharePoint loads the assembly when it registers a receiver, so a fake one cannot be registered. Only an assembly load failure is a skip; any other error from the registration is a failure. See "What stays manual".
+- `EventReceivers` and `CustomMasterPage` are columns of the inventory, so the lab reads them there, not in the `Reasons` of the score.
+- While it creates the site collections, the script prints one line before each (`[3/18] Creating https://lab.contoso.local/sites/spslab-lock-readonly ...`) and one after it with the result and the seconds it took (`[3/18] Created in 41 s`, `Skipped in 3 s: <reason>` or `Failed in 3 s: <message>`). `Remove` prints the same for each site collection it removes. With `-WhatIf` they print nothing.
+- Before the inventory starts, the script prints the settings file and the report folder that it uses, so that you can check that they are the lab ones and not those of another environment.
 - `lock-noaccess` is informational on purpose: a `NoAccess` lock makes the site unreadable, so what the inventory does with it is something to look at, not to assert.
 - When the lab runs as the farm account, the edits of the farm account are those of the System Account, which the inventory ignores for customized pages: run it as another account to see `customized-page` pass.
 
@@ -101,6 +104,7 @@ The lab does not build these, because they need services, packages or farm-level
 - SharePoint add-ins and app webs (an app catalog);
 - Forms-based authentication zones, web application policies and the browser file handling of the web application (`html-files` needs a Permissive web application);
 - farm solutions, full-trust code and sandbox solutions (a WSP);
+- custom event receivers (`EventReceivers`): SharePoint loads the assembly to register a receiver, so deploy one (a WSP or the GAC) and register it on a list; the `event-receiver` scenario registers one from an assembly named `Contoso.Lab.Receivers` when it is deployed;
 - a site large enough for `IsLargeSite` (the size is rounded to 0.01 GB, so a small fixture cannot reach it).
 
 ## Safety
