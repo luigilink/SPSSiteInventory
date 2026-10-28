@@ -134,58 +134,59 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $html = ConvertTo-SPSInventoryHtml -InputObject $sites
 
         $html | Should -Match '<strong>1</strong> partial &middot; <strong>1</strong> failed'
-        $html | Should -Match 'Assessment status'
-        $html | Should -Match 'Customization complete'
-        $html | Should -Match 'Assessment warnings'
-        $html | Should -Match 'Root web metadata could not be fully read'
-        $html | Should -Match 'Assessment failed: Access denied'
+        $html | Should -Match '<th data-type="text">Status <span class="arrow">'
+        $html | Should -Match '<span class="pill warn">Partial</span>'
+        $html | Should -Match '<span class="pill yes">Failed</span>'
+        $html | Should -Match '<dt>Site inventory incomplete</dt>'
+        $html | Should -Match '<dt>Customization inventory incomplete</dt>'
+        $html | Should -Match '<dt>Content type inventory incomplete</dt>'
+        $html | Should -Match 'Assessment warnings</strong> Root web metadata could not be fully read'
+        $html | Should -Match 'Assessment warnings</strong> Assessment failed: Access denied'
         $html | Should -Match 'Not assessed'
         $html | Should -Match 'data-category="0"'
     }
 
-    It 'shows permission and policy signals in summary cards and table columns' {
+    It 'shows permission and policy signals in summary cards and in the details of a site' {
         $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
 
         $html | Should -Match '<div class="num">1</div><div class="lbl">Sites with custom permission levels</div>'
         $html | Should -Match '<div class="num">1</div><div class="lbl">Sites with e-mail enabled lists</div>'
         $html | Should -Match '<div class="num">1</div><div class="lbl">Sites with HTML files</div>'
         $html | Should -Match '<div class="num">1</div><div class="lbl">Sites in web applications with permissive browser file handling</div>'
-        foreach ($label in @('Custom permission levels', 'Custom permission level examples', 'E-mail enabled lists', 'E-mail enabled list examples', 'HTML files', 'HTML file examples', 'Browser file handling', 'Web application policies', 'Web application policy examples')) {
-            $html | Should -Match ('>{0} <span class="arrow">' -f $label)
-        }
-        $html | Should -Match 'Project Manager \(https://intranet/sites/legacy\)'
+        $html | Should -Match '<dt>Custom permission levels</dt><dd><span class="sig-value">2</span> <span class="sig-detail">Project Manager \(https://intranet/sites/legacy\)</span></dd>'
+        $html | Should -Match '<dt>E-mail enabled lists</dt><dd><span class="sig-value">1</span> <span class="sig-detail">Invoices \(/sites/legacy/Invoices\)</span></dd>'
+        $html | Should -Match '<dt>HTML files</dt><dd><span class="sig-value">4</span> <span class="sig-detail">/sites/legacy/Docs/a\.htm</span></dd>'
+        $html | Should -Match '<dt>Browser file handling</dt><dd><span class="sig-value">Permissive</span></dd>'
+        # The policies belong to the web application: their section shows them once, not each site.
+        $html | Should -Not -Match '<dt>Web application policies</dt>'
     }
 
-    It 'shows managed metadata signals in the summary card and table columns' {
+    It 'shows managed metadata signals in the summary card and in the details of a site' {
         $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
 
         $html | Should -Match '<div class="num">1</div><div class="lbl">Sites with managed metadata columns</div>'
-        foreach ($label in @('Managed metadata lists', 'Managed metadata columns', 'Term sets in use', 'Managed metadata examples')) {
-            $html | Should -Match ('>{0} <span class="arrow">' -f $label)
-        }
+        $html | Should -Match '<dt>Managed metadata</dt><dd><span class="sig-value">2 list\(s\), 3 column\(s\), 2 term set\(s\)</span>'
         $html | Should -Match 'Projects &lt;Q&amp;A&gt; \(Department\)'
         $html | Should -Not -Match 'Projects <Q&A>'
     }
 
-    It 'shows external list signals in the summary card and table columns' {
+    It 'shows external list signals in the summary card and in the details of a site' {
         $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
 
         $html | Should -Match '<div class="num">1</div><div class="lbl">Sites with external lists</div>'
-        foreach ($label in @('External lists', 'External list examples')) {
-            $html | Should -Match ('>{0} <span class="arrow">' -f $label)
-        }
+        $html | Should -Match '<dt>External lists</dt><dd><span class="sig-value">2</span>'
         $html | Should -Match 'Orders &lt;SAP&gt; \(Contoso.Sap.Order\)'
         $html | Should -Not -Match 'Orders <SAP>'
     }
 
-    It 'shows the SharePoint alert count in the summary card and table column, without the alert rows' {
+    It 'shows the SharePoint alert count in the summary card and in the details of a site, without the alert rows' {
         $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
 
-        $html | Should -Match '>SharePoint alerts <span class="arrow">'
-        $html | Should -Match '<td class="num">1234</td>'
+        $html | Should -Match '<div class="num">1</div><div class="lbl">Sites with SharePoint alerts</div>'
+        $html | Should -Match '<dt>SharePoint alerts</dt><dd><span class="sig-value">1234</span></dd>'
     }
 
-    It 'shows the classic customization signals in summary cards and table columns, and counts only the sites that have them' {
+    It 'shows the classic customization signals in summary cards and in the details, and counts only the sites that have them' {
         # The four cards count 1, 2, 3 and 4 sites, so that a card that reads the wrong field is noticed.
         $records = @(
             [PSCustomObject]@{ Url = 'https://intranet/sites/a'; Category = 2; CategoryName = 'Moderate'; Wave = 2; WaveName = 'Light remediation'; UsesCustomFarmFeature = $true; SandboxSolutions = 1; CustomMasterPage = $true; EventReceivers = 3; UniquePermissionsCount = 9 }
@@ -201,12 +202,14 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $html | Should -Match '<div class="num">2</div><div class="lbl">Sites with a custom master page</div>'
         $html | Should -Match '<div class="num">3</div><div class="lbl">Sites with sandbox solutions</div>'
         $html | Should -Match '<div class="num">4</div><div class="lbl">Sites with custom event receivers</div>'
-        $html | Should -Match '>Custom farm feature <span class="arrow">'
-        $html | Should -Match '>Sandbox solutions <span class="arrow">'
-        $html | Should -Match '>Custom master page <span class="arrow">'
-        $html | Should -Match '>Custom event receivers <span class="arrow">'
-        $html | Should -Match '>Unique permission assignments <span class="arrow">'
-        $html | Should -Match '<td class="num">9</td>'
+        # The details list a signal only for the sites that raise it.
+        ([regex]::Matches($html, '<dt>Custom farm feature</dt>')).Count | Should -Be 1
+        ([regex]::Matches($html, '<dt>Sandbox solutions</dt>')).Count | Should -Be 3
+        ([regex]::Matches($html, '<dt>Custom master page</dt>')).Count | Should -Be 2
+        ([regex]::Matches($html, '<dt>Custom event receivers</dt>')).Count | Should -Be 4
+        $html | Should -Match '<dt>Unique permission assignments</dt><dd><span class="sig-value">9</span></dd>'
+        # A site with no signal says so instead of showing an empty row.
+        ([regex]::Matches($html, 'No signal raised')).Count | Should -Be 1
     }
 
     It 'counts the sites that have SharePoint alerts, not the sites with other signals' {
@@ -223,7 +226,7 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $html | Should -Match '<div class="num">1</div><div class="lbl">Sites with external lists</div>'
     }
 
-    It 'shows the subsite structure in a summary card and table columns, and counts only the sites that have subsites' {
+    It 'shows the subsite structure in a summary card and in the details, and counts only the sites that have subsites' {
         $records = @(
             [PSCustomObject]@{ Url = 'https://intranet/sites/a'; Category = 1; CategoryName = 'Simple'; Wave = 1; WaveName = 'Quick wins'; SubWebCount = 4; SubsiteCount = 3; MaxSubsiteDepth = 2; SubsiteExamples = 'payroll/<2026> (level 2); payroll (level 1)' }
             [PSCustomObject]@{ Url = 'https://intranet/sites/b'; Category = 1; CategoryName = 'Simple'; Wave = 1; WaveName = 'Quick wins'; SubWebCount = 1; SubsiteCount = 0; MaxSubsiteDepth = 0; SubsiteExamples = '' }
@@ -233,19 +236,18 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $html = ConvertTo-SPSInventoryHtml -InputObject $records
 
         $html | Should -Match '<div class="num">1</div><div class="lbl">Sites with subsites</div>'
-        $html | Should -Match '>Webs <span class="arrow">'
-        $html | Should -Match '>Subsites <span class="arrow">'
-        $html | Should -Match '>Subsite depth <span class="arrow">'
-        $html | Should -Match '>Subsite examples <span class="arrow">'
-        $html | Should -Match 'payroll/&lt;2026&gt; \(level 2\); payroll \(level 1\)'
-        $html | Should -Not -Match '>Sub-webs <span class="arrow">'
+        $html | Should -Match '<dt>Subsites</dt><dd><span class="sig-value">3 \(depth 2\)</span> <span class="sig-detail">payroll/&lt;2026&gt; \(level 2\); payroll \(level 1\)</span></dd>'
+        ([regex]::Matches($html, '<dt>Subsites</dt>')).Count | Should -Be 1
+        # The number of webs, which includes the root web, is in the context line of the site.
+        $html | Should -Match 'Webs <strong>4</strong>'
+        $html | Should -Not -Match 'payroll/<2026>'
     }
 
-    It 'shows the NoAccess lock in a summary card and a table column' {
+    It 'shows the NoAccess lock in a summary card and in the details of a site' {
         $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
 
         $html | Should -Match '<div class="num">1</div><div class="lbl">Sites locked with NoAccess</div>'
-        $html | Should -Match '>NoAccess lock <span class="arrow">'
+        $html | Should -Match '<dt>Site lock</dt><dd><span class="sig-value">NoAccess</span></dd>'
     }
 
     It 'counts the NoAccess locks apart from the other locks' {
@@ -294,24 +296,23 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $html | Should -Match 'Wave <span class="arrow">'
     }
 
-    It 'shows app signals in summary cards and table columns' {
+    It 'shows app signals in summary cards and in the details of a site' {
         $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
 
         $html | Should -Match 'Sites with app instances'
         $html | Should -Match 'Sites with app webs'
-        $html | Should -Match '>App instances <span class="arrow">'
-        $html | Should -Match '>App webs <span class="arrow">'
-        $html | Should -Match '>App instance examples <span class="arrow">'
+        $html | Should -Match '<dt>App instances</dt><dd><span class="sig-value">3</span> <span class="sig-detail">Contoso App \(https://intranet/sites/legacy\)</span></dd>'
+        $html | Should -Match '<dt>App webs</dt><dd><span class="sig-value">1</span></dd>'
     }
 
-    It 'shows publishing and customized-page signals in summary cards and table columns' {
+    It 'shows publishing and customized-page signals in summary cards and in the details of a site' {
         $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
 
         $html | Should -Match '<div class="num">1</div><div class="lbl">Sites with publishing features</div>'
         $html | Should -Match '<div class="num">1</div><div class="lbl">Sites with publishing pages</div>'
         $html | Should -Match '<div class="num">1</div><div class="lbl">Sites with customized pages</div>'
-        foreach ($label in @('Publishing infrastructure', 'Publishing webs', 'Publishing pages', 'Page layouts in use', 'Page layout examples', 'Customized pages', 'Customized page examples')) {
-            $html | Should -Match ('>{0} <span class="arrow">' -f $label)
+        foreach ($label in @('Publishing infrastructure', 'Publishing webs', 'Publishing pages', 'Page layouts in use', 'Customized pages')) {
+            $html | Should -Match ('<dt>{0}</dt>' -f $label)
         }
         $html | Should -Match 'ArticleLeft\.aspx \(30\)'
         $html | Should -Match '/sites/legacy/default\.aspx'
@@ -393,8 +394,9 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $html | Should -Match '<strong>1</strong> site collection\(s\)'
         $html | Should -Match '<strong>1</strong> web application enumeration failure'
         $html | Should -Match '1 web application\(s\) had site collection enumeration failures'
-        $html | Should -Match 'Inventory scope'
-        $html | Should -Match 'WebApplication'
+        # The failure is a row of the inventory table, tagged as a web application, with its warning.
+        $html | Should -Match '<span class="pill no">Web application</span></div><div class="site-url">https://intranet</div>'
+        $html | Should -Match 'Assessment warnings</strong> Site collection list could not be accessed: Access denied'
     }
 
     It 'HTML-encodes field values so markup cannot break' {
@@ -411,6 +413,288 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $html | Should -Match 'data-category="1"'
         $html | Should -Match 'data-category="4"'
         $html | Should -Match 'class="badge b4"'
+    }
+
+    It 'puts a category on each site collection and keeps the details in the same body' {
+        $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
+
+        $html | Should -Match '<tbody class="site" data-category="1">'
+        $html | Should -Match '<tbody class="site" data-category="4">'
+        ([regex]::Matches($html, '<tbody class="site"')).Count | Should -Be 2
+        ([regex]::Matches($html, '<tr class="main">')).Count | Should -Be 2
+        ([regex]::Matches($html, '<tr class="detail">')).Count | Should -Be 2
+        ([regex]::Matches($html, 'class="toggle"')).Count | Should -Be 2
+    }
+
+    It 'shows nine columns and a column for the toggle in the inventory table' {
+        $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
+
+        $header = [regex]::Match($html, '(?s)<table id="inv">\s*<thead>(.*?)</thead>').Groups[1].Value
+        ([regex]::Matches($header, '<th')).Count | Should -Be 10
+        $labels = @([regex]::Matches($header, '(?s)<th[^>]*>\s*([^<]*?)\s*(?:<span|</th>)') | ForEach-Object { $_.Groups[1].Value } | Where-Object { $_ })
+        $labels | Should -Be @('Site', 'Category', 'Score', 'Wave', 'Size (GB)', 'Template', 'Last modified', 'Status', 'Reasons')
+    }
+
+    It 'shows the title and the URL of a site collection together, and the URL alone when there is no title' {
+        $records = @(
+            [PSCustomObject]@{ Url = 'https://intranet/sites/with-title'; Title = 'With <title>'; Category = 1; CategoryName = 'Simple' }
+            [PSCustomObject]@{ Url = 'https://intranet/sites/no-title'; Category = 1; CategoryName = 'Simple' }
+        )
+
+        $html = ConvertTo-SPSInventoryHtml -InputObject $records
+
+        $html | Should -Match '<div class="site-title">With &lt;title&gt;</div><div class="site-url">https://intranet/sites/with-title</div>'
+        $html | Should -Match '<div class="site-title">https://intranet/sites/no-title</div></td>'
+        $html | Should -Not -Match 'With <title>'
+    }
+
+    It 'lists the site collections worst first, then by score' {
+        $records = @(
+            [PSCustomObject]@{ Url = 'https://intranet/sites/a-simple'; Category = 1; CategoryName = 'Simple'; Score = 0.5 }
+            [PSCustomObject]@{ Url = 'https://intranet/sites/b-moderate-low'; Category = 2; CategoryName = 'Moderate'; Score = 1.5 }
+            [PSCustomObject]@{ Url = 'https://intranet/sites/c-blocking'; Category = 4; CategoryName = 'Blocking'; Score = 3 }
+            [PSCustomObject]@{ Url = 'https://intranet/sites/d-moderate-high'; Category = 2; CategoryName = 'Moderate'; Score = 5.25 }
+        )
+
+        $html = ConvertTo-SPSInventoryHtml -InputObject $records
+
+        $order = @([regex]::Matches($html, '<div class="site-url">https://intranet/sites/([a-z-]+)</div>|<div class="site-title">https://intranet/sites/([a-z-]+)</div>') | ForEach-Object { $_.Groups[1].Value + $_.Groups[2].Value })
+        $order | Should -Be @('c-blocking', 'd-moderate-high', 'b-moderate-low', 'a-simple')
+    }
+
+    It 'sorts by score with the same result in every culture' {
+        $records = @(
+            [PSCustomObject]@{ Url = 'https://intranet/sites/low'; Category = 2; CategoryName = 'Moderate'; Score = 1.5 }
+            [PSCustomObject]@{ Url = 'https://intranet/sites/high'; Category = 2; CategoryName = 'Moderate'; Score = 5.25 }
+        )
+        $previous = [System.Threading.Thread]::CurrentThread.CurrentCulture
+        try {
+            [System.Threading.Thread]::CurrentThread.CurrentCulture = [System.Globalization.CultureInfo]::GetCultureInfo('fr-FR')
+            $html = ConvertTo-SPSInventoryHtml -InputObject $records
+        }
+        finally {
+            [System.Threading.Thread]::CurrentThread.CurrentCulture = $previous
+        }
+
+        $html.IndexOf('sites/high') | Should -BeLessThan $html.IndexOf('sites/low')
+        $html | Should -Match '<td class="num">5\.25</td>'
+    }
+
+    It 'puts the site collections that were not assessed first and adds a filter for them' {
+        $records = @(
+            [PSCustomObject]@{ Url = 'https://intranet/sites/ok'; Category = 4; CategoryName = 'Blocking'; Score = 9 }
+            [PSCustomObject]@{ Url = 'https://intranet/sites/failed'; Category = $null; CategoryName = 'Not assessed'; AssessmentStatus = 'Failed' }
+        )
+
+        $html = ConvertTo-SPSInventoryHtml -InputObject $records
+
+        $html.IndexOf('sites/failed') | Should -BeLessThan $html.IndexOf('sites/ok')
+        $html | Should -Match '<button data-filter="0">Not assessed</button>'
+        $withoutFailure = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
+        $withoutFailure | Should -Not -Match 'data-filter="0"'
+    }
+
+    It 'offers a search box, the category filters and a count of the site collections shown' {
+        $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
+
+        $html | Should -Match '<input type="search" id="inv-search"'
+        $html | Should -Match '<button data-filter="all" class="active">All</button>'
+        foreach ($key in 1..4) {
+            $html | Should -Match ('<button data-filter="{0}">{0}\. ' -f $key)
+        }
+        $html | Should -Match '<span class="count" id="inv-count">2 of 2 shown</span>'
+    }
+
+    It 'shows the context of a site collection in its details' {
+        $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
+
+        $html | Should -Match 'Web application <strong>Intranet</strong> &middot; Content database <strong>WSS_Content</strong>'
+        $html | Should -Match 'Template language <strong>en-US</strong>'
+        $html | Should -Match 'Webs <strong>8</strong>'
+    }
+
+    It 'shows the blocking reasons first in the compact row and the full reasons, as they are, in the details' {
+        $record = [PSCustomObject]@{
+            Url = 'https://intranet/sites/team'; Category = 4; CategoryName = 'Blocking'; Score = 5
+            Reasons = 'CustomMasterPage=1 (+2); UniquePermissionsCount=7 (+0.07); blocking: UsesFullTrustCode; blocking: HasNoAccessLock'
+        }
+
+        $html = ConvertTo-SPSInventoryHtml -InputObject @($record)
+
+        $html | Should -Match '<div class="clamp">blocking: UsesFullTrustCode; blocking: HasNoAccessLock; CustomMasterPage=1 \(\+2\); UniquePermissionsCount=7 \(\+0\.07\)</div>'
+        $html | Should -Match '<strong>Reasons</strong> CustomMasterPage=1 \(\+2\); UniquePermissionsCount=7 \(\+0\.07\); blocking: UsesFullTrustCode; blocking: HasNoAccessLock</div>'
+    }
+
+    It 'does not show the assessment warnings twice: they end the reasons and have their own box' {
+        $warnings = "Site inventory partial: Storage usage could not be read; Webs could not be fully enumerated"
+        $record = [PSCustomObject]@{
+            Url = 'https://intranet/sites/partial'; Category = 1; CategoryName = 'Simple'; Score = 0.5
+            AssessmentStatus = 'Partial'; AssessmentWarnings = $warnings
+            Reasons = "TemplateLanguageReviewRequired=1 (+0.5); $warnings"
+        }
+
+        $html = ConvertTo-SPSInventoryHtml -InputObject @($record)
+
+        ([regex]::Matches($html, [regex]::Escape($warnings))).Count | Should -Be 1
+        $html | Should -Match '<div class="clamp">TemplateLanguageReviewRequired=1 \(\+0\.5\)</div>'
+        $html | Should -Match '<strong>Reasons</strong> TemplateLanguageReviewRequired=1 \(\+0\.5\)</div>'
+        $html | Should -Match 'Assessment warnings</strong> Site inventory partial'
+    }
+
+    It 'shows the warnings in the reasons cell of a row that has no other reason' {
+        $record = [PSCustomObject]@{
+            InventoryScope = 'WebApplication'; Url = 'https://intranet'; AssessmentStatus = 'Failed'
+            AssessmentWarnings = 'Site collection list could not be accessed: Access denied'
+            Reasons = 'Site collection list could not be accessed: Access denied'
+        }
+
+        $html = ConvertTo-SPSInventoryHtml -InputObject @($record)
+
+        $html | Should -Match '<div class="clamp">Site collection list could not be accessed: Access denied</div>'
+        $html | Should -Not -Match '<strong>Reasons</strong>'
+        $html | Should -Match 'Assessment warnings</strong> Site collection list could not be accessed: Access denied'
+    }
+
+    It 'places the inventory table right after the wave plan, before the detail sections' {
+        $withAuthentication = @($script:Sample) + [PSCustomObject]@{
+            Url = 'https://intranet/sites/auth'; Category = 1; CategoryName = 'Simple'
+            WebAppUrl = 'https://intranet'; AuthenticationZones = 'Default: Windows'
+        }
+        $html = ConvertTo-SPSInventoryHtml -InputObject $withAuthentication -SolutionMap $script:SolutionMap -ContentTypes @() -ManagedMetadataLists @() -ExternalLists @() -BcsApplications @()
+
+        $wave = $html.IndexOf('id="wave-plan"')
+        $inventory = $html.IndexOf('id="inventory-table"')
+        $inventory | Should -BeGreaterThan $wave
+        foreach ($section in @('farm-solutions', 'authentication', 'web-app-policies', 'content-types', 'managed-metadata', 'external-lists', 'bcs-applications')) {
+            $html.IndexOf(('id="{0}"' -f $section)) | Should -BeGreaterThan $inventory
+        }
+    }
+
+    It 'keeps every field of the former 78-column table in the page, except the few that the CSV and JSON files alone hold' {
+        # Every text and numeric field gets a value that can be found in the page.
+        $textFields = @(
+            'Url', 'Title', 'WebApp', 'ContentDb', 'Template', 'TemplateCompatibilityReason', 'TemplateLanguageTag', 'TemplateLanguageReason',
+            'AppInstanceExamples', 'PublishingPageLayoutExamples', 'CustomizedPageExamples', 'CustomPermissionLevelExamples',
+            'EmailEnabledListExamples', 'HtmlFileExamples', 'WebAppPolicyExamples', 'ManagedMetadataExamples', 'ExternalListExamples',
+            'SubsiteExamples', 'AssessmentStatus', 'AssessmentWarnings', 'AuthenticationModes', 'SiteLockState',
+            'LargeListExamples', 'LargeListViewExamples', 'CheckedOutFileExamples', 'FileVersionExamples', 'Reasons'
+        )
+        $numberFields = @(
+            'AppInstanceCount', 'AppWebCount', 'PublishingWebCount', 'PublishingPageCount', 'PublishingPageLayoutCount', 'CustomizedPageCount',
+            'CustomPermissionLevelCount', 'EmailEnabledListCount', 'HtmlFileCount', 'WebAppPolicyCount', 'ManagedMetadataListCount',
+            'ManagedMetadataColumnCount', 'ManagedMetadataTermSetCount', 'ExternalListCount', 'SharePointAlertCount', 'SubWebCount',
+            'SubsiteCount', 'MaxSubsiteDepth', 'IrmEnabledListCount', 'Workflow2010RunningInstanceCount', 'Workflow2013RunningInstanceCount',
+            'LargeListCount', 'LargeListViewCount', 'CheckedOutFileCount', 'FileVersionCount', 'ContentTypeCount', 'ListContentTypeBindingCount',
+            'SandboxSolutions', 'EventReceivers', 'UniquePermissionsCount'
+        )
+        $record = [ordered]@{ Category = 4; CategoryName = 'Blocking'; Wave = 4; WaveName = 'Projects / blockers'; WebAppUrl = 'https://intranet' }
+        foreach ($field in $textFields) { $record[$field] = "ZZ${field}ZZ" }
+        $number = 70000
+        foreach ($field in $numberFields) { $record[$field] = ++$number }
+        $record['SizeGB'] = 7.25
+        $record['Score'] = 8.5
+        $record['LastModified'] = [datetime]'2026-01-02'
+        # The flags show as a label, whose presence is checked below.
+        foreach ($flag in @('IsUnsupportedSiteTemplate', 'TemplateLanguageReviewRequired', 'PublishingInfrastructureEnabled', 'HasFbaZone', 'IsLargeSite', 'IsLockedSite', 'HasNoAccessLock', 'UsesCustomFarmFeature', 'CustomMasterPage', 'UsesFullTrustCode')) {
+            $record[$flag] = $true
+        }
+        foreach ($flag in @('SiteInventoryComplete', 'CustomizationInventoryComplete', 'ContentTypeInventoryComplete')) {
+            $record[$flag] = $false
+        }
+
+        $html = ConvertTo-SPSInventoryHtml -InputObject @([PSCustomObject]$record)
+
+        # Not checked here, because the CSV and JSON files alone hold them or the page shows them otherwise:
+        # InventoryScope (a tag on web application rows), TemplateLanguageLcid (a fallback for a missing
+        # language tag), TemplateCompatibility (replaced by the unsupported-template signal) and Wave
+        # (a number that is not unique in this record, and a column of the table).
+        $missing = @(
+            @($textFields) + @($numberFields) | Where-Object {
+                $value = if ($record[$_] -is [string]) { [System.Net.WebUtility]::HtmlEncode($record[$_]) } else { [string]$record[$_] }
+                $html.IndexOf($value, [System.StringComparison]::Ordinal) -lt 0
+            }
+        )
+        $missing | Should -BeNullOrEmpty
+        foreach ($shown in @('7.25', '8.5', '2026-01-02')) {
+            $html.IndexOf($shown) | Should -BeGreaterThan -1
+        }
+        foreach ($label in @('Unsupported template', 'Template language review', 'Publishing infrastructure', 'FBA configured', 'Large site', 'Site lock', 'Custom farm feature', 'Custom master page', 'Full-trust code', 'Site inventory incomplete', 'Customization inventory incomplete', 'Content type inventory incomplete')) {
+            $html | Should -Match ('<dt>{0}</dt>' -f $label)
+        }
+        $html | Should -Match '<th class="num" data-type="num">Wave <span class="arrow">'
+    }
+
+    It 'keeps the report small however many content types there are' {
+        $types = foreach ($index in 1..600) {
+            [PSCustomObject]@{
+                SiteUrl = 'https://intranet/sites/team'; WebUrl = 'https://intranet/sites/team'; Scope = 'List'
+                ListTitle = "List $index"; ListUrl = "/sites/team/List$index"; Name = "Content type $index"
+                ContentTypeId = '0x0100'; ParentContentTypeId = '0x01'; Group = 'Custom'
+                FieldCount = 12; FieldTypes = 'Text; Note; Choice'; DocumentTemplateUrl = ''
+                Hidden = $false; ReadOnly = $false; Sealed = $false
+            }
+        }
+
+        $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample -ContentTypes @($types)
+
+        $html | Should -Match '<strong>600</strong> definition/binding row\(s\)'
+        $html.Length | Should -BeLessThan 60000
+        $html | Should -Not -Match 'Content type 600'
+    }
+
+    It 'limits each detail table to MaxDetailRow rows and says where to find the others' {
+        $lists = foreach ($index in 1..5) {
+            [PSCustomObject]@{
+                SiteUrl = 'https://intranet/sites/team'; WebUrl = 'https://intranet/sites/team'; ListTitle = "List $index"; ListUrl = "/sites/team/List$index"
+                ListTemplate = 'DocumentLibrary'; ListType = 'DocumentLibrary'; ListItemCount = 1; ItemLastModifiedDate = ''
+                ManagedMetadataColumnCount = 1; ManagedMetadataColumns = 'Department'; TermSetIds = ''
+                LobSystemInstance = 'Crm'; EntityNamespace = 'Contoso.Crm'; Entity = "Entity $index"
+            }
+        }
+        $applications = foreach ($index in 1..5) {
+            [PSCustomObject]@{
+                WebApplicationUrls = 'https://intranet'; BdcServiceApplicationId = 'id'; LobSystemName = "Lob $index"
+                LobSystemType = 'Wcf'; LobSystemInstances = 'Crm'; EntityCount = 1; LobEntities = 'Contoso.Crm.Account'
+            }
+        }
+        $solutions = foreach ($index in 1..5) {
+            [PSCustomObject]@{
+                SolutionName = "solution$index.wsp"; Deployed = $true; DeploymentState = 'GlobalDeployed'
+                IsCustom = $true; ContainsGlobalAssembly = $true; ContainsCasPolicy = $false
+                ContainsWebApplicationResource = $false; IsFullTrustCode = $true
+                FeatureCount = 1; FeatureScopes = @('Site'); FeatureIds = @('f1')
+            }
+        }
+        $fullTrustSites = foreach ($index in 1..5) {
+            [PSCustomObject]@{ Url = "https://intranet/sites/trust$index"; Category = 4; CategoryName = 'Blocking'; UsesFullTrustCode = $true; Wave = 4; Score = 1 }
+        }
+
+        $html = ConvertTo-SPSInventoryHtml -InputObject @($fullTrustSites) -SolutionMap @($solutions) -ManagedMetadataLists @($lists) -ExternalLists @($lists) -BcsApplications @($applications) -MaxDetailRow 2
+
+        ([regex]::Matches($html, '<td>List [0-9]</td>')).Count | Should -Be 4
+        ([regex]::Matches($html, '<td>Lob [0-9]</td>')).Count | Should -Be 2
+        ([regex]::Matches($html, '<td>solution[0-9]\.wsp</td>')).Count | Should -Be 2
+        ([regex]::Matches($html, '<table class="fulltrust">.*?</table>', 'Singleline')[0].Value -split '<tr>').Count - 2 | Should -Be 2
+        $html | Should -Match 'Showing the first 2 of 5 rows\. The managed metadata CSV and JSON files hold all the rows\.'
+        $html | Should -Match 'Showing the first 2 of 5 rows\. The external lists CSV and JSON files hold all the rows\.'
+        $html | Should -Match 'Showing the first 2 of 5 rows\. The BCS CSV and JSON files hold all the rows\.'
+        $html | Should -Match 'Showing the first 2 of 5 rows\. The farm solutions CSV and JSON files hold all the rows\.'
+        $html | Should -Match 'Showing the first 2 of 5 rows\. The main CSV and JSON files hold all the rows\.'
+    }
+
+    It 'shows every row of a detail table that is within the limit, without a note' {
+        $applications = @([PSCustomObject]@{
+            WebApplicationUrls = 'https://intranet'; BdcServiceApplicationId = 'id'; LobSystemName = 'Lob'
+            LobSystemType = 'Wcf'; LobSystemInstances = 'Crm'; EntityCount = 1; LobEntities = 'Contoso.Crm.Account'
+        })
+
+        $html = ConvertTo-SPSInventoryHtml -InputObject @() -BcsApplications $applications
+
+        $html | Should -Not -Match 'Showing the first'
+    }
+
+    It 'rejects a MaxDetailRow that is not a positive number' {
+        { ConvertTo-SPSInventoryHtml -InputObject @() -MaxDetailRow 0 } | Should -Throw
     }
 
     It 'shows the environment name in the header when provided' {
@@ -529,14 +813,13 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $html | Should -Match '<td>Unknown</td><td><span class="pill warn">Yes</span>'
     }
 
-    It 'renders lock-state and IRM columns in the main table' {
+    It 'shows the lock state and the IRM-enabled lists in the details of a site' {
         $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
 
-        $html | Should -Match 'Site lock state'
-        $html | Should -Match 'Site locked'
-        $html | Should -Match 'IRM-enabled lists'
-        $html | Should -Match 'NoAccess'
-        $html | Should -Match '>3</td>'
+        $html | Should -Match '<dt>Site lock</dt><dd><span class="sig-value">NoAccess</span></dd>'
+        $html | Should -Match '<dt>IRM-enabled lists</dt><dd><span class="sig-value">3</span></dd>'
+        # The site that is not locked has no lock line.
+        ([regex]::Matches($html, '<dt>Site lock</dt>')).Count | Should -Be 1
     }
 
     It 'renders navigation shortcuts and risk indicator cards' {
@@ -567,51 +850,56 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $html | Should -Not -Match 'href="#bcs-applications"'
     }
 
-    It 'renders large-content columns in the main table' {
+    It 'shows the large-content, workflow and template signals in the details of a site' {
         $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
 
-        $html | Should -Match 'Large site'
-        $html | Should -Match 'Large lists'
-        $html | Should -Match 'Large-list views'
-        $html | Should -Match 'Checked-out files'
-        $html | Should -Match 'High-version files'
-        $html | Should -Match 'Running WF 2010'
-        $html | Should -Match 'Running WF 2013'
-        $html | Should -Match 'Template compatibility'
-        $html | Should -Match 'Unsupported template'
-        $html | Should -Match 'Template language LCID'
-        $html | Should -Match 'Template language review'
+        foreach ($label in @('Large site', 'Large lists', 'Large-list views', 'Checked-out files', 'High-version files', 'Workflow 2010', 'Workflow 2013', 'Template compatibility', 'Template language review')) {
+            $html | Should -Match ('<dt>{0}</dt>' -f $label)
+        }
+        $html | Should -Match '<dt>Workflow 2010</dt><dd><span class="sig-value">4 running instance\(s\)</span></dd>'
+        $html | Should -Match '<dt>Template compatibility</dt><dd><span class="sig-value">Review</span> <span class="sig-detail">Template &#39;STS#0&#39; requires manual validation\.</span></dd>'
+        $html | Should -Match '<dt>Template language review</dt><dd><span class="sig-value">LCID 999999</span>'
         $html | Should -Match 'Documents \(7000\); Records \(5100\)'
         $html | Should -Match 'Documents/All Documents \(7000\)'
     }
 
-    It 'renders encoded content-type detail and surfaces partial collection' {
+    It 'summarizes the content types and leaves the rows to the CSV and JSON files' {
         $site = [PSCustomObject]@{
             Url = 'https://intranet/sites/team'; Category = 1
             ContentTypeCount = 1; ListContentTypeBindingCount = 1
             ContentTypeInventoryComplete = $false
         }
-        $types = @([PSCustomObject]@{
-            SiteUrl = 'https://intranet/sites/team'; WebUrl = 'https://intranet/sites/team'
-            Scope = 'List'; ListTitle = 'Records <Admin>'; ListUrl = '/sites/team/records?a=1&b=2'
-            Name = 'Contract & Agreement'
-            ContentTypeId = '0x01'; ParentContentTypeId = '0x0'; Group = 'Custom'
-            FieldCount = 1; FieldTypes = 'Text'; DocumentTemplateUrl = 'a&b.dotx'
-            Hidden = $true; ReadOnly = $true; Sealed = $false
-        })
+        $types = @(
+            [PSCustomObject]@{
+                SiteUrl = 'https://intranet/sites/team'; WebUrl = 'https://intranet/sites/team'
+                Scope = 'Web'; ListTitle = ''; ListUrl = ''
+                Name = 'Contract & Agreement'
+                ContentTypeId = '0x01'; ParentContentTypeId = '0x0'; Group = 'Custom'
+                FieldCount = 1; FieldTypes = 'Text'; DocumentTemplateUrl = 'a&b.dotx'
+                Hidden = $true; ReadOnly = $true; Sealed = $false
+            },
+            [PSCustomObject]@{
+                SiteUrl = 'https://intranet/sites/team'; WebUrl = 'https://intranet/sites/team'
+                Scope = 'List'; ListTitle = 'Records <Admin>'; ListUrl = '/sites/team/records?a=1&b=2'
+                Name = 'Contract & Agreement'
+                ContentTypeId = '0x01'; ParentContentTypeId = '0x0'; Group = 'Custom'
+                FieldCount = 1; FieldTypes = 'Text'; DocumentTemplateUrl = 'a&b.dotx'
+                Hidden = $false; ReadOnly = $false; Sealed = $false
+            }
+        )
 
         $html = ConvertTo-SPSInventoryHtml -InputObject @($site) -ContentTypes $types
 
         $html | Should -Match 'Content types and list bindings'
+        $html | Should -Match '<strong>2</strong> definition/binding row\(s\): <strong>1</strong> web definition\(s\) and <strong>1</strong> list binding\(s\), in <strong>1</strong> site collection\(s\)'
+        $html | Should -Match 'content types CSV and JSON files hold every one of them'
         $html | Should -Match 'Partial collection'
-        $html | Should -Match 'Records &lt;Admin&gt;'
-        $html | Should -Match 'List URL'
-        $html | Should -Match '/sites/team/records\?a=1&amp;b=2'
-        $html | Should -Match 'Contract &amp; Agreement'
-        $html | Should -Match 'a&amp;b.dotx'
-        $html | Should -Match '(?s)<th>Hidden</th>.*<th>Read only</th>.*<th>Sealed</th>'
-        $html | Should -Match '(?s)<td>True</td>\s*<td>True</td>\s*<td>False</td>'
-        $html | Should -Not -Match 'Records <Admin>'
+        $html | Should -Match '<dt>Content type inventory incomplete</dt>'
+        $html | Should -Match 'Content types <strong>1</strong> definition\(s\), <strong>1</strong> list binding\(s\)'
+        # The rows themselves are not in the page.
+        $html | Should -Not -Match 'class="contenttypes"'
+        $html | Should -Not -Match 'Records &lt;Admin&gt;'
+        $html | Should -Not -Match 'Contract &amp; Agreement'
     }
 
     It 'renders an explicit empty content-type report when requested' {
