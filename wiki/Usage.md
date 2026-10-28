@@ -165,7 +165,7 @@ CSV/JSON rows describe site collections and any web-application enumeration fail
 | `UsesFullTrustCode` | Site activates a feature from a custom full-trust WSP (GAC assembly) |
 | `UsesCustomFarmFeature` | Site activates a feature from a custom farm solution (WSP), as identified by the farm-solution map |
 | `SandboxSolutions` | Sandbox (user) solutions in the solution gallery of the site collection, activated or not |
-| `CustomMasterPage` | At least one web of the site collection uses a master page other than the default seattle, oslo or v4 master |
+| `CustomMasterPage` | At least one web of the site collection uses a master page other than the ones that SharePoint provisions in the master page gallery (`seattle.master`, `oslo.master`, `v4.master` and, for the My Site templates, `mysite15.master`) |
 | `EventReceivers` | Event receivers registered on lists from a custom (non-Microsoft) assembly; out-of-the-box receivers are not counted |
 | `UniquePermissionsCount` | Role assignments on the webs that do not inherit their permissions. The root web always has its own, so the value is never 0: it is not a count of webs with unique permissions |
 | `ContentTypeCount` | Distinct content-type IDs seen in web definition collections, deduplicated within this site collection |

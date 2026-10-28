@@ -288,8 +288,10 @@ own name, so that you can filter and sort on them:
 
 - `SandboxSolutions` — the sandbox (user) solutions in the solution gallery of the site
   collection, activated or not.
-- `CustomMasterPage` — true when a web uses a master page other than the default seattle,
-  oslo or v4 master.
+- `CustomMasterPage` — true when a web uses a master page other than the ones that SharePoint
+  provisions in the master page gallery: `seattle.master`, `oslo.master`, `v4.master` and, for
+  the My Site host and the personal sites, `mysite15.master`. A copy of one of them in another
+  folder, or a master page whose name only contains one of these names, is reported.
 - `EventReceivers` — the custom event receivers described above.
 - `UsesCustomFarmFeature` — see [BlockingSignals](#blockingsignals).
 - `UniquePermissionsCount` — the role assignments on the webs that do not inherit their

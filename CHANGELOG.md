@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cannot be read for another reason leaves the state `Unknown`, marks the site collection partial
   and writes a warning. The site collection stays `Partial` because nothing else can be read in
   it. The lab scenario `lock-noaccess` now has to pass. (#83)
+- `CustomMasterPage` is no longer reported for the My Site host. Its master page, `mysite15.master`,
+  is the one that SharePoint provisions for the My Site templates, but only `seattle`, `oslo` and
+  `v4` were recognized. The master page is now compared on its folder and file name in the master
+  page gallery instead of on a part of the text, so a copy of `seattle.master` in another folder or
+  a master page such as `contoso-v4.master`, which the old comparison took for the original, is
+  reported. (#107)
 
 ## [2.0.0] - 2026-10-28
 
