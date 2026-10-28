@@ -23,12 +23,13 @@
        INFO or SKIP for every check, with the assessment status of every lab site. The exit code is
        1 when a check fails.
     4. Remove: removes the lab. When the lab has a content database of its own, and that database holds
-       nothing but the lab site collections, it removes the database (Remove-SPContentDatabase deletes
-       it from SQL Server), which takes the site collections with it. Otherwise it removes the lab site
-       collections one by one, and only those (the name prefix and the marker are both required). With
-       -Action All, it runs only when -Cleanup is given, and then it runs even when an earlier step
-       failed. A manifest in the work folder is used only if it is the one of the web application (and of
-       the prefix, when it is given) that is asked for.
+       nothing but the lab (its site collections and its deleted site collections), it removes the
+       database (Remove-SPContentDatabase deletes it from SQL Server), which takes the site collections
+       with it. The lab site collections that are not in it, and all of them when the database is not
+       removed, are removed one by one, and only those (the name prefix and the marker are both
+       required). With -Action All, it runs only when -Cleanup is given, and then it runs even when an
+       earlier step failed. A manifest in the work folder is used only if it is the one of the web
+       application (and of the prefix, when it is given) that is asked for.
 
     The scenarios are listed in the wiki page "Lab testing" and by Get-SPSLabScenario. Everything
     the script writes goes to -WorkFolder: the lab settings, the manifest and the reports.

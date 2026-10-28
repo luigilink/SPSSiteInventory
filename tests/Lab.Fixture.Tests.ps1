@@ -9,7 +9,7 @@
     function global:Get-SPWebApplication { [CmdletBinding()] param ($Identity) throw 'Unmocked SharePoint call: Get-SPWebApplication' }
     function global:Set-SPSite { [CmdletBinding(SupportsShouldProcess = $true)] param ($Identity, $LockState) throw 'Unmocked SharePoint call: Set-SPSite' }
     function global:Remove-SPSite { [CmdletBinding(SupportsShouldProcess = $true)] param ($Identity) throw 'Unmocked SharePoint call: Remove-SPSite' }
-    function global:Get-SPDeletedSite { [CmdletBinding()] param ($WebApplication) throw 'Unmocked SharePoint call: Get-SPDeletedSite' }
+    function global:Get-SPDeletedSite { [CmdletBinding()] param ($WebApplication, $ContentDatabase, $Limit) throw 'Unmocked SharePoint call: Get-SPDeletedSite' }
     function global:Remove-SPDeletedSite { [CmdletBinding(SupportsShouldProcess = $true)] param ($Identity) throw 'Unmocked SharePoint call: Remove-SPDeletedSite' }
 
     function global:New-LabFakeSite {
@@ -507,7 +507,7 @@ Describe 'The content database of the lab' {
         foreach ($name in @('Get-SPContentDatabase', 'New-SPContentDatabase', 'Remove-SPContentDatabase')) {
             Remove-Item -Path "function:global:$name" -ErrorAction SilentlyContinue
         }
-        Remove-Variable -Name LabCreated, LabDatabases, LabRemovedDatabase, LabRemoved -Scope Global -ErrorAction SilentlyContinue
+        Remove-Variable -Name LabCreated, LabDatabases, LabRemovedDatabase, LabRemoved, LabPurged -Scope Global -ErrorAction SilentlyContinue
     }
 
     Context 'when the lab is created' {
@@ -646,7 +646,13 @@ Describe 'The content database of the lab' {
             $global:LabDisposed = 0
             $global:LabRemoved = [System.Collections.Generic.List[string]]::new()
             $global:LabRemovedDatabase = [System.Collections.Generic.List[string]]::new()
+            $global:LabPurged = [System.Collections.Generic.List[string]]::new()
             $script:InDatabase = @($script:Urls)
+            $script:Exists = @($script:Urls)
+            $script:Unmarked = @()
+            $script:DeletedInDatabase = @()
+            $script:DeletedInWebApplication = @()
+            $script:DeletedListingFails = $false
             $script:DatabaseWebApplication = 'https://lab/'
             $script:DatabaseExists = $true
             $script:ManifestPath = Join-Path -Path $TestDrive -ChildPath ('manifest-{0}.json' -f [guid]::NewGuid())
@@ -666,13 +672,20 @@ Describe 'The content database of the lab' {
             }
             Mock -ModuleName $script:ModuleName Get-SPSite {
                 if ($null -ne $ContentDatabase) { return @($script:InDatabase | ForEach-Object { New-LabFakeSite -Url $_ }) }
-                if ($null -ne $Identity -and $script:Urls -contains [System.String]$Identity) { New-LabFakeSite -Url $Identity -Marked $true }
+                if ($null -ne $Identity -and $script:Exists -contains [System.String]$Identity) { New-LabFakeSite -Url $Identity -Marked ($script:Unmarked -notcontains [System.String]$Identity) }
             }
             Mock -ModuleName $script:ModuleName Remove-SPContentDatabase { $global:LabRemovedDatabase.Add([System.String]$Identity) }
             Mock -ModuleName $script:ModuleName Remove-SPSite { $global:LabRemoved.Add([System.String]$Identity) }
             Mock -ModuleName $script:ModuleName Set-SPSite { }
-            Mock -ModuleName $script:ModuleName Get-SPDeletedSite { @() }
-            Mock -ModuleName $script:ModuleName Remove-SPDeletedSite { }
+            # The deleted site collections of the database, and those of the web application. The identity of a deleted site is its path, to know which one is purged.
+            Mock -ModuleName $script:ModuleName Get-SPDeletedSite {
+                if ($null -ne $ContentDatabase) {
+                    if ($script:DeletedListingFails) { throw 'The deleted sites cannot be read.' }
+                    return @($script:DeletedInDatabase | ForEach-Object { [PSCustomObject]@{ Path = $_; SiteId = $_ } })
+                }
+                @($script:DeletedInWebApplication | ForEach-Object { [PSCustomObject]@{ Path = $_; SiteId = $_ } })
+            }
+            Mock -ModuleName $script:ModuleName Remove-SPDeletedSite { $global:LabPurged.Add([System.String]$Identity) }
         }
 
         It 'removes the content database that the lab created, and the lab with it, without removing a site collection' {
@@ -688,15 +701,106 @@ Describe 'The content database of the lab' {
             Should -Invoke Remove-SPDeletedSite -ModuleName $script:ModuleName -Times 0 -Exactly
         }
 
-        It 'reports a site collection of the manifest that is not in the database as absent' {
+        It 'removes a site collection of the manifest that is not in the database one by one, and the others with the database' {
             & $script:WriteManifest
             $script:InDatabase = @($script:Urls[0], $script:Urls[1])
 
             $result = Remove-SPSLabFixture -ManifestPath $script:ManifestPath -Confirm:$false
 
+            $global:LabRemovedDatabase | Should -Be @('spslab_Content')
+            $global:LabRemoved | Should -Be @($script:Urls[2])
+            @($result | ForEach-Object { $_.Url }) | Should -Be $script:Urls
+            @($result | ForEach-Object { $_.Status }) | Should -Be @('Removed', 'Removed', 'Removed')
+            $result[0].Detail | Should -Match "content database 'spslab_Content'"
+            $result[1].Detail | Should -Match "content database 'spslab_Content'"
+            $result[2].Detail | Should -BeNullOrEmpty
+        }
+
+        It 'purges the deleted entry of a site collection that it removed one by one, and no other' {
+            & $script:WriteManifest
+            $script:InDatabase = @($script:Urls[0], $script:Urls[1])
+            $script:DeletedInWebApplication = @('/sites/spslab-three', '/sites/finance')
+
+            $null = Remove-SPSLabFixture -ManifestPath $script:ManifestPath -Confirm:$false
+
+            $global:LabPurged | Should -Be @('/sites/spslab-three')
+        }
+
+        It 'reports as absent a site collection of the manifest that is not in the database and does not exist' {
+            & $script:WriteManifest
+            $script:InDatabase = @($script:Urls[0], $script:Urls[1])
+            $script:Exists = @()
+
+            $result = Remove-SPSLabFixture -ManifestPath $script:ManifestPath -Confirm:$false
+
             $global:LabRemovedDatabase | Should -HaveCount 1
+            $global:LabRemoved | Should -HaveCount 0
             ($result | Where-Object { $_.Url -eq $script:Urls[2] }).Status | Should -Be 'Absent'
             ($result | Where-Object { $_.Url -eq $script:Urls[0] }).Status | Should -Be 'Removed'
+        }
+
+        It 'refuses, outside the database, a site collection that has the name of the lab and no marker' {
+            & $script:WriteManifest
+            $script:InDatabase = @($script:Urls[0], $script:Urls[1])
+            $script:Unmarked = @($script:Urls[2])
+
+            $result = Remove-SPSLabFixture -ManifestPath $script:ManifestPath -Confirm:$false
+
+            $global:LabRemoved | Should -HaveCount 0
+            ($result | Where-Object { $_.Url -eq $script:Urls[2] }).Status | Should -Be 'Refused'
+            ($result | Where-Object { $_.Url -eq $script:Urls[2] }).Detail | Should -Match 'does not carry the lab marker'
+        }
+
+        It 'leaves the database, and removes the site collections one by one, when it holds a deleted site collection that is not in the manifest, which would be lost for good' {
+            & $script:WriteManifest
+            $script:DeletedInDatabase = @('/sites/spslab-one', '/sites/finance-old')
+            $script:DeletedInWebApplication = @('/sites/finance-old')
+
+            $result = Remove-SPSLabFixture -ManifestPath $script:ManifestPath -Confirm:$false -InformationVariable shown
+
+            $global:LabRemovedDatabase | Should -HaveCount 0
+            $global:LabRemoved | Should -HaveCount 3
+            (@($shown | ForEach-Object { [System.String]$_.MessageData }) -join ' ') | Should -Match 'deleted site collections that are not in the manifest, which would be lost for good: /sites/finance-old'
+            $global:LabPurged | Should -HaveCount 0
+            @($result | ForEach-Object { $_.Status }) | Should -Be @('Removed', 'Removed', 'Removed')
+        }
+
+        It 'does not count the deleted site collections of the lab itself, whatever the case of their path' {
+            & $script:WriteManifest
+            $script:DeletedInDatabase = @('/sites/spslab-one', '/sites/SPSLAB-two')
+
+            $null = Remove-SPSLabFixture -ManifestPath $script:ManifestPath -Confirm:$false
+
+            $global:LabRemovedDatabase | Should -Be @('spslab_Content')
+        }
+
+        It 'treats a deleted site collection that has the name of the lab but is not in the manifest as foreign' {
+            & $script:WriteManifest
+            $script:DeletedInDatabase = @('/sites/spslab-other-run')
+
+            $null = Remove-SPSLabFixture -ManifestPath $script:ManifestPath -Confirm:$false
+
+            $global:LabRemovedDatabase | Should -HaveCount 0
+            $global:LabRemoved | Should -HaveCount 3
+        }
+
+        It 'lists all the deleted site collections of the database, not the first ones' {
+            & $script:WriteManifest
+
+            $null = Remove-SPSLabFixture -ManifestPath $script:ManifestPath -Confirm:$false
+
+            Should -Invoke Get-SPDeletedSite -ModuleName $script:ModuleName -Times 1 -Exactly -ParameterFilter { $ContentDatabase -eq 'spslab_Content' -and $Limit -eq 'All' }
+        }
+
+        It 'leaves the database, and removes the site collections one by one, when its deleted site collections cannot be listed' {
+            & $script:WriteManifest
+            $script:DeletedListingFails = $true
+
+            $null = Remove-SPSLabFixture -ManifestPath $script:ManifestPath -Confirm:$false -InformationVariable shown
+
+            $global:LabRemovedDatabase | Should -HaveCount 0
+            $global:LabRemoved | Should -HaveCount 3
+            (@($shown | ForEach-Object { [System.String]$_.MessageData }) -join ' ') | Should -Match 'deleted site collections could not be checked: The deleted sites cannot be read\.'
         }
 
         It 'leaves the database, and removes the site collections one by one, when it holds a site collection that is not in the manifest' {

@@ -1404,10 +1404,14 @@ function Remove-SPSLabFixture {
         database holds nothing but the site collections of the manifest, the database is removed,
         after a confirmation, and the site collections with it: that is one removal, with no unlock, no
         deleted site to purge and nothing left behind. Remove-SPContentDatabase deletes the database
-        from SQL Server. The database is left alone, and the site collections are removed one by one as
-        below, when its name does not start with <prefix>_, when it is not the database of the web
-        application, when it holds a site collection that is not in the manifest, when it is not
-        reported as created by the lab, or when it does not exist any more.
+        from SQL Server, and with it the deleted site collections that it still holds and that could be
+        restored. The database is left alone, and the site collections are removed one by one as below,
+        when its name does not start with <prefix>_, when it is not the database of the web application,
+        when it holds a site collection, or a deleted site collection, that is not in the manifest (or
+        when they cannot be listed), when it is not reported as created by the lab, or when it does not
+        exist any more. A site collection of the manifest that is not in the database, because it existed
+        before the database was created and was skipped, is removed one by one as below, with its marker
+        checked, like the others.
 
         A removed site collection stays in the deleted sites, which blocks its URL. The deleted sites
         that this run removed, and those of the manifest that were removed before, are purged, after a
@@ -1481,6 +1485,8 @@ function Remove-SPSLabFixture {
     $quiet = [bool]$WhatIfPreference
 
     # The content database that the lab created holds the lab and nothing else: removing it removes the lab.
+    $databaseName = ''
+    $removedWithDatabase = [System.Collections.Generic.List[string]]::new()
     if ($PSCmdlet.ParameterSetName -eq 'Manifest' -and $null -ne $manifest.PSObject.Properties['ContentDatabase'] -and
         -not [System.String]::IsNullOrEmpty([System.String]$manifest.ContentDatabase) -and [bool]$manifest.ContentDatabaseCreated) {
         $databaseName = [System.String]$manifest.ContentDatabase
@@ -1523,6 +1529,31 @@ function Remove-SPSLabFixture {
                     $reason = 'it holds site collections that are not in the manifest: ' + ($foreign -join ', ')
                 }
             }
+
+            # Remove-SPContentDatabase also destroys for good the deleted site collections that the database still holds and
+            # that could be restored: one that is not of the lab must not be lost with it.
+            if (-not $reason) {
+                try {
+                    if ($null -eq (Get-Command -Name 'Get-SPDeletedSite' -ErrorAction SilentlyContinue)) {
+                        throw 'Get-SPDeletedSite is not available.'
+                    }
+                    $requiredPath = ([System.Uri]$required).AbsolutePath
+                    $labPath = @($urlList | ForEach-Object { ([System.Uri]$_).AbsolutePath })
+                    $foreignDeleted = [System.Collections.Generic.List[string]]::new()
+                    foreach ($deletedSite in @(Get-SPDeletedSite -ContentDatabase $databaseName -Limit All -ErrorAction Stop)) {
+                        $deletedPath = [System.String]$deletedSite.Path
+                        if (-not ($labPath -contains $deletedPath -and $deletedPath.StartsWith($requiredPath, [System.StringComparison]::OrdinalIgnoreCase))) {
+                            $foreignDeleted.Add($deletedPath)
+                        }
+                    }
+                    if ($foreignDeleted.Count -gt 0) {
+                        $reason = 'it holds deleted site collections that are not in the manifest, which would be lost for good: ' + ($foreignDeleted -join ', ')
+                    }
+                }
+                catch {
+                    $reason = "its deleted site collections could not be checked: $($_.Exception.Message)"
+                }
+            }
         }
 
         if ($reason) {
@@ -1532,25 +1563,25 @@ function Remove-SPSLabFixture {
             $timer = [System.Diagnostics.Stopwatch]::StartNew()
             try {
                 Remove-SPContentDatabase -Identity $databaseName -Confirm:$false -Force -ErrorAction Stop
-                foreach ($url in $urlList) {
-                    if ($inDatabase -contains $url) {
-                        $result.Add([PSCustomObject]@{ Url = $url; Status = 'Removed'; Detail = "With the content database '$databaseName'." })
-                    }
-                    else {
-                        $result.Add([PSCustomObject]@{ Url = $url; Status = 'Absent'; Detail = 'The site collection does not exist.' })
-                    }
-                }
+                $removedWithDatabase.AddRange($inDatabase)
                 Write-SPSLabNote -Message ("Removed the content database '{0}' and the {1} site collection(s) in it, in {2} s." -f $databaseName, $inDatabase.Count, [System.Math]::Round($timer.Elapsed.TotalSeconds)) -Color 'Green' -Quiet:$quiet
-                return $result.ToArray()
             }
             catch {
                 Write-SPSLabNote -Message ("The lab content database '{0}' could not be removed: {1} The site collections are removed one by one." -f $databaseName, $_.Exception.Message) -Color 'Yellow' -Quiet:$quiet
-                $result.Clear()
+                $removedWithDatabase.Clear()
             }
         }
     }
 
+    # What the database took with it is done. The other site collections of the manifest, those that existed before the database
+    # was created and were skipped, or that are in another database, are removed one by one, with their marker checked.
+    $total = @($urlList | Where-Object { $removedWithDatabase -notcontains $_ }).Count
+
     foreach ($url in $urlList) {
+        if ($removedWithDatabase -contains $url) {
+            $result.Add([PSCustomObject]@{ Url = $url; Status = 'Removed'; Detail = "With the content database '$databaseName'." })
+            continue
+        }
         $position++
         if (-not $url.StartsWith($required, [System.StringComparison]::OrdinalIgnoreCase)) {
             $result.Add([PSCustomObject]@{ Url = $url; Status = 'Refused'; Detail = "The URL does not start with '$required'." })

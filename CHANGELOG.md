@@ -19,10 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instead of making the page wider than the screen. (#90)
 - The lab test script creates the lab site collections in a content database of its own
   (`<prefix>_Content`, or the name given with `-ContentDatabaseName`) and removes that database at
-  the end when it holds nothing but the lab, so that a test run leaves nothing behind in the
-  content database of the web application. When it cannot create the database it says why and
-  falls back to the content database of the web application, which `-NoContentDatabase` asks for.
-  (#88)
+  the end when it holds nothing but the lab (its site collections and its deleted site collections:
+  one that is not of the lab would be lost for good), so that a test run leaves nothing behind in
+  the content database of the web application. The lab site collections that are not in the
+  database, such as one that existed before it was created, are removed one by one, with their
+  marker checked. When it cannot create the database it says why and falls back to the content
+  database of the web application, which `-NoContentDatabase` asks for. (#88)
 
 ### Fixed
 
