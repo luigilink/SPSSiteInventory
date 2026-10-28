@@ -47,6 +47,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in `Needs review`, and the `AssessmentPartial` alert says so. The lab has a `partial-simple`
   scenario (three alerts, with the cap of the alert rows lowered to 2) that must end in
   `Needs review`. (#106)
+- A site collection whose root web cannot be read, such as one locked with `NoAccess`, is no
+  longer reported with the template `#`, the language 0 and two alerts that mean nothing for it.
+  PowerShell turns the exception of a property getter into `$null`, so `Title`, `WebTemplate`,
+  `Configuration`, `Language` and `LastItemModifiedDate` of such a root web read as empty, and the
+  template and the language that were made of them were `#` and 0. They are now read in a way that
+  keeps the error, each on its own, so that what can be read is kept. What could not be read stays
+  empty (`Template`, `TemplateLanguageLcid`), `TemplateCompatibility` is `NotCollected`,
+  `TemplateLanguageReviewRequired` is empty, and one warning names the properties and the error.
+  The `TemplateCompatibilityReview` and `TemplateLanguageReview` alerts, and the 0.5 of the score
+  for the language, are no longer given for a value that was not read: the site collection is
+  partial, and the `AssessmentPartial` alert says so. A root web that can be read is not
+  affected. The lab scenario `lock-noaccess` checks it, with a new check that an alert is not
+  raised. (#108)
 
 ## [2.0.0] - 2026-10-28
 

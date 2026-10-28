@@ -238,25 +238,54 @@
                     SiteInventoryWarnings = ''
                 }
 
+                $templateRead = $false
+                $languageRead = $false
                 try {
                     try {
                         $rootWeb = $site.RootWeb
                         if ($null -eq $rootWeb) {
                             throw "The root web is unavailable."
                         }
-                        $record.Title = $rootWeb.Title
-                        $record.Template = '{0}#{1}' -f $rootWeb.WebTemplate, $rootWeb.Configuration
+
+                        # PowerShell turns the exception of a property getter into $null. A root web that cannot be read
+                        # (a site collection locked with NoAccess) would then give the template '#' and the language 0, with
+                        # no error. Get-SPSPropertyValue keeps the error, and what could not be read stays empty.
+                        $rootWebValue = @{}
+                        $unreadableProperty = [System.Collections.Generic.List[string]]::new()
+                        $firstReadError = ''
+                        foreach ($propertyName in @('Title', 'WebTemplate', 'Configuration', 'Language', 'LastItemModifiedDate')) {
+                            try {
+                                $rootWebValue[$propertyName] = Get-SPSPropertyValue -InputObject $rootWeb -Name $propertyName
+                            }
+                            catch {
+                                $unreadableProperty.Add($propertyName)
+                                if ([string]::IsNullOrEmpty($firstReadError)) {
+                                    $firstReadError = $_.Exception.Message
+                                }
+                            }
+                        }
+                        if ($unreadableProperty.Count -gt 0) {
+                            $warnings.Add(('Root web metadata could not be fully read ({0}): {1}' -f ($unreadableProperty -join ', '), $firstReadError))
+                        }
+
+                        if ($rootWebValue.ContainsKey('Title')) {
+                            $record.Title = $rootWebValue['Title']
+                        }
+                        if ($rootWebValue.ContainsKey('WebTemplate') -and $rootWebValue.ContainsKey('Configuration')) {
+                            $record.Template = '{0}#{1}' -f $rootWebValue['WebTemplate'], $rootWebValue['Configuration']
+                            $templateRead = $true
+                        }
                         $exclusionReason = Get-SPSSiteExclusionReason -Url $siteUrl -Template $record.Template -IncludePersonalSite ([bool]$IncludePersonalSite) -IncludeSiteMaster ([bool]$IncludeSiteMaster)
                         if ($exclusionReason -eq 'PersonalSite') {
                             $Exclusion['PersonalSites'] = [int]$Exclusion['PersonalSites'] + 1
                             continue
                         }
-                        $record.LastModified = $rootWeb.LastItemModifiedDate
-                        try {
-                            $record.TemplateLanguageLcid = [int]$rootWeb.Language
+                        if ($rootWebValue.ContainsKey('LastItemModifiedDate')) {
+                            $record.LastModified = $rootWebValue['LastItemModifiedDate']
                         }
-                        catch {
-                            $warnings.Add("Template language LCID could not be read: $($_.Exception.Message)")
+                        if ($rootWebValue.ContainsKey('Language')) {
+                            $record.TemplateLanguageLcid = [int]$rootWebValue['Language']
+                            $languageRead = $true
                         }
                     }
                     catch {
@@ -265,13 +294,27 @@
 
                     try {
                         $parity = Get-SPSSiteTemplateParity -Template $record.Template -LanguageLcid $record.TemplateLanguageLcid -TemplateParity $TemplateParity
-                        $record.IsUnsupportedSiteTemplate = [bool]$parity.IsUnsupportedSiteTemplate
-                        $record.TemplateCompatibility = $parity.TemplateCompatibility
-                        $record.TemplateCompatibilityReason = $parity.TemplateCompatibilityReason
-                        $record.TemplateLanguageTag = $parity.TemplateLanguageTag
-                        $record.TemplateLanguageName = $parity.TemplateLanguageName
-                        $record.TemplateLanguageReviewRequired = [bool]$parity.TemplateLanguageReviewRequired
-                        $record.TemplateLanguageReason = $parity.TemplateLanguageReason
+                        # A template or a language that could not be read is not one to review: the site collection is
+                        # partial, and the warning and the AssessmentPartial alert say so.
+                        if ($templateRead) {
+                            $record.IsUnsupportedSiteTemplate = [bool]$parity.IsUnsupportedSiteTemplate
+                            $record.TemplateCompatibility = $parity.TemplateCompatibility
+                            $record.TemplateCompatibilityReason = $parity.TemplateCompatibilityReason
+                        }
+                        else {
+                            $record.TemplateCompatibility = 'NotCollected'
+                            $record.TemplateCompatibilityReason = 'Template could not be collected.'
+                        }
+                        if ($languageRead) {
+                            $record.TemplateLanguageTag = $parity.TemplateLanguageTag
+                            $record.TemplateLanguageName = $parity.TemplateLanguageName
+                            $record.TemplateLanguageReviewRequired = [bool]$parity.TemplateLanguageReviewRequired
+                            $record.TemplateLanguageReason = $parity.TemplateLanguageReason
+                        }
+                        else {
+                            $record.TemplateLanguageReviewRequired = $null
+                            $record.TemplateLanguageReason = 'Template language could not be collected.'
+                        }
                     }
                     catch {
                         $warnings.Add("Template compatibility mapping failed: $($_.Exception.Message)")

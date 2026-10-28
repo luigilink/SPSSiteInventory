@@ -49,6 +49,7 @@ function Get-SPSLabExpectation {
     <#
         .SYNOPSIS
         Creates the expectation of a scenario: a property of the inventory record, or an alert.
+        With -Absent, the alert must not be raised.
     #>
     [CmdletBinding()]
     [OutputType([System.Collections.Hashtable])]
@@ -74,12 +75,17 @@ function Get-SPSLabExpectation {
 
         [Parameter()]
         [switch]
+        $Absent,
+
+        [Parameter()]
+        [switch]
         $Info
     )
 
     $expectation = @{ Info = [bool]$Info }
     if ($PSBoundParameters.ContainsKey('Alert')) {
         $expectation['Alert'] = $Alert
+        $expectation['Absent'] = [bool]$Absent
     }
     else {
         $expectation['Property'] = $Property
@@ -314,9 +320,16 @@ function Get-SPSLabScenario {
         )
         if ($isNoAccess) {
             $expectation += (Get-SPSLabExpectation Category eq 4)
+            # The root web cannot be read: its template and its language stay empty, say so in a warning, and are not alerts to review.
+            $expectation += (Get-SPSLabExpectation Template eq '')
+            $expectation += (Get-SPSLabExpectation TemplateLanguageLcid eq $null)
+            $expectation += (Get-SPSLabExpectation TemplateCompatibility eq 'NotCollected')
+            $expectation += (Get-SPSLabExpectation SiteInventoryWarnings like '*Root web metadata could not be fully read*')
+            $expectation += (Get-SPSLabExpectation -Alert 'TemplateCompatibilityReview' -Absent)
+            $expectation += (Get-SPSLabExpectation -Alert 'TemplateLanguageReview' -Absent)
         }
         $description = if ($isNoAccess) {
-            'A NoAccess lock. The site cannot be read, so its assessment stays partial, but the lock must be recognized and reported as a blocker.'
+            'A NoAccess lock. The site cannot be read, so its assessment stays partial, its template and its language stay empty and raise no alert, but the lock must be recognized and reported as a blocker.'
         }
         else {
             "A $state lock: the site is reported as locked but not as a blocker."
@@ -941,17 +954,22 @@ function Test-SPSLabExpectation {
 
     if ($Expectation.Contains('Alert')) {
         $type = [System.String]$Expectation['Alert']
+        $absent = $Expectation.Contains('Absent') -and [bool]$Expectation['Absent']
+        $check = if ($absent) { "No alert $type" } else { "Alert $type" }
+        $expectedState = if ($absent) { 'not raised' } else { 'raised' }
         if ($null -eq $Alert) {
-            return [PSCustomObject]@{ Check = "Alert $type"; Expected = 'raised'; Actual = 'no alerts report'; Kind = $kind; Status = 'SKIP' }
+            return [PSCustomObject]@{ Check = $check; Expected = $expectedState; Actual = 'no alerts report'; Kind = $kind; Status = 'SKIP' }
         }
         $raised = @($Alert) -contains $type
-        return [PSCustomObject]@{ Check = "Alert $type"; Expected = 'raised'; Actual = $(if ($raised) { 'raised' } else { 'not raised' }); Kind = $kind; Status = $(if ($raised) { 'PASS' } else { $notMet }) }
+        $met = if ($absent) { -not $raised } else { $raised }
+        return [PSCustomObject]@{ Check = $check; Expected = $expectedState; Actual = $(if ($raised) { 'raised' } else { 'not raised' }); Kind = $kind; Status = $(if ($met) { 'PASS' } else { $notMet }) }
     }
 
     $property = [System.String]$Expectation['Property']
     $operator = [System.String]$Expectation['Operator']
     $expected = $Expectation['Value']
-    $label = '{0} {1} {2}' -f $property, $operator, $(if ($expected -is [System.Boolean]) { $expected.ToString().ToLowerInvariant() } else { $expected })
+    $shown = if ($expected -is [System.Boolean]) { $expected.ToString().ToLowerInvariant() } elseif ($null -eq $expected) { 'null' } elseif ($expected -is [System.String] -and $expected.Length -eq 0) { '""' } else { $expected }
+    $label = '{0} {1} {2}' -f $property, $operator, $shown
     if ($null -eq $Record -or $null -eq $Record.PSObject.Properties[$property]) {
         return [PSCustomObject]@{ Check = $label; Expected = $expected; Actual = '(not in the record)'; Kind = $kind; Status = $notMet }
     }

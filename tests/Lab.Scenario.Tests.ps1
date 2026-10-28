@@ -129,6 +129,36 @@ Describe 'The lab scenarios' {
         @($noAccess.Expect | Where-Object { $_.Alert -eq 'NoAccessSite' }).Count | Should -Be 1
     }
 
+    It 'expect the template and the language of a site that cannot be read to stay empty and raise no review alert' {
+        $noAccess = $script:Scenario | Where-Object { $_.Name -eq 'lock-noaccess' }
+        $property = @($noAccess.Expect | Where-Object { $_.ContainsKey('Property') })
+
+        @($property | Where-Object { $_.Property -eq 'Template' }).Value | Should -Be ''
+        @($property | Where-Object { $_.Property -eq 'TemplateLanguageLcid' }).Value | Should -BeNullOrEmpty
+        @($property | Where-Object { $_.Property -eq 'TemplateLanguageLcid' }).Operator | Should -Be 'eq'
+        @($property | Where-Object { $_.Property -eq 'TemplateCompatibility' }).Value | Should -Be 'NotCollected'
+        @($property | Where-Object { $_.Property -eq 'SiteInventoryWarnings' }).Value | Should -BeLike '*Root web metadata could not be fully read*'
+        $absent = @($noAccess.Expect | Where-Object { $_.ContainsKey('Alert') -and $_.Absent } | ForEach-Object { $_.Alert })
+        $absent | Should -Be @('TemplateCompatibilityReview', 'TemplateLanguageReview')
+
+        # What the inventory writes for such a site meets them, and what it wrote before (the template '#' and the language 0, with the alerts) does not.
+        $written = [PSCustomObject]@{
+            SiteLockState = 'NoAccess'; IsLockedSite = $true; HasNoAccessLock = $true; Category = 4; Template = ''; TemplateLanguageLcid = $null
+            TemplateCompatibility = 'NotCollected'; SiteInventoryWarnings = 'Root web metadata could not be fully read (Title): Access to this Web site has been blocked.'
+        }
+        $before = [PSCustomObject]@{
+            SiteLockState = 'NoAccess'; IsLockedSite = $true; HasNoAccessLock = $true; Category = 4; Template = '#'; TemplateLanguageLcid = 0
+            TemplateCompatibility = 'Review'; SiteInventoryWarnings = 'Storage usage could not be read: x'
+        }
+        $raised = @('NoAccessSite')
+        $beforeRaised = @('NoAccessSite', 'TemplateCompatibilityReview', 'TemplateLanguageReview')
+        foreach ($expectation in @($noAccess.Expect)) {
+            (Test-SPSLabExpectation -Expectation $expectation -Record $written -Alert $raised).Status | Should -Be 'PASS' -Because ($expectation | ConvertTo-Json -Compress)
+        }
+        $failed = @($noAccess.Expect | Where-Object { (Test-SPSLabExpectation -Expectation $_ -Record $before -Alert $beforeRaised).Status -eq 'FAIL' })
+        @($failed | ForEach-Object { if ($_.ContainsKey('Alert')) { 'No alert ' + $_.Alert } else { $_.Property } }) | Should -Be @('Template', 'TemplateLanguageLcid', 'TemplateCompatibility', 'SiteInventoryWarnings', 'No alert TemplateCompatibilityReview', 'No alert TemplateLanguageReview')
+    }
+
     It 'build a Simple site collection with a partial assessment and expect it in the Needs review wave, not in the quick wins' {
         $scenario = $script:Scenario | Where-Object { $_.Name -eq 'partial-simple' }
 

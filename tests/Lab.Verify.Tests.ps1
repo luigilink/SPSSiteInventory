@@ -18,12 +18,12 @@
     }
 
     function Get-Expectation {
-        param ([System.String] $Property, [System.String] $Operator = 'eq', $Value, [System.Management.Automation.SwitchParameter] $Info, [System.String] $Alert)
+        param ([System.String] $Property, [System.String] $Operator = 'eq', $Value, [System.Management.Automation.SwitchParameter] $Info, [System.String] $Alert, [System.Management.Automation.SwitchParameter] $Absent)
 
         return & (Get-Module -Name SPSInventoryLab) {
-            param ($p, $o, $v, $i, $a)
-            if ($a) { Get-SPSLabExpectation -Alert $a -Info:$i } else { Get-SPSLabExpectation $p $o $v -Info:$i }
-        } $Property $Operator $Value ([bool]$Info) $Alert
+            param ($p, $o, $v, $i, $a, $ab)
+            if ($a) { Get-SPSLabExpectation -Alert $a -Absent:$ab -Info:$i } else { Get-SPSLabExpectation $p $o $v -Info:$i }
+        } $Property $Operator $Value ([bool]$Info) $Alert ([bool]$Absent)
     }
 }
 
@@ -100,6 +100,32 @@ Describe 'Test-SPSLabExpectation' {
         (Test-Expectation $alert $record $null).Status | Should -Be 'SKIP'
         (Test-Expectation (Get-Expectation -Alert 'Subsites' -Info) $record @('LargeLists')).Status | Should -Be 'INFO'
         (Test-Expectation $alert $record @('Subsites')).Check | Should -Be 'Alert Subsites'
+    }
+
+    It 'checks that an alert is not raised, and skips the check when there is no alerts report' {
+        $record = [PSCustomObject]@{ Url = 'x' }
+        $absent = Get-Expectation -Alert 'LargeLists' -Absent
+
+        (Test-Expectation $absent $record @('Subsites')).Status | Should -Be 'PASS'
+        (Test-Expectation $absent $record @()).Status | Should -Be 'PASS'
+        (Test-Expectation $absent $record @('Subsites', 'LargeLists')).Status | Should -Be 'FAIL'
+        (Test-Expectation $absent $record $null).Status | Should -Be 'SKIP'
+        (Test-Expectation (Get-Expectation -Alert 'LargeLists' -Absent -Info) $record @('LargeLists')).Status | Should -Be 'INFO'
+        $result = Test-Expectation $absent $record @('LargeLists')
+        $result.Check | Should -Be 'No alert LargeLists'
+        $result.Expected | Should -Be 'not raised'
+        $result.Actual | Should -Be 'raised'
+    }
+
+    It 'shows an empty string and a null in the label of a check instead of leaving it blank' {
+        $record = [PSCustomObject]@{ Template = ''; Lcid = $null }
+
+        (Test-Expectation (Get-Expectation Template eq '') $record).Check | Should -Be 'Template eq ""'
+        (Test-Expectation (Get-Expectation Template eq '') $record).Status | Should -Be 'PASS'
+        (Test-Expectation (Get-Expectation Lcid eq $null) $record).Check | Should -Be 'Lcid eq null'
+        (Test-Expectation (Get-Expectation Lcid eq $null) $record).Status | Should -Be 'PASS'
+        (Test-Expectation (Get-Expectation Lcid eq 0) ([PSCustomObject]@{ Lcid = 0 })).Status | Should -Be 'PASS'
+        (Test-Expectation (Get-Expectation Lcid eq $null) ([PSCustomObject]@{ Lcid = 0 })).Status | Should -Be 'FAIL'
     }
 }
 

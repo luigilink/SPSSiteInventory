@@ -375,6 +375,11 @@ Detection order is explicit and deterministic:
 3. Template key starts with `SupportedTemplatePrefixes` => `TemplateCompatibility = Compatible`.
 4. Anything else => `TemplateCompatibility = Review`.
 
+A template that could not be read, because the root web raised an error (the one of a site collection
+locked with `NoAccess`, for example), is not mapped: `Template` is empty and
+`TemplateCompatibility = NotCollected`, with no review alert. The site collection is partial, and its
+warnings say that the root web could not be read.
+
 Default intent:
 
 - Personal sites (`SPSPERS#0`) are treated as compatible migration sources
@@ -385,7 +390,9 @@ Default intent:
 Language behavior:
 
 - `TemplateLanguageLcid` comes from the root web.
-- If LCID is missing or not recognized by .NET culture metadata, `TemplateLanguageReviewRequired = True`.
+- If the LCID was read but is not recognized by .NET culture metadata, `TemplateLanguageReviewRequired = True`.
+- If the LCID could not be read, `TemplateLanguageLcid` and `TemplateLanguageReviewRequired` are empty and there is
+  no review alert: the site collection is partial, and its warnings say what could not be read.
 - If `SupportedLanguageLcid` is non-empty, LCIDs outside that allow-list are flagged for review.
 
 Content types are inventoried for review, including standard definitions and list
