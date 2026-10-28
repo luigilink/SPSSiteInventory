@@ -203,40 +203,68 @@
         }
     }
     $totalSizeText = ConvertTo-SPSSizeText -SizeGB $totalSize
-    $riskCards = @(
-        [PSCustomObject]@{ Label = 'Sites with full-trust code'; Count = @($siteRecords | Where-Object { $_.UsesFullTrustCode }).Count }
-        [PSCustomObject]@{ Label = 'Sites with custom farm features'; Count = @($siteRecords | Where-Object { $_.UsesCustomFarmFeature }).Count }
-        [PSCustomObject]@{ Label = 'Sites with sandbox solutions'; Count = @($siteRecords | Where-Object { [int]$_.SandboxSolutions -gt 0 }).Count }
-        [PSCustomObject]@{ Label = 'Sites with a custom master page'; Count = @($siteRecords | Where-Object { $_.CustomMasterPage }).Count }
-        [PSCustomObject]@{ Label = 'Sites with custom event receivers'; Count = @($siteRecords | Where-Object { [int]$_.EventReceivers -gt 0 }).Count }
-        [PSCustomObject]@{ Label = 'Sites with FBA configured'; Count = @($siteRecords | Where-Object { $_.HasFbaZone }).Count }
-        [PSCustomObject]@{ Label = 'Sites with unsupported templates'; Count = @($siteRecords | Where-Object { $_.IsUnsupportedSiteTemplate }).Count }
-        [PSCustomObject]@{ Label = 'Sites with template compatibility review'; Count = @($siteRecords | Where-Object { -not [bool]$_.IsUnsupportedSiteTemplate -and [string]$_.TemplateCompatibility -eq 'Review' }).Count }
-        [PSCustomObject]@{ Label = 'Sites with template-language review'; Count = @($siteRecords | Where-Object { $_.TemplateLanguageReviewRequired }).Count }
-        [PSCustomObject]@{ Label = 'Sites with InfoPath forms'; Count = @($siteRecords | Where-Object { [int]$_.InfoPathFormCount -gt 0 }).Count }
-        [PSCustomObject]@{ Label = 'Sites with IRM-enabled lists'; Count = @($siteRecords | Where-Object { [int]$_.IrmEnabledListCount -gt 0 }).Count }
-        [PSCustomObject]@{ Label = 'Sites with locked state'; Count = @($siteRecords | Where-Object { $_.IsLockedSite }).Count }
-        [PSCustomObject]@{ Label = 'Sites locked with NoAccess'; Count = @($siteRecords | Where-Object { $_.HasNoAccessLock }).Count }
-        [PSCustomObject]@{ Label = 'Sites with Workflow 2010'; Count = @($siteRecords | Where-Object { [int]$_.Workflow2010Count -gt 0 }).Count }
-        [PSCustomObject]@{ Label = 'Sites with running Workflow 2010'; Count = @($siteRecords | Where-Object { [int]$_.Workflow2010RunningInstanceCount -gt 0 }).Count }
-        [PSCustomObject]@{ Label = 'Sites with running Workflow 2013'; Count = @($siteRecords | Where-Object { [int]$_.Workflow2013RunningInstanceCount -gt 0 }).Count }
-        [PSCustomObject]@{ Label = 'Sites with app instances'; Count = @($siteRecords | Where-Object { [int]$_.AppInstanceCount -gt 0 }).Count }
-        [PSCustomObject]@{ Label = 'Sites with app webs'; Count = @($siteRecords | Where-Object { [int]$_.AppWebCount -gt 0 }).Count }
-        [PSCustomObject]@{ Label = 'Sites with publishing features'; Count = @($siteRecords | Where-Object { [bool]$_.PublishingInfrastructureEnabled -or [int]$_.PublishingWebCount -gt 0 }).Count }
-        [PSCustomObject]@{ Label = 'Sites with publishing pages'; Count = @($siteRecords | Where-Object { [int]$_.PublishingPageCount -gt 0 }).Count }
-        [PSCustomObject]@{ Label = 'Sites with customized pages'; Count = @($siteRecords | Where-Object { [int]$_.CustomizedPageCount -gt 0 }).Count }
-        [PSCustomObject]@{ Label = 'Sites with custom permission levels'; Count = @($siteRecords | Where-Object { [int]$_.CustomPermissionLevelCount -gt 0 }).Count }
-        [PSCustomObject]@{ Label = 'Sites with e-mail enabled lists'; Count = @($siteRecords | Where-Object { [int]$_.EmailEnabledListCount -gt 0 }).Count }
-        [PSCustomObject]@{ Label = 'Sites with HTML files'; Count = @($siteRecords | Where-Object { [int]$_.HtmlFileCount -gt 0 }).Count }
-        [PSCustomObject]@{ Label = 'Sites with managed metadata columns'; Count = @($siteRecords | Where-Object { [int]$_.ManagedMetadataListCount -gt 0 }).Count }
-        [PSCustomObject]@{ Label = 'Sites with external lists'; Count = @($siteRecords | Where-Object { [int]$_.ExternalListCount -gt 0 }).Count }
-        [PSCustomObject]@{ Label = 'Sites with SharePoint alerts'; Count = @($siteRecords | Where-Object { [int]$_.SharePointAlertCount -gt 0 }).Count }
-        [PSCustomObject]@{ Label = 'Sites with subsites'; Count = @($siteRecords | Where-Object { [int]$_.SubsiteCount -gt 0 }).Count }
-        [PSCustomObject]@{ Label = 'Sites in web applications with permissive browser file handling'; Count = @($siteRecords | Where-Object { [string]$_.BrowserFileHandling -eq 'Permissive' }).Count }
-        [PSCustomObject]@{ Label = 'Sites above large-size threshold'; Count = @($siteRecords | Where-Object { $_.IsLargeSite }).Count }
-        [PSCustomObject]@{ Label = 'Sites with large lists'; Count = @($siteRecords | Where-Object { [int]$_.LargeListCount -gt 0 }).Count }
-        [PSCustomObject]@{ Label = 'Sites with checked-out files'; Count = @($siteRecords | Where-Object { [int]$_.CheckedOutFileCount -gt 0 }).Count }
-        [PSCustomObject]@{ Label = 'Sites with high file-version counts'; Count = @($siteRecords | Where-Object { [int]$_.FileVersionCount -gt 0 }).Count }
+    # Risk indicators: one entry per signal. Test says whether a site collection raises it. It gives the
+    # count and the tags of the rows of the inventory table, so that a click on an indicator filters the
+    # table. The severity is the one of the alert of the signal in the alert catalog (High blocks or
+    # breaks a migration, Medium needs a plan or a check, Low is information to pass on); a signal that
+    # has no alert has its own.
+    $alertCatalog = Get-SPSAlertCatalog
+    $riskIndicators = @(
+        @{ Key = 'full-trust'; Label = 'Sites with full-trust code'; Short = 'full-trust code'; Alert = 'FullTrustCode'; Test = { param($r) [bool]$r.UsesFullTrustCode } }
+        @{ Key = 'custom-farm-feature'; Label = 'Sites with custom farm features'; Short = 'custom farm features'; Severity = 'High'; Test = { param($r) [bool]$r.UsesCustomFarmFeature } }
+        @{ Key = 'sandbox'; Label = 'Sites with sandbox solutions'; Short = 'sandbox solutions'; Severity = 'Medium'; Test = { param($r) [int]$r.SandboxSolutions -gt 0 } }
+        @{ Key = 'custom-master-page'; Label = 'Sites with a custom master page'; Short = 'a custom master page'; Severity = 'Medium'; Test = { param($r) [bool]$r.CustomMasterPage } }
+        @{ Key = 'event-receivers'; Label = 'Sites with custom event receivers'; Short = 'custom event receivers'; Severity = 'Medium'; Test = { param($r) [int]$r.EventReceivers -gt 0 } }
+        @{ Key = 'fba'; Label = 'Sites with FBA configured'; Short = 'FBA configured'; Alert = 'FbaConfigured'; Test = { param($r) [bool]$r.HasFbaZone } }
+        @{ Key = 'unsupported-template'; Label = 'Sites with unsupported templates'; Short = 'unsupported templates'; Alert = 'UnsupportedSiteTemplate'; Test = { param($r) [bool]$r.IsUnsupportedSiteTemplate } }
+        @{ Key = 'template-review'; Label = 'Sites with template compatibility review'; Short = 'template compatibility review'; Alert = 'TemplateCompatibilityReview'; Test = { param($r) -not [bool]$r.IsUnsupportedSiteTemplate -and [string]$r.TemplateCompatibility -eq 'Review' } }
+        @{ Key = 'template-language'; Label = 'Sites with template-language review'; Short = 'template-language review'; Alert = 'TemplateLanguageReview'; Test = { param($r) [bool]$r.TemplateLanguageReviewRequired } }
+        @{ Key = 'infopath'; Label = 'Sites with InfoPath forms'; Short = 'InfoPath forms'; Alert = 'InfoPath'; Test = { param($r) [int]$r.InfoPathFormCount -gt 0 } }
+        @{ Key = 'irm'; Label = 'Sites with IRM-enabled lists'; Short = 'IRM-enabled lists'; Alert = 'IrmEnabledLists'; Test = { param($r) [int]$r.IrmEnabledListCount -gt 0 } }
+        @{ Key = 'locked'; Label = 'Sites with locked state'; Short = 'a locked state'; Alert = 'LockedSite'; Test = { param($r) [bool]$r.IsLockedSite } }
+        @{ Key = 'noaccess'; Label = 'Sites locked with NoAccess'; Short = 'a NoAccess lock'; Alert = 'NoAccessSite'; Test = { param($r) [bool]$r.HasNoAccessLock } }
+        @{ Key = 'workflow-2010'; Label = 'Sites with Workflow 2010'; Short = 'Workflow 2010'; Alert = 'Workflow2010'; Test = { param($r) [int]$r.Workflow2010Count -gt 0 } }
+        @{ Key = 'workflow-2010-running'; Label = 'Sites with running Workflow 2010'; Short = 'running Workflow 2010'; Alert = 'Workflow2010Running'; Test = { param($r) [int]$r.Workflow2010RunningInstanceCount -gt 0 } }
+        @{ Key = 'workflow-2013-running'; Label = 'Sites with running Workflow 2013'; Short = 'running Workflow 2013'; Alert = 'Workflow2013Running'; Test = { param($r) [int]$r.Workflow2013RunningInstanceCount -gt 0 } }
+        @{ Key = 'app-instances'; Label = 'Sites with app instances'; Short = 'app instances'; Alert = 'AppInstances'; Test = { param($r) [int]$r.AppInstanceCount -gt 0 } }
+        @{ Key = 'app-webs'; Label = 'Sites with app webs'; Short = 'app webs'; Alert = 'AppWebs'; Test = { param($r) [int]$r.AppWebCount -gt 0 } }
+        @{ Key = 'publishing-features'; Label = 'Sites with publishing features'; Short = 'publishing features'; Alert = 'PublishingSite'; Test = { param($r) [bool]$r.PublishingInfrastructureEnabled -or [int]$r.PublishingWebCount -gt 0 } }
+        @{ Key = 'publishing-pages'; Label = 'Sites with publishing pages'; Short = 'publishing pages'; Alert = 'PublishingPages'; Test = { param($r) [int]$r.PublishingPageCount -gt 0 } }
+        @{ Key = 'customized-pages'; Label = 'Sites with customized pages'; Short = 'customized pages'; Alert = 'CustomizedPages'; Test = { param($r) [int]$r.CustomizedPageCount -gt 0 } }
+        @{ Key = 'custom-permission-levels'; Label = 'Sites with custom permission levels'; Short = 'custom permission levels'; Alert = 'CustomPermissionLevels'; Test = { param($r) [int]$r.CustomPermissionLevelCount -gt 0 } }
+        @{ Key = 'email-enabled-lists'; Label = 'Sites with e-mail enabled lists'; Short = 'e-mail enabled lists'; Alert = 'EmailEnabledLists'; Test = { param($r) [int]$r.EmailEnabledListCount -gt 0 } }
+        @{ Key = 'html-files'; Label = 'Sites with HTML files'; Short = 'HTML files'; Alert = 'HtmlFiles'; Test = { param($r) [int]$r.HtmlFileCount -gt 0 } }
+        @{ Key = 'managed-metadata'; Label = 'Sites with managed metadata columns'; Short = 'managed metadata columns'; Alert = 'ManagedMetadataColumns'; Test = { param($r) [int]$r.ManagedMetadataListCount -gt 0 } }
+        @{ Key = 'external-lists'; Label = 'Sites with external lists'; Short = 'external lists'; Alert = 'ExternalLists'; Test = { param($r) [int]$r.ExternalListCount -gt 0 } }
+        @{ Key = 'sharepoint-alerts'; Label = 'Sites with SharePoint alerts'; Short = 'SharePoint alerts'; Alert = 'AlertSubscriptions'; Test = { param($r) [int]$r.SharePointAlertCount -gt 0 } }
+        @{ Key = 'subsites'; Label = 'Sites with subsites'; Short = 'subsites'; Alert = 'Subsites'; Test = { param($r) [int]$r.SubsiteCount -gt 0 } }
+        @{ Key = 'permissive-file-handling'; Label = 'Sites in web applications with permissive browser file handling'; Short = 'permissive browser file handling'; Alert = 'PermissiveBrowserFileHandling'; Test = { param($r) [string]$r.BrowserFileHandling -eq 'Permissive' } }
+        @{ Key = 'large-site'; Label = 'Sites above large-size threshold'; Short = 'a size above the large-size threshold'; Alert = 'LargeSite'; Test = { param($r) [bool]$r.IsLargeSite } }
+        @{ Key = 'large-lists'; Label = 'Sites with large lists'; Short = 'large lists'; Alert = 'LargeLists'; Test = { param($r) [int]$r.LargeListCount -gt 0 } }
+        @{ Key = 'checked-out-files'; Label = 'Sites with checked-out files'; Short = 'checked-out files'; Alert = 'CheckedOutFiles'; Test = { param($r) [int]$r.CheckedOutFileCount -gt 0 } }
+        @{ Key = 'file-versions'; Label = 'Sites with high file-version counts'; Short = 'high file-version counts'; Alert = 'FileVersions'; Test = { param($r) [int]$r.FileVersionCount -gt 0 } }
+    )
+    $riskCounts = @{}
+    foreach ($indicator in $riskIndicators) { $riskCounts[$indicator.Key] = 0 }
+    $taggedRecords = [System.Collections.Generic.List[System.Object]]::new()
+    foreach ($record in $records) {
+        $tags = [System.Collections.Generic.List[System.String]]::new()
+        if ($record.InventoryScope -ne 'WebApplication') {
+            foreach ($indicator in $riskIndicators) {
+                if (& $indicator.Test $record) {
+                    $tags.Add($indicator.Key)
+                    $riskCounts[$indicator.Key]++
+                }
+            }
+        }
+        $taggedRecords.Add([PSCustomObject]@{ Record = $record; Tags = $tags.ToArray() })
+    }
+    $riskRows = @(
+        for ($index = 0; $index -lt $riskIndicators.Count; $index++) {
+            $indicator = $riskIndicators[$index]
+            $severity = if ($indicator.Alert) { [string]$alertCatalog[$indicator.Alert].Severity } else { [string]$indicator.Severity }
+            [PSCustomObject]@{ Key = $indicator.Key; Label = $indicator.Label; Short = $indicator.Short; Severity = $severity; Count = $riskCounts[$indicator.Key]; Order = $index }
+        }
     )
 
     # Per-wave aggregation for the migration wave plan. Waves are discovered from the
@@ -346,8 +374,6 @@ h2 { margin: 28px 0 12px; font-size: 18px; }
 .card.c2 { border-top-color: var(--cat2); } .card.c2 .num { color: var(--cat2); }
 .card.c3 { border-top-color: var(--cat3); } .card.c3 .num { color: var(--cat3); }
 .card.c4 { border-top-color: var(--cat4); } .card.c4 .num { color: var(--cat4); }
-.card.risk { border-top-color: var(--cat4); }
-.card.risk .num { color: var(--cat4); }
 .filters { margin: 8px 0 12px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .filters button {
     font: inherit;
@@ -424,6 +450,55 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
 .note { border-left: 3px solid var(--border); padding: 2px 10px; margin: 6px 0; font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
 .note strong { color: var(--text); }
 .note.warn { border-left-color: var(--cat2); }
+.summary > p.muted:first-child { margin-top: 0; }
+.risk-group { margin: 0 0 14px; }
+.risk-head { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; color: var(--muted); font-size: 13px; }
+button.risk {
+    display: grid;
+    grid-template-columns: minmax(260px, 380px) minmax(120px, 1fr) 100px;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    font: inherit;
+    text-align: left;
+    color: var(--text);
+    background: none;
+    border: 0;
+    border-radius: 6px;
+    padding: 5px 8px;
+    cursor: pointer;
+}
+button.risk:hover { background: var(--brand-soft); }
+button.risk.active { background: var(--brand-soft); box-shadow: inset 3px 0 0 var(--brand); }
+.risk-bar { display: block; height: 10px; border-radius: 5px; background: #e9ecf0; overflow: hidden; }
+.risk-bar > span { display: block; height: 100%; border-radius: 5px; }
+.sev-high .risk-bar > span { background: var(--cat4); }
+.sev-medium .risk-bar > span { background: var(--cat2); }
+.sev-low .risk-bar > span { background: #8a9099; }
+.risk-count { text-align: right; white-space: nowrap; }
+.risk-none { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
+.alert-list { border: 1px solid var(--border); border-radius: 6px; background: #fff; }
+.alert-item { border-top: 1px solid var(--border); }
+.alert-item:first-child { border-top: 0; }
+.alert-item summary {
+    display: grid;
+    grid-template-columns: 16px 80px minmax(200px, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 12px;
+    cursor: pointer;
+    list-style: none;
+}
+.alert-item summary::-webkit-details-marker { display: none; }
+.alert-item summary::before { content: "\25B8"; color: var(--brand); }
+.alert-item[open] summary::before { content: "\25BE"; }
+.alert-item summary:hover { background: var(--brand-soft); }
+.alert-item summary .pill { justify-self: start; }
+.alert-name { font-weight: 600; }
+.alert-count { color: var(--muted); font-size: 13px; }
+.alert-body { padding: 2px 12px 12px 120px; font-size: 13px; }
+.alert-body p { margin: 4px 0; }
+.chip { font: inherit; color: #fff; background: var(--brand); border: 0; border-radius: 999px; padding: 5px 12px; cursor: pointer; }
 @media print { tr.detail { display: table-row; } .toolbar { display: none; } }
 </style>
 '@
@@ -507,11 +582,39 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
 
     [void]$sb.AppendLine('<h2 id="risk-indicators">Risk indicators</h2>')
     [void]$sb.AppendLine('<div class="summary">')
-    [void]$sb.AppendLine('<div class="cards">')
-    foreach ($risk in $riskCards) {
-        [void]$sb.AppendLine(('<div class="card risk"><div class="num">{0}</div><div class="lbl">{1}</div></div>' -f $risk.Count, (ConvertTo-SPSHtmlText -Value $risk.Label)))
+    if ($total -eq 0) {
+        [void]$sb.AppendLine('<p class="muted">There is no site collection in this inventory.</p>')
     }
-    [void]$sb.AppendLine('</div>')
+    else {
+        [void]$sb.AppendLine('<p class="muted">The share of the site collections that raise each signal, grouped by the severity of the alert of the signal. Click an indicator to filter the inventory table.</p>')
+        $severityMeta = [ordered]@{
+            High   = @{ Pill = 'yes'; Meaning = 'block or break a migration' }
+            Medium = @{ Pill = 'warn'; Meaning = 'need a plan or a check' }
+            Low    = @{ Pill = 'no'; Meaning = 'information to pass on' }
+        }
+        foreach ($severityName in $severityMeta.Keys) {
+            $severityRows = @($riskRows | Where-Object { $_.Severity -eq $severityName -and $_.Count -gt 0 } | Sort-Object -Property @{ Expression = { $_.Count }; Descending = $true }, @{ Expression = { $_.Order } })
+            if ($severityRows.Count -eq 0) { continue }
+            [void]$sb.AppendLine('<div class="risk-group">')
+            [void]$sb.AppendLine(('<div class="risk-head"><span class="pill {0}">{1}</span> {2}</div>' -f $severityMeta[$severityName].Pill, $severityName, $severityMeta[$severityName].Meaning))
+            foreach ($row in $severityRows) {
+                $share = [math]::Round(100 * $row.Count / $total, 1)
+                $barWidth = [math]::Max($share, 1)
+                [void]$sb.AppendLine(('<button type="button" class="risk sev-{0}" data-ind="{1}"><span class="risk-label">{2}</span><span class="risk-bar"><span style="width:{3}%"></span></span><span class="risk-count"><strong>{4}</strong> <span class="muted">{5}%</span></span></button>' -f
+                    $severityName.ToLowerInvariant(),
+                    $row.Key,
+                    (ConvertTo-SPSHtmlText -Value $row.Label),
+                    $barWidth.ToString('0.#', $invariant),
+                    $row.Count,
+                    $share.ToString('0.#', $invariant)))
+            }
+            [void]$sb.AppendLine('</div>')
+        }
+        $quietRows = @($riskRows | Where-Object { $_.Count -eq 0 })
+        if ($quietRows.Count -gt 0) {
+            [void]$sb.AppendLine(('<p class="risk-none">No site collection has: {0}.</p>' -f ((@($quietRows | ForEach-Object { ConvertTo-SPSHtmlText -Value $_.Short })) -join ', ')))
+        }
+    }
     [void]$sb.AppendLine('</div>')
 
     # Alerts grouped by type, with what to do about each.
@@ -536,10 +639,9 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
         $mediumAlertCount = @($alertRows | Where-Object { [string]$_.Severity -eq 'Medium' }).Count
         $lowAlertCount = @($alertRows | Where-Object { [string]$_.Severity -eq 'Low' }).Count
         [void]$sb.AppendLine('<h2 id="alerts">Alerts and remediation</h2>')
-        [void]$sb.AppendLine(('<p><strong>{0}</strong> alert(s) of <strong>{1}</strong> type(s): <strong>{2}</strong> high, <strong>{3}</strong> medium and <strong>{4}</strong> low. Each type shows how many site collections or web applications it concerns and what to do about it. The alert of each site collection, with its URL, is in the alerts CSV and JSON files.</p>' -f $alertRows.Count, $alertGroups.Count, $highAlertCount, $mediumAlertCount, $lowAlertCount))
+        [void]$sb.AppendLine(('<p><strong>{0}</strong> alert(s) of <strong>{1}</strong> type(s): <strong>{2}</strong> high, <strong>{3}</strong> medium and <strong>{4}</strong> low. Each type shows how many site collections or web applications it concerns; open it to read what it means and what to do about it. The alert of each site collection, with its URL, is in the alerts CSV and JSON files.</p>' -f $alertRows.Count, $alertGroups.Count, $highAlertCount, $mediumAlertCount, $lowAlertCount))
         if ($alertGroups.Count -gt 0) {
-            [void]$sb.AppendLine('<div class="table-scroll"><table class="alerts">')
-            [void]$sb.AppendLine('<thead><tr><th>Severity</th><th>Alert</th><th class="num">Affected</th><th>What it means</th><th>What to do</th><th>Reference</th></tr></thead><tbody>')
+            [void]$sb.AppendLine('<div class="alert-list">')
             foreach ($alertGroup in $alertGroups) {
                 $severityPill = switch ($alertGroup.Severity) {
                     'High' { '<span class="pill yes">High</span>' }
@@ -547,20 +649,23 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
                     default { ('<span class="pill no">{0}</span>' -f (ConvertTo-SPSHtmlText -Value $alertGroup.Severity)) }
                 }
                 $referenceLink = if ($alertGroup.Reference -like 'https://*') {
-                    '<a href="{0}">Microsoft Learn</a>' -f (ConvertTo-SPSHtmlText -Value $alertGroup.Reference)
+                    '<p><a href="{0}">Microsoft Learn</a></p>' -f (ConvertTo-SPSHtmlText -Value $alertGroup.Reference)
                 }
                 else {
                     ''
                 }
-                [void]$sb.AppendLine(('<tr><td>{0}</td><td>{1}</td><td class="num">{2}</td><td>{3}</td><td>{4}</td><td>{5}</td></tr>' -f
+                [void]$sb.AppendLine('<details class="alert-item">')
+                [void]$sb.AppendLine(('<summary>{0}<span class="alert-name">{1}</span><span class="alert-count">{2} affected</span></summary>' -f
                     $severityPill,
                     (ConvertTo-SPSHtmlText -Value $alertGroup.AlertType),
-                    $alertGroup.Count,
+                    $alertGroup.Count))
+                [void]$sb.AppendLine(('<div class="alert-body"><p><strong>What it means</strong> {0}</p><p><strong>What to do</strong> {1}</p>{2}</div>' -f
                     (ConvertTo-SPSHtmlText -Value $alertGroup.Message),
                     (ConvertTo-SPSHtmlText -Value $alertGroup.Remediation),
                     $referenceLink))
+                [void]$sb.AppendLine('</details>')
             }
-            [void]$sb.AppendLine('</tbody></table></div>')
+            [void]$sb.AppendLine('</div>')
         }
     }
 
@@ -584,11 +689,11 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
     # Inventory table: one compact row per site collection, worst first. Opening a row shows the
     # context of the site collection, the signals it raises and its assessment warnings, so the page
     # stays readable on a large farm. The CSV and JSON files keep every column.
-    $inventoryRecords = @($records | Sort-Object -Property `
-        @{ Expression = { $sortCategory = 0; if ($null -ne $_.Category) { $sortCategory = [int]$_.Category }; if ($sortCategory -eq 0) { 5 } else { $sortCategory } }; Descending = $true },
-        @{ Expression = { try { [double]$_.Score } catch { 0.0 } }; Descending = $true },
-        @{ Expression = { [string]$_.Url } })
-    $notAssessedCount = @($inventoryRecords | Where-Object { $null -eq $_.Category -or [int]$_.Category -eq 0 }).Count
+    $inventoryRecords = @($taggedRecords | Sort-Object -Property `
+        @{ Expression = { $sortCategory = 0; if ($null -ne $_.Record.Category) { $sortCategory = [int]$_.Record.Category }; if ($sortCategory -eq 0) { 5 } else { $sortCategory } }; Descending = $true },
+        @{ Expression = { try { [double]$_.Record.Score } catch { 0.0 } }; Descending = $true },
+        @{ Expression = { [string]$_.Record.Url } })
+    $notAssessedCount = @($inventoryRecords | Where-Object { $null -eq $_.Record.Category -or [int]$_.Record.Category -eq 0 }).Count
     # The blocking reasons answer "why is this site blocking?", so the compact row shows them first.
     $orderReasons = {
         param([System.String]$Reasons)
@@ -618,6 +723,7 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
         [void]$sb.AppendLine('<button data-filter="0">Not assessed</button>')
     }
     [void]$sb.AppendLine('</div>')
+    [void]$sb.AppendLine('<button type="button" class="chip" id="inv-indicator" hidden></button>')
     [void]$sb.AppendLine(('<span class="count" id="inv-count">{0} of {0} shown</span>' -f $inventoryRecords.Count))
     [void]$sb.AppendLine('</div>')
 
@@ -642,7 +748,8 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
     }
     [void]$sb.AppendLine('</tr></thead>')
 
-    foreach ($record in $inventoryRecords) {
+    foreach ($item in $inventoryRecords) {
+        $record = $item.Record
         $cat = 0
         if ($null -ne $record.Category) { $cat = [int]$record.Category }
         $catName = if ($categoryMeta.Contains($cat)) { $categoryMeta[$cat].Name } elseif ($record.CategoryName) { [string]$record.CategoryName } else { '' }
@@ -676,7 +783,8 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
         if ($modified -is [datetime]) { $modified = $modified.ToString('yyyy-MM-dd') }
         $waveText = if ($null -ne $record.Wave -and [int]$record.Wave -ne 0) { [string][int]$record.Wave } else { '-' }
 
-        [void]$sb.AppendLine(('<tbody class="site" data-category="{0}">' -f $cat))
+        $indicatorAttribute = if ($item.Tags.Count -gt 0) { ' data-ind="{0}"' -f ($item.Tags -join ' ') } else { '' }
+        [void]$sb.AppendLine(('<tbody class="site" data-category="{0}"{1}>' -f $cat, $indicatorAttribute))
         [void]$sb.AppendLine('<tr class="main">')
         [void]$sb.AppendLine('<td class="tgl"><button type="button" class="toggle" aria-expanded="false" aria-label="Show the details of this site collection" title="Show details"></button></td>')
         [void]$sb.AppendLine(('<td class="site-cell" data-sort="{0}">{1}</td>' -f (ConvertTo-SPSHtmlText -Value $url.ToLowerInvariant()), $siteCell))
@@ -997,7 +1105,10 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
     var search = document.getElementById('inv-search');
     var counter = document.getElementById('inv-count');
     var buttons = document.querySelectorAll('.filters button');
+    var indicators = document.querySelectorAll('button.risk[data-ind]');
+    var indicatorChip = document.getElementById('inv-indicator');
     var activeFilter = 'all';
+    var activeIndicator = '';
     var texts = null;
 
     function cellSortValue(site, index, type) {
@@ -1019,6 +1130,7 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
         var shown = 0;
         for (var i = 0; i < sites.length; i++) {
             var visible = (activeFilter === 'all' || sites[i].getAttribute('data-category') === activeFilter) &&
+                (activeIndicator === '' || (' ' + (sites[i].getAttribute('data-ind') || '') + ' ').indexOf(' ' + activeIndicator + ' ') !== -1) &&
                 (query === '' || texts[i].indexOf(query) !== -1);
             sites[i].hidden = !visible;
             if (visible) { shown++; }
@@ -1062,6 +1174,33 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
             applyFilters();
         });
     }
+
+    function setIndicator(key, label) {
+        activeIndicator = key;
+        for (var n = 0; n < indicators.length; n++) {
+            indicators[n].classList.toggle('active', key !== '' && indicators[n].getAttribute('data-ind') === key);
+        }
+        if (indicatorChip) {
+            indicatorChip.hidden = key === '';
+            indicatorChip.textContent = label + ' \u2715';
+        }
+        applyFilters();
+    }
+
+    for (var m = 0; m < indicators.length; m++) {
+        indicators[m].addEventListener('click', function () {
+            var key = this.getAttribute('data-ind');
+            if (activeIndicator === key) {
+                setIndicator('', '');
+                return;
+            }
+            setIndicator(key, this.querySelector('.risk-label').textContent);
+            var target = document.getElementById('inventory-table');
+            if (target && target.scrollIntoView) { target.scrollIntoView(); }
+        });
+    }
+
+    if (indicatorChip) { indicatorChip.addEventListener('click', function () { setIndicator('', ''); }); }
 
     if (search) { search.addEventListener('input', applyFilters); }
 

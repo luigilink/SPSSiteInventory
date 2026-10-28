@@ -204,6 +204,15 @@ Each row in the `*-solutions-*` CSV/JSON describes one farm solution (WSP):
 The HTML report is made to be read. The CSV and JSON files keep every column and every row.
 
 - **Summary, risk indicators, alerts and migration waves** come first.
+  - The **risk indicators** are a ranked list: each signal that at least one site collection
+    raises has a bar for the share of site collections, with the count, grouped by the severity
+    of its alert (High blocks or breaks a migration, Medium needs a plan or a check, Low is
+    information to pass on, like the [alerts](Alerts)). A signal that has no alert has its own
+    severity. The signals that no site collection raises are named on one line. Click an
+    indicator to filter the inventory table to the site collections that raise it; click it
+    again, or the button that appears next to the filters, to remove the filter.
+  - The **alerts** are lines with their severity, name and number of affected site collections.
+    Open one to read what it means, what to do about it and the Microsoft Learn page.
 - **Site collections** is the inventory table, right after the wave plan. Each site collection
   has one row with its title and URL, category, score, wave, size, template, last modification,
   status and reasons, **worst first** (not assessed, Blocking, Complex, Moderate, then Simple, by
