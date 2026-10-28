@@ -5,6 +5,7 @@
 - [⚙️ Configuration](Configuration)
 - [📖 Usage](Usage)
 - [🚨 Alerts](Alerts)
+- [🧩 WSP packages](Solution-Packages)
 - [🧪 Lab testing](Lab-Testing)
 - [📦 Release Process](Release-Process)
 

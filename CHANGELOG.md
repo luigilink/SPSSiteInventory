@@ -21,6 +21,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   filter takes a few milliseconds. The manifest lists the pages (`Files.InventoryHtmlPages`), and
   `ConvertTo-SPSInventoryHtml -FileName` returns the pages as objects (the report is still a string
   without it). (#105)
+- Offline inspection of WSP packages, with no farm and no SharePoint command:
+  `Get-SPSSolutionPackageInfo` expands a WSP (a cabinet) with `expand.exe` (or `cabextract` off
+  Windows), or reads a package that is already expanded, and reports what the farm solution only
+  shows as booleans. It reads the strong name and the public key token of every assembly, so a
+  package is custom or Microsoft on its assemblies and not on the name of the solution, the
+  feature ids and scopes even when the solution is not deployed (the farm reports no feature for
+  it), the features that have a receiver, where the assemblies are deployed, the safe controls, the
+  code access security policy, the kind of elements that the features provision, and the .NET
+  framework that the DLLs were built for (custom assemblies built for .NET 3.5 or before are
+  counted). With `-FarmSolutionMap` it matches each package to the farm solution and lists the
+  differences. `Export-SPSSolutionPackageReport` writes a CSV per package, a CSV per assembly and
+  a JSON file. The package is checked before it is expanded (a file name that goes up with `..`,
+  too many files, too large a size), its DLLs are read as bytes and never loaded, and its XML is
+  read with the DTD switched off. See the wiki page "Inspecting WSP packages (offline)". (#21)
 
 ### Changed
 

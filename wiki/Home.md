@@ -48,3 +48,4 @@ Export-SPSInventoryReport     -> CSV + JSON
 - [Configuration](Configuration)
 - [Usage](Usage)
 - [Alerts and remediation](Alerts)
+- [Inspecting WSP packages offline](Solution-Packages)
