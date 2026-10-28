@@ -70,7 +70,8 @@
         if ($value -ne 0 -and $weight -ne 0) {
             $contribution = $weight * $value
             $score += $contribution
-            $reasons.Add(("{0}={1} (+{2})" -f $signalName, $value, [math]::Round($contribution, 2)))
+            # Invariant culture: the reasons are written to the reports and must not depend on the server.
+            $reasons.Add([string]::Format([System.Globalization.CultureInfo]::InvariantCulture, '{0}={1} (+{2})', $signalName, $value, [math]::Round($contribution, 2)))
         }
     }
 
