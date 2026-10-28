@@ -199,4 +199,28 @@ Describe 'Measure-SPSSiteComplexity' {
 
         $result.Score | Should -Be 2
     }
+
+    It 'scores the size of a site collection and writes the reasons the same way in <Culture>' -ForEach @(
+        @{ Culture = 'en-US' }
+        @{ Culture = 'fr-FR' }
+        @{ Culture = 'de-DE' }
+    ) {
+        $previous = [System.Threading.Thread]::CurrentThread.CurrentCulture
+        try {
+            [System.Threading.Thread]::CurrentThread.CurrentCulture = [System.Globalization.CultureInfo]::GetCultureInfo($Culture)
+            # 400.75 GB at 0.02 per GB is 8.015 (rounded to 8.02), so a Complex site collection.
+            $large = Measure-SPSSiteComplexity -Signals @{ SizeGB = 400.75 } -Scoring $script:Scoring
+            $small = Measure-SPSSiteComplexity -Signals @{ SizeGB = 25.5 } -Scoring $script:Scoring
+        }
+        finally {
+            [System.Threading.Thread]::CurrentThread.CurrentCulture = $previous
+        }
+
+        $large.Score | Should -Be 8.02
+        $large.Category | Should -Be 3
+        $large.Reasons | Should -Be @('SizeGB=400.75 (+8.02)')
+        $small.Score | Should -Be 0.51
+        $small.Category | Should -Be 1
+        $small.Reasons | Should -Be @('SizeGB=25.5 (+0.51)')
+    }
 }

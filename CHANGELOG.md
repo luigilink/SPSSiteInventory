@@ -222,6 +222,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   files and the HTML report keep the original text. A script that parses a CSV must remove the
   leading quote. (#64)
 
+### Fixed
+
+- The scoring no longer depends on the culture of the server. A signal that is not a whole number,
+  above all the size of a site collection (`SizeGB`), was read as 1 on a server whose culture has a
+  decimal comma (French, Spanish and others) and as a hundred times more or less on a German one,
+  so the size counted for nothing in the score and the category: a 400 GB site collection was
+  Simple on a French server and Complex on an English one. A number is now used as it is and a
+  text is read with the invariant culture. The reasons (`SizeGB=25.5 (+0.51)`) are also written
+  with the invariant culture, so the CSV, JSON and HTML reports read the same on every server.
+  Re-run the inventory, or re-score it, on a server whose culture has a decimal comma to get the
+  right categories. (#102)
+
 ## [1.1.0] - 2026-09-21
 
 ### Added
