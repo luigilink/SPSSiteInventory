@@ -4,12 +4,12 @@
     $script:ModuleName = 'SPSInventoryLab'
 
     # The SharePoint commands, as stubs, so that they can be mocked. A real farm is never touched here.
-    function global:New-SPSite { [CmdletBinding()] param ($Url, $OwnerAlias, $Template, $Name, $Language) throw 'Unmocked SharePoint call: New-SPSite' }
-    function global:Get-SPSite { [CmdletBinding()] param ($Identity, $WebApplication, $Limit) throw 'Unmocked SharePoint call: Get-SPSite' }
+    function global:New-SPSite { [CmdletBinding()] param ($Url, $OwnerAlias, $Template, $Name, $Language, $ContentDatabase) throw 'Unmocked SharePoint call: New-SPSite' }
+    function global:Get-SPSite { [CmdletBinding()] param ($Identity, $WebApplication, $ContentDatabase, $Limit) throw 'Unmocked SharePoint call: Get-SPSite' }
     function global:Get-SPWebApplication { [CmdletBinding()] param ($Identity) throw 'Unmocked SharePoint call: Get-SPWebApplication' }
     function global:Set-SPSite { [CmdletBinding(SupportsShouldProcess = $true)] param ($Identity, $LockState) throw 'Unmocked SharePoint call: Set-SPSite' }
     function global:Remove-SPSite { [CmdletBinding(SupportsShouldProcess = $true)] param ($Identity) throw 'Unmocked SharePoint call: Remove-SPSite' }
-    function global:Get-SPDeletedSite { [CmdletBinding()] param ($WebApplication) throw 'Unmocked SharePoint call: Get-SPDeletedSite' }
+    function global:Get-SPDeletedSite { [CmdletBinding()] param ($WebApplication, $ContentDatabase, $Limit) throw 'Unmocked SharePoint call: Get-SPDeletedSite' }
     function global:Remove-SPDeletedSite { [CmdletBinding(SupportsShouldProcess = $true)] param ($Identity) throw 'Unmocked SharePoint call: Remove-SPDeletedSite' }
 
     function global:New-LabFakeSite {
@@ -137,8 +137,18 @@ Describe 'New-SPSLabFixture' {
         $global:LabCreated[0].Url | Should -Be 'https://lab/sites/lab42-ok'
     }
 
+    It 'keeps the lab in the content database of the web application, and says why, when the commands of the content database are not available' {
+        $manifest = New-SPSLabFixture -WebApplicationUrl 'https://lab' -ManifestPath $script:ManifestPath -Confirm:$false -InformationVariable shown
+
+        $manifest.ContentDatabase | Should -BeNullOrEmpty
+        $manifest.ContentDatabaseCreated | Should -BeFalse
+        $global:LabCreated.Count | Should -Be 3
+        $note = @($shown | ForEach-Object { [System.String]$_.MessageData }) | Where-Object { $_ -like 'No content database*' }
+        $note | Should -Match 'Get-SPContentDatabase is not available'
+    }
+
     It 'prints a line before each creation and a result line with the status and the elapsed seconds after it' {
-        $null = New-SPSLabFixture -WebApplicationUrl 'https://lab' -ManifestPath $script:ManifestPath -Confirm:$false -InformationVariable progress
+        $null = New-SPSLabFixture -WebApplicationUrl 'https://lab' -ManifestPath $script:ManifestPath -NoContentDatabase -Confirm:$false -InformationVariable progress
 
         $line = @($progress | ForEach-Object { [System.String]$_.MessageData })
         $line | Should -HaveCount 6
@@ -153,7 +163,7 @@ Describe 'New-SPSLabFixture' {
     It 'prints a failure to create the site collection on one line' {
         Mock -ModuleName $script:ModuleName New-SPSite { throw "The URL is`r`n  already in use." }
 
-        $null = New-SPSLabFixture -WebApplicationUrl 'https://lab' -ManifestPath $script:ManifestPath -Scenario 'ok' -Confirm:$false -InformationVariable progress
+        $null = New-SPSLabFixture -WebApplicationUrl 'https://lab' -ManifestPath $script:ManifestPath -Scenario 'ok' -NoContentDatabase -Confirm:$false -InformationVariable progress
 
         [System.String]@($progress)[1].MessageData | Should -Match '^\[1/1\] Failed in \d+ s: The URL is already in use\.$'
     }
@@ -161,7 +171,7 @@ Describe 'New-SPSLabFixture' {
     It 'prints that a site collection that already exists is skipped, without announcing a creation' {
         Mock -ModuleName $script:ModuleName Get-SPSite { if ($Identity -eq 'https://lab/sites/spslab-ok') { New-LabFakeSite -Url $Identity } }
 
-        $null = New-SPSLabFixture -WebApplicationUrl 'https://lab' -ManifestPath $script:ManifestPath -Scenario 'ok' -Confirm:$false -InformationVariable progress
+        $null = New-SPSLabFixture -WebApplicationUrl 'https://lab' -ManifestPath $script:ManifestPath -Scenario 'ok' -NoContentDatabase -Confirm:$false -InformationVariable progress
 
         @($progress) | Should -HaveCount 1
         [System.String]@($progress)[0].MessageData | Should -Be '[1/1] Skipped: The site collection already exists: remove the lab first.'
@@ -482,5 +492,399 @@ Describe 'Remove-SPSLabFixture' {
         ($result | Where-Object { $_.Url -eq 'https://lab/sites/spslab-ok' }).Status | Should -Be 'Failed'
         ($result | Where-Object { $_.Url -eq 'https://lab/sites/spslab-ok' }).Detail | Should -Be 'The site is in use.'
         $global:LabRemoved | Should -Contain 'https://lab/sites/spslab-locked'
+    }
+}
+
+Describe 'The content database of the lab' {
+    BeforeAll {
+        # Not defined for the other tests: without these commands, the lab stays in the content database of the web application.
+        function global:Get-SPContentDatabase { [CmdletBinding()] param ($Identity) throw 'Unmocked SharePoint call: Get-SPContentDatabase' }
+        function global:New-SPContentDatabase { [CmdletBinding(SupportsShouldProcess = $true)] param ($Name, $WebApplication, $MaxSiteCount, $WarningSiteCount) throw 'Unmocked SharePoint call: New-SPContentDatabase' }
+        function global:Remove-SPContentDatabase { [CmdletBinding(SupportsShouldProcess = $true)] param ($Identity, [switch]$Force) throw 'Unmocked SharePoint call: Remove-SPContentDatabase' }
+    }
+
+    AfterAll {
+        foreach ($name in @('Get-SPContentDatabase', 'New-SPContentDatabase', 'Remove-SPContentDatabase')) {
+            Remove-Item -Path "function:global:$name" -ErrorAction SilentlyContinue
+        }
+        Remove-Variable -Name LabCreated, LabDatabases, LabRemovedDatabase, LabRemoved, LabPurged -Scope Global -ErrorAction SilentlyContinue
+    }
+
+    Context 'when the lab is created' {
+        BeforeEach {
+            $global:LabDisposed = 0
+            $global:LabCreated = [System.Collections.Generic.List[object]]::new()
+            $global:LabDatabases = [System.Collections.Generic.List[object]]::new()
+            $script:ManifestPath = Join-Path -Path $TestDrive -ChildPath ('manifest-{0}.json' -f [guid]::NewGuid())
+
+            Mock -ModuleName $script:ModuleName Get-SPWebApplication { [PSCustomObject]@{ Url = 'https://lab/' } }
+            Mock -ModuleName $script:ModuleName Get-SPSite { $null }
+            Mock -ModuleName $script:ModuleName Get-SPContentDatabase { $null }
+            Mock -ModuleName $script:ModuleName New-SPContentDatabase {
+                $global:LabDatabases.Add([PSCustomObject]@{ Name = $Name; WebApplication = $WebApplication; MaxSiteCount = $MaxSiteCount; WarningSiteCount = $WarningSiteCount })
+            }
+            Mock -ModuleName $script:ModuleName New-SPSite {
+                $global:LabCreated.Add([PSCustomObject]@{ Url = $Url; ContentDatabase = $ContentDatabase })
+                New-LabFakeSite -Url $Url -Marked $false
+            }
+            Mock -ModuleName $script:ModuleName Get-SPSLabScenario {
+                @(
+                    [PSCustomObject]@{ Name = 'one'; Description = 'one'; Template = 'STS#0'; Expect = @(); Provision = { param ($Context) $null = $Context } }
+                    [PSCustomObject]@{ Name = 'two'; Description = 'two'; Template = 'STS#0'; Expect = @(); Provision = { param ($Context) $null = $Context } }
+                    [PSCustomObject]@{ Name = 'three'; Description = 'three'; Template = 'STS#0'; Expect = @(); Provision = { param ($Context) $null = $Context } }
+                ) | Where-Object { -not $Name -or $Name -contains $_.Name }
+            }
+        }
+
+        It 'creates a content database with the prefix, attached to the web application, with room for just the scenarios, and creates the site collections in it' {
+            $manifest = New-SPSLabFixture -WebApplicationUrl 'https://lab' -ManifestPath $script:ManifestPath -Confirm:$false
+
+            $global:LabDatabases | Should -HaveCount 1
+            $global:LabDatabases[0].Name | Should -Be 'spslab_Content'
+            $global:LabDatabases[0].WebApplication.Url | Should -Be 'https://lab/'
+            $global:LabDatabases[0].MaxSiteCount | Should -Be 5
+            $global:LabDatabases[0].WarningSiteCount | Should -Be 0
+            $global:LabCreated | Should -HaveCount 3
+            foreach ($created in $global:LabCreated) { $created.ContentDatabase | Should -Be 'spslab_Content' }
+            $manifest.ContentDatabase | Should -Be 'spslab_Content'
+            $manifest.ContentDatabaseCreated | Should -BeTrue
+        }
+
+        It 'records the database in the manifest file' {
+            $null = New-SPSLabFixture -WebApplicationUrl 'https://lab' -ManifestPath $script:ManifestPath -Prefix 'labx' -Confirm:$false
+
+            $written = Get-Content -LiteralPath $script:ManifestPath -Raw | ConvertFrom-Json
+            $written.ContentDatabase | Should -Be 'labx_Content'
+            $written.ContentDatabaseCreated | Should -BeTrue
+        }
+
+        It 'takes the name that is asked for, when it starts with the prefix, and refuses one that does not' {
+            $null = New-SPSLabFixture -WebApplicationUrl 'https://lab' -ManifestPath $script:ManifestPath -ContentDatabaseName 'spslab_Mine' -Confirm:$false
+
+            $global:LabDatabases[0].Name | Should -Be 'spslab_Mine'
+            { New-SPSLabFixture -WebApplicationUrl 'https://lab' -ManifestPath $script:ManifestPath -ContentDatabaseName 'WSS_Content' -Confirm:$false } | Should -Throw "*must start with 'spslab_'*"
+        }
+
+        It 'sizes the database for the scenarios that are built' {
+            $null = New-SPSLabFixture -WebApplicationUrl 'https://lab' -ManifestPath $script:ManifestPath -Scenario 'one' -Confirm:$false
+
+            $global:LabDatabases[0].MaxSiteCount | Should -Be 3
+        }
+
+        It 'keeps the lab in the content database of the web application when the account cannot create a database, and says why' {
+            Mock -ModuleName $script:ModuleName New-SPContentDatabase { throw 'CREATE DATABASE permission denied.' }
+
+            $manifest = New-SPSLabFixture -WebApplicationUrl 'https://lab' -ManifestPath $script:ManifestPath -Confirm:$false -InformationVariable shown
+
+            $global:LabCreated | Should -HaveCount 3
+            foreach ($created in $global:LabCreated) { $created.ContentDatabase | Should -BeNullOrEmpty }
+            $manifest.ContentDatabase | Should -BeNullOrEmpty
+            $manifest.ContentDatabaseCreated | Should -BeFalse
+            $note = @($shown | ForEach-Object { [System.String]$_.MessageData }) | Where-Object { $_ -like 'No content database*' }
+            $note | Should -Match 'CREATE DATABASE permission denied'
+            $note | Should -Match 'content database of the web application'
+        }
+
+        It 'creates no database with -NoContentDatabase, and calls none of its commands' {
+            $manifest = New-SPSLabFixture -WebApplicationUrl 'https://lab' -ManifestPath $script:ManifestPath -NoContentDatabase -Confirm:$false
+
+            Should -Invoke New-SPContentDatabase -ModuleName $script:ModuleName -Times 0 -Exactly
+            Should -Invoke Get-SPContentDatabase -ModuleName $script:ModuleName -Times 0 -Exactly
+            foreach ($created in $global:LabCreated) { $created.ContentDatabase | Should -BeNullOrEmpty }
+            $manifest.ContentDatabase | Should -BeNullOrEmpty
+            $manifest.ContentDatabaseCreated | Should -BeFalse
+        }
+
+        It 'uses a database of that name that already belongs to the web application, without reporting it as created' {
+            Mock -ModuleName $script:ModuleName Get-SPContentDatabase { [PSCustomObject]@{ Name = $Identity; WebApplication = [PSCustomObject]@{ Url = 'https://lab/' } } }
+
+            $manifest = New-SPSLabFixture -WebApplicationUrl 'https://lab' -ManifestPath $script:ManifestPath -Confirm:$false
+
+            $global:LabDatabases | Should -HaveCount 0
+            $manifest.ContentDatabase | Should -Be 'spslab_Content'
+            $manifest.ContentDatabaseCreated | Should -BeFalse
+            foreach ($created in $global:LabCreated) { $created.ContentDatabase | Should -Be 'spslab_Content' }
+        }
+
+        It 'does not use a database of that name that belongs to another web application' {
+            Mock -ModuleName $script:ModuleName Get-SPContentDatabase { [PSCustomObject]@{ Name = $Identity; WebApplication = [PSCustomObject]@{ Url = 'https://other/' } } }
+
+            $manifest = New-SPSLabFixture -WebApplicationUrl 'https://lab' -ManifestPath $script:ManifestPath -Confirm:$false -InformationVariable shown
+
+            $global:LabDatabases | Should -HaveCount 0
+            $manifest.ContentDatabase | Should -BeNullOrEmpty
+            foreach ($created in $global:LabCreated) { $created.ContentDatabase | Should -BeNullOrEmpty }
+            (@($shown | ForEach-Object { [System.String]$_.MessageData }) -join ' ') | Should -Match 'another web application|for the web application ''https://other'''
+        }
+
+        It 'creates no database with -WhatIf, and prints nothing beyond what ShouldProcess prints' {
+            $null = New-SPSLabFixture -WebApplicationUrl 'https://lab' -ManifestPath $script:ManifestPath -WhatIf -InformationVariable shown
+
+            $global:LabDatabases | Should -HaveCount 0
+            @($shown) | Should -HaveCount 0
+        }
+
+        It 'goes on in the content database of the web application when the creation is not confirmed' {
+            $manifest = New-SPSLabFixture -WebApplicationUrl 'https://lab' -ManifestPath $script:ManifestPath -Confirm:$false -Scenario 'one'
+            $global:LabDatabases.Clear()
+            $global:LabCreated.Clear()
+
+            $declined = New-SPSLabFixture -WebApplicationUrl 'https://lab' -ManifestPath $script:ManifestPath -Scenario 'one' -WhatIf
+
+            $manifest.ContentDatabase | Should -Be 'spslab_Content'
+            $declined.ContentDatabase | Should -BeNullOrEmpty
+            $global:LabDatabases | Should -HaveCount 0
+        }
+    }
+
+    Context 'when the lab is removed' {
+        BeforeAll {
+            $script:Urls = @('https://lab/sites/spslab-one', 'https://lab/sites/spslab-two', 'https://lab/sites/spslab-three')
+        }
+
+        BeforeEach {
+            $global:LabDisposed = 0
+            $global:LabRemoved = [System.Collections.Generic.List[string]]::new()
+            $global:LabRemovedDatabase = [System.Collections.Generic.List[string]]::new()
+            $global:LabPurged = [System.Collections.Generic.List[string]]::new()
+            $script:InDatabase = @($script:Urls)
+            $script:Exists = @($script:Urls)
+            $script:Unmarked = @()
+            $script:DeletedInDatabase = @()
+            $script:DeletedInWebApplication = @()
+            $script:DeletedListingFails = $false
+            $script:DatabaseWebApplication = 'https://lab/'
+            $script:DatabaseExists = $true
+            $script:ManifestPath = Join-Path -Path $TestDrive -ChildPath ('manifest-{0}.json' -f [guid]::NewGuid())
+            $script:WriteManifest = {
+                param ($Database = 'spslab_Content', $Created = $true, $Prefix = 'spslab')
+                $manifest = [ordered]@{
+                    ManifestVersion = 1; WebApplicationUrl = 'https://lab'; Prefix = $Prefix
+                    ContentDatabase = $Database; ContentDatabaseCreated = $Created
+                    Scenario = @($script:Urls | ForEach-Object { [PSCustomObject]@{ Name = 'x'; Url = $_; Status = 'Created' } })
+                }
+                ConvertTo-Json -InputObject ([PSCustomObject]$manifest) -Depth 5 | Set-Content -Path $script:ManifestPath -Encoding UTF8
+            }
+
+            Mock -ModuleName $script:ModuleName Get-SPWebApplication { [PSCustomObject]@{ Url = 'https://lab/' } }
+            Mock -ModuleName $script:ModuleName Get-SPContentDatabase {
+                if ($script:DatabaseExists) { [PSCustomObject]@{ Name = $Identity; WebApplication = [PSCustomObject]@{ Url = $script:DatabaseWebApplication } } }
+            }
+            Mock -ModuleName $script:ModuleName Get-SPSite {
+                if ($null -ne $ContentDatabase) { return @($script:InDatabase | ForEach-Object { New-LabFakeSite -Url $_ }) }
+                if ($null -ne $Identity -and $script:Exists -contains [System.String]$Identity) { New-LabFakeSite -Url $Identity -Marked ($script:Unmarked -notcontains [System.String]$Identity) }
+            }
+            Mock -ModuleName $script:ModuleName Remove-SPContentDatabase { $global:LabRemovedDatabase.Add([System.String]$Identity) }
+            Mock -ModuleName $script:ModuleName Remove-SPSite { $global:LabRemoved.Add([System.String]$Identity) }
+            Mock -ModuleName $script:ModuleName Set-SPSite { }
+            # The deleted site collections of the database, and those of the web application. The identity of a deleted site is its path, to know which one is purged.
+            Mock -ModuleName $script:ModuleName Get-SPDeletedSite {
+                if ($null -ne $ContentDatabase) {
+                    if ($script:DeletedListingFails) { throw 'The deleted sites cannot be read.' }
+                    return @($script:DeletedInDatabase | ForEach-Object { [PSCustomObject]@{ Path = $_; SiteId = $_ } })
+                }
+                @($script:DeletedInWebApplication | ForEach-Object { [PSCustomObject]@{ Path = $_; SiteId = $_ } })
+            }
+            Mock -ModuleName $script:ModuleName Remove-SPDeletedSite { $global:LabPurged.Add([System.String]$Identity) }
+        }
+
+        It 'removes the content database that the lab created, and the lab with it, without removing a site collection' {
+            & $script:WriteManifest
+
+            $result = Remove-SPSLabFixture -ManifestPath $script:ManifestPath -Confirm:$false
+
+            $global:LabRemovedDatabase | Should -Be @('spslab_Content')
+            $global:LabRemoved | Should -HaveCount 0
+            @($result | ForEach-Object { $_.Status }) | Should -Be @('Removed', 'Removed', 'Removed')
+            $result[0].Detail | Should -Match "content database 'spslab_Content'"
+            Should -Invoke Set-SPSite -ModuleName $script:ModuleName -Times 0 -Exactly
+            Should -Invoke Remove-SPDeletedSite -ModuleName $script:ModuleName -Times 0 -Exactly
+        }
+
+        It 'removes a site collection of the manifest that is not in the database one by one, and the others with the database' {
+            & $script:WriteManifest
+            $script:InDatabase = @($script:Urls[0], $script:Urls[1])
+
+            $result = Remove-SPSLabFixture -ManifestPath $script:ManifestPath -Confirm:$false
+
+            $global:LabRemovedDatabase | Should -Be @('spslab_Content')
+            $global:LabRemoved | Should -Be @($script:Urls[2])
+            @($result | ForEach-Object { $_.Url }) | Should -Be $script:Urls
+            @($result | ForEach-Object { $_.Status }) | Should -Be @('Removed', 'Removed', 'Removed')
+            $result[0].Detail | Should -Match "content database 'spslab_Content'"
+            $result[1].Detail | Should -Match "content database 'spslab_Content'"
+            $result[2].Detail | Should -BeNullOrEmpty
+        }
+
+        It 'purges the deleted entry of a site collection that it removed one by one, and no other' {
+            & $script:WriteManifest
+            $script:InDatabase = @($script:Urls[0], $script:Urls[1])
+            $script:DeletedInWebApplication = @('/sites/spslab-three', '/sites/finance')
+
+            $null = Remove-SPSLabFixture -ManifestPath $script:ManifestPath -Confirm:$false
+
+            $global:LabPurged | Should -Be @('/sites/spslab-three')
+        }
+
+        It 'reports as absent a site collection of the manifest that is not in the database and does not exist' {
+            & $script:WriteManifest
+            $script:InDatabase = @($script:Urls[0], $script:Urls[1])
+            $script:Exists = @()
+
+            $result = Remove-SPSLabFixture -ManifestPath $script:ManifestPath -Confirm:$false
+
+            $global:LabRemovedDatabase | Should -HaveCount 1
+            $global:LabRemoved | Should -HaveCount 0
+            ($result | Where-Object { $_.Url -eq $script:Urls[2] }).Status | Should -Be 'Absent'
+            ($result | Where-Object { $_.Url -eq $script:Urls[0] }).Status | Should -Be 'Removed'
+        }
+
+        It 'refuses, outside the database, a site collection that has the name of the lab and no marker' {
+            & $script:WriteManifest
+            $script:InDatabase = @($script:Urls[0], $script:Urls[1])
+            $script:Unmarked = @($script:Urls[2])
+
+            $result = Remove-SPSLabFixture -ManifestPath $script:ManifestPath -Confirm:$false
+
+            $global:LabRemoved | Should -HaveCount 0
+            ($result | Where-Object { $_.Url -eq $script:Urls[2] }).Status | Should -Be 'Refused'
+            ($result | Where-Object { $_.Url -eq $script:Urls[2] }).Detail | Should -Match 'does not carry the lab marker'
+        }
+
+        It 'leaves the database, and removes the site collections one by one, when it holds a deleted site collection that is not in the manifest, which would be lost for good' {
+            & $script:WriteManifest
+            $script:DeletedInDatabase = @('/sites/spslab-one', '/sites/finance-old')
+            $script:DeletedInWebApplication = @('/sites/finance-old')
+
+            $result = Remove-SPSLabFixture -ManifestPath $script:ManifestPath -Confirm:$false -InformationVariable shown
+
+            $global:LabRemovedDatabase | Should -HaveCount 0
+            $global:LabRemoved | Should -HaveCount 3
+            (@($shown | ForEach-Object { [System.String]$_.MessageData }) -join ' ') | Should -Match 'deleted site collections that are not in the manifest, which would be lost for good: /sites/finance-old'
+            $global:LabPurged | Should -HaveCount 0
+            @($result | ForEach-Object { $_.Status }) | Should -Be @('Removed', 'Removed', 'Removed')
+        }
+
+        It 'does not count the deleted site collections of the lab itself, whatever the case of their path' {
+            & $script:WriteManifest
+            $script:DeletedInDatabase = @('/sites/spslab-one', '/sites/SPSLAB-two')
+
+            $null = Remove-SPSLabFixture -ManifestPath $script:ManifestPath -Confirm:$false
+
+            $global:LabRemovedDatabase | Should -Be @('spslab_Content')
+        }
+
+        It 'treats a deleted site collection that has the name of the lab but is not in the manifest as foreign' {
+            & $script:WriteManifest
+            $script:DeletedInDatabase = @('/sites/spslab-other-run')
+
+            $null = Remove-SPSLabFixture -ManifestPath $script:ManifestPath -Confirm:$false
+
+            $global:LabRemovedDatabase | Should -HaveCount 0
+            $global:LabRemoved | Should -HaveCount 3
+        }
+
+        It 'lists all the deleted site collections of the database, not the first ones' {
+            & $script:WriteManifest
+
+            $null = Remove-SPSLabFixture -ManifestPath $script:ManifestPath -Confirm:$false
+
+            Should -Invoke Get-SPDeletedSite -ModuleName $script:ModuleName -Times 1 -Exactly -ParameterFilter { $ContentDatabase -eq 'spslab_Content' -and $Limit -eq 'All' }
+        }
+
+        It 'leaves the database, and removes the site collections one by one, when its deleted site collections cannot be listed' {
+            & $script:WriteManifest
+            $script:DeletedListingFails = $true
+
+            $null = Remove-SPSLabFixture -ManifestPath $script:ManifestPath -Confirm:$false -InformationVariable shown
+
+            $global:LabRemovedDatabase | Should -HaveCount 0
+            $global:LabRemoved | Should -HaveCount 3
+            (@($shown | ForEach-Object { [System.String]$_.MessageData }) -join ' ') | Should -Match 'deleted site collections could not be checked: The deleted sites cannot be read\.'
+        }
+
+        It 'leaves the database, and removes the site collections one by one, when it holds a site collection that is not in the manifest' {
+            & $script:WriteManifest
+            $script:InDatabase = @($script:Urls) + @('https://lab/sites/finance')
+
+            $result = Remove-SPSLabFixture -ManifestPath $script:ManifestPath -Confirm:$false -InformationVariable shown
+
+            $global:LabRemovedDatabase | Should -HaveCount 0
+            $global:LabRemoved | Should -HaveCount 3
+            (@($shown | ForEach-Object { [System.String]$_.MessageData }) -join ' ') | Should -Match 'not in the manifest: https://lab/sites/finance'
+            @($result | ForEach-Object { $_.Status }) | Should -Be @('Removed', 'Removed', 'Removed')
+        }
+
+        It 'does not remove a database that the lab did not create, or whose name does not start with the prefix, or that is not the one of the web application' {
+            foreach ($case in @(
+                    @{ Database = 'spslab_Content'; Created = $false; Reason = 'not-created' }
+                    @{ Database = 'WSS_Content'; Created = $true; Reason = 'name' }
+                )) {
+                & $script:WriteManifest $case.Database $case.Created
+                $null = Remove-SPSLabFixture -ManifestPath $script:ManifestPath -Confirm:$false
+
+                $global:LabRemovedDatabase | Should -HaveCount 0 -Because $case.Reason
+            }
+            & $script:WriteManifest
+            $script:DatabaseWebApplication = 'https://other/'
+
+            $null = Remove-SPSLabFixture -ManifestPath $script:ManifestPath -Confirm:$false
+
+            $global:LabRemovedDatabase | Should -HaveCount 0
+        }
+
+        It 'leaves the database, and removes the site collections one by one, when the site collections in it cannot be listed' {
+            & $script:WriteManifest
+            Mock -ModuleName $script:ModuleName Get-SPSite {
+                if ($null -ne $ContentDatabase) { throw 'The database cannot be read.' }
+                if ($null -ne $Identity -and $script:Urls -contains [System.String]$Identity) { New-LabFakeSite -Url $Identity -Marked $true }
+            }
+
+            $result = Remove-SPSLabFixture -ManifestPath $script:ManifestPath -Confirm:$false -InformationVariable shown
+
+            $global:LabRemovedDatabase | Should -HaveCount 0
+            $global:LabRemoved | Should -HaveCount 3
+            (@($shown | ForEach-Object { [System.String]$_.MessageData }) -join ' ') | Should -Match 'could not be listed: The database cannot be read\.'
+            @($result | ForEach-Object { $_.Status }) | Should -Be @('Removed', 'Removed', 'Removed')
+        }
+
+        It 'removes the site collections one by one when the database does not exist any more, and when its removal fails' {
+            & $script:WriteManifest
+            $script:DatabaseExists = $false
+
+            $null = Remove-SPSLabFixture -ManifestPath $script:ManifestPath -Confirm:$false
+
+            $global:LabRemovedDatabase | Should -HaveCount 0
+            $global:LabRemoved | Should -HaveCount 3
+
+            $global:LabRemoved.Clear()
+            $script:DatabaseExists = $true
+            Mock -ModuleName $script:ModuleName Remove-SPContentDatabase { throw 'The database is in use.' }
+
+            $result = Remove-SPSLabFixture -ManifestPath $script:ManifestPath -Confirm:$false -InformationVariable shown
+
+            $global:LabRemoved | Should -HaveCount 3
+            @($result) | Should -HaveCount 3
+            (@($shown | ForEach-Object { [System.String]$_.MessageData }) -join ' ') | Should -Match 'could not be removed: The database is in use\.'
+        }
+
+        It 'removes nothing with -WhatIf' {
+            & $script:WriteManifest
+
+            $null = Remove-SPSLabFixture -ManifestPath $script:ManifestPath -WhatIf
+
+            $global:LabRemovedDatabase | Should -HaveCount 0
+            $global:LabRemoved | Should -HaveCount 0
+        }
+
+        It 'works as before with a manifest that has no content database' {
+            & $script:WriteManifest $null $false
+
+            $result = Remove-SPSLabFixture -ManifestPath $script:ManifestPath -Confirm:$false
+
+            $global:LabRemovedDatabase | Should -HaveCount 0
+            $global:LabRemoved | Should -HaveCount 3
+            @($result | ForEach-Object { $_.Status }) | Should -Be @('Removed', 'Removed', 'Removed')
+        }
     }
 }
