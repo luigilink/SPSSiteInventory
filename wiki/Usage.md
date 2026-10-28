@@ -34,7 +34,7 @@ report pack, plus a dedicated farm-solution report, to the output folder:
 | `*.csv` | Site inventory for review in Excel; one row per site collection. |
 | `*.json` | Site inventory for downstream automation (for example feeding migration wave planning). |
 | `*.html` | A shareable, self-contained report to read: summary and risk indicators, alerts, migration wave plan, a compact table of the site collections (worst first, one row to open for the details) and the detail sections. See [Reading the HTML report](#reading-the-html-report). |
-| `*-manifest-*.json` | Report-pack manifest with generation metadata, top-level counters and file references. |
+| `*-manifest-*.json` | Report-pack manifest with the layout version (`ReportPackVersion`), generation metadata, top-level counters and file references. |
 | `*-sites-*.json` | Site inventory dataset used by the dashboard/report-pack consumers. |
 | `*-auth-*.json` | Authentication-by-web-application dataset (zone/provider summary + collection counts). |
 | `*-workflows-*.json` | Workflow/template-focused dataset (`Workflow2010Count`, `Workflow2013Count`, running-instance counts, template-compatibility and template-language review fields, status, category). |

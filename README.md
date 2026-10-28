@@ -14,7 +14,7 @@ Compatible with **SharePoint Server 2016, 2019 and Subscription Edition**.
 
 ## Why
 
-Microsoft's assessment tooling has shifted: **SMAT reaches end of support on 1 October 2026**, and the **SPMT scan** capability now covers content inventory and migration risks. Neither produces a **business-complexity categorization** correlated with the farm's custom code (which full-trust solution feeds which site). SPSSiteInventory fills that gap: a configurable scoring engine turns raw customization signals into an actionable 1–4 category, so you know which sites are quick wins and which need a project.
+Microsoft's assessment tooling has shifted: **SMAT reached end of support on 1 October 2026**, and the **SPMT scan** capability now covers content inventory and migration risks. Neither produces a **business-complexity categorization** correlated with the farm's custom code (which full-trust solution feeds which site). SPSSiteInventory fills that gap: a configurable scoring engine turns raw customization signals into an actionable 1–4 category, so you know which sites are quick wins and which need a project.
 
 ## What it collects
 

@@ -2,11 +2,12 @@
 
 ## Supported Versions
 
-SPSSiteInventory is pre-1.0. Security fixes are applied to the latest release only.
+Security fixes are applied to the latest release only.
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.x     | :white_check_mark: |
+| 2.x     | :white_check_mark: |
+| < 2.0   | :x:                |
 
 ## Reporting a Vulnerability
 
