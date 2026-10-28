@@ -115,6 +115,104 @@ function Add-SPSLabList {
     return $Web.Lists[$id]
 }
 
+function Write-SPSLabNote {
+    <#
+        .SYNOPSIS
+        Writes one line of information about the lab, in a color. -Quiet prints nothing, for -WhatIf.
+    #>
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingWriteHost', '',
+        Justification = 'This is operator-facing information whose purpose is colored console output.')]
+    [CmdletBinding()]
+    [OutputType([System.Void])]
+    param
+    (
+        [Parameter(Mandatory = $true)]
+        [System.String]
+        $Message,
+
+        [Parameter()]
+        [System.String]
+        $Color = 'Cyan',
+
+        [Parameter()]
+        [switch]
+        $Quiet
+    )
+
+    if ($Quiet) {
+        return
+    }
+    Write-Host (($Message -replace '\s+', ' ').Trim()) -ForegroundColor $Color
+}
+
+function Initialize-SPSLabContentDatabase {
+    <#
+        .SYNOPSIS
+        Creates the content database of the lab, or says why the lab stays in the one of the web application.
+
+        .DESCRIPTION
+        WRITES TO THE FARM. Creates the content database that holds the lab site collections and nothing else,
+        attached to the web application, with a limit of site collections just above the number of scenarios
+        (so that nothing else ends up in it). Removing the lab then is the removal of one database.
+
+        It never fails: when the account cannot create a database, when the commands are not there, when a
+        database of that name belongs to another web application or when the creation is not confirmed, it
+        returns the reason, and the lab goes on in the content database of the web application, as before.
+        A database of that name that belongs to the web application is used as it is, and is not reported as
+        created, so that removing the lab does not remove it.
+
+        .OUTPUTS
+        An object with Name (the database, or $null), Created and Note.
+    #>
+    [CmdletBinding()]
+    [OutputType([System.Management.Automation.PSObject])]
+    param
+    (
+        [Parameter(Mandatory = $true)]
+        [System.Object]
+        $WebApplication,
+
+        [Parameter(Mandatory = $true)]
+        [System.String]
+        $Name,
+
+        [Parameter(Mandatory = $true)]
+        [System.Int32]
+        $MaxSiteCount,
+
+        [Parameter(Mandatory = $true)]
+        [System.Object]
+        $Cmdlet
+    )
+
+    $baseUrl = ([System.String]$WebApplication.Url).TrimEnd('/')
+    foreach ($command in @('Get-SPContentDatabase', 'New-SPContentDatabase')) {
+        if ($null -eq (Get-Command -Name $command -ErrorAction SilentlyContinue)) {
+            return [PSCustomObject]@{ Name = $null; Created = $false; Note = "$command is not available" }
+        }
+    }
+
+    $existing = Get-SPContentDatabase -Identity $Name -ErrorAction SilentlyContinue
+    if ($null -ne $existing) {
+        $existingUrl = ([System.String]$existing.WebApplication.Url).TrimEnd('/')
+        if ([System.String]::Equals($existingUrl, $baseUrl, [System.StringComparison]::OrdinalIgnoreCase)) {
+            return [PSCustomObject]@{ Name = $Name; Created = $false; Note = 'it already exists for this web application, and is used as it is' }
+        }
+        return [PSCustomObject]@{ Name = $null; Created = $false; Note = "a content database named '$Name' already exists, for the web application '$existingUrl'" }
+    }
+
+    if (-not $Cmdlet.ShouldProcess($Name, 'Create the lab content database')) {
+        return [PSCustomObject]@{ Name = $null; Created = $false; Note = 'the creation was not confirmed' }
+    }
+    try {
+        $null = New-SPContentDatabase -Name $Name -WebApplication $WebApplication -MaxSiteCount $MaxSiteCount -WarningSiteCount 0 -ErrorAction Stop
+    }
+    catch {
+        return [PSCustomObject]@{ Name = $null; Created = $false; Note = "it could not be created: $($_.Exception.Message)" }
+    }
+    return [PSCustomObject]@{ Name = $Name; Created = $true; Note = "created, with room for $MaxSiteCount site collections" }
+}
+
 function Test-SPSLabAssemblyLoadFailure {
     <#
         .SYNOPSIS
@@ -756,6 +854,13 @@ function New-SPSLabFixture {
         The manifest lists what was created, so that Test-SPSLabResult and Remove-SPSLabFixture
         know the lab sites. Confirmation is asked before anything is created.
 
+        The site collections go in a content database of their own, <prefix>_Content, which the
+        function creates with room for just the scenarios, so that removing the lab is the removal
+        of one database, not of every site collection and of their deleted sites. The manifest
+        records it. When the account cannot create a database, the function says why and the site
+        collections go in the content database of the web application, as before: removing them
+        takes longer, and is the part that is the most likely to leave something behind.
+
         .PARAMETER WebApplicationUrl
         The URL of the lab web application. There is no default: name it on purpose.
 
@@ -771,6 +876,13 @@ function New-SPSLabFixture {
 
         .PARAMETER Scenario
         The scenarios to build. Defaults to all of them (see Get-SPSLabScenario).
+
+        .PARAMETER ContentDatabaseName
+        The name of the content database of the lab. It must start with <prefix>_, which is what
+        Remove-SPSLabFixture checks before it removes it. Defaults to <prefix>_Content.
+
+        .PARAMETER NoContentDatabase
+        Keeps the lab in the content database of the web application, without creating one.
 
         .EXAMPLE
         New-SPSLabFixture -WebApplicationUrl https://lab.contoso.local -ManifestPath .\lab-manifest.json
@@ -798,11 +910,23 @@ function New-SPSLabFixture {
 
         [Parameter()]
         [System.String[]]
-        $Scenario
+        $Scenario,
+
+        [Parameter()]
+        [ValidatePattern('^[A-Za-z][A-Za-z0-9_]{2,100}$')]
+        [System.String]
+        $ContentDatabaseName,
+
+        [Parameter()]
+        [switch]
+        $NoContentDatabase
     )
 
     if ($null -eq (Get-Command -Name 'New-SPSite' -ErrorAction SilentlyContinue)) {
         throw 'The SharePoint commands are not available. Run this from the SharePoint Management Shell, or load the snap-in, on a farm server.'
+    }
+    if ($PSBoundParameters.ContainsKey('ContentDatabaseName') -and -not $ContentDatabaseName.StartsWith(($Prefix + '_'), [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "The name of the content database must start with '${Prefix}_': Remove-SPSLabFixture only removes a database that has the prefix of the lab."
     }
 
     $scenarioList = @(Get-SPSLabScenario -Name $Scenario)
@@ -816,6 +940,22 @@ function New-SPSLabFixture {
     $entry = [System.Collections.Generic.List[object]]::new()
     $total = $scenarioList.Count
     $position = 0
+
+    # The lab has a content database of its own, with room for just the scenarios. Nothing else would fit in it.
+    $databaseName = $null
+    $databaseCreated = $false
+    if (-not $NoContentDatabase) {
+        $wanted = if ($PSBoundParameters.ContainsKey('ContentDatabaseName')) { $ContentDatabaseName } else { '{0}_Content' -f $Prefix }
+        $database = Initialize-SPSLabContentDatabase -WebApplication $webApplication -Name $wanted -MaxSiteCount ($total + 2) -Cmdlet $PSCmdlet
+        if ($null -ne $database.Name) {
+            $databaseName = $database.Name
+            $databaseCreated = [bool]$database.Created
+            Write-SPSLabNote -Message ('Content database {0}: {1}.' -f $databaseName, $database.Note) -Quiet:([bool]$WhatIfPreference)
+        }
+        else {
+            Write-SPSLabNote -Message ('No content database for the lab ({0}): the site collections go in the content database of the web application.' -f $database.Note) -Color 'Yellow' -Quiet:([bool]$WhatIfPreference)
+        }
+    }
 
     foreach ($item in $scenarioList) {
         $position++
@@ -841,7 +981,11 @@ function New-SPSLabFixture {
         $timer = [System.Diagnostics.Stopwatch]::StartNew()
         Write-SPSLabProgress -Position $position -Total $total -Status 'Creating' -Detail $url
         try {
-            $site = New-SPSite -Url $url -OwnerAlias $Owner -Template $item.Template -Name ('SPS lab: ' + $item.Name) -Language 1033 -ErrorAction Stop
+            $siteParameter = @{ Url = $url; OwnerAlias = $Owner; Template = $item.Template; Name = ('SPS lab: ' + $item.Name); Language = 1033; ErrorAction = 'Stop' }
+            if ($null -ne $databaseName) {
+                $siteParameter['ContentDatabase'] = $databaseName
+            }
+            $site = New-SPSite @siteParameter
             $web = $site.RootWeb
             $web.AllProperties[$script:LabMarkerName] = 'true'
             $web.Update()
@@ -885,6 +1029,8 @@ function New-SPSLabFixture {
         WebApplicationUrl = $baseUrl
         Prefix            = $Prefix
         Owner             = $Owner
+        ContentDatabase   = $databaseName
+        ContentDatabaseCreated = $databaseCreated
         Scenario          = $entry.ToArray()
     }
     $folder = Split-Path -Path $ManifestPath -Parent
@@ -1254,6 +1400,15 @@ function Remove-SPSLabFixture {
         manifest: a manifest that is left in a work folder cannot be used to remove the lab of another
         web application.
 
+        When the manifest records a content database that the lab created, <prefix>_Content, and that
+        database holds nothing but the site collections of the manifest, the database is removed,
+        after a confirmation, and the site collections with it: that is one removal, with no unlock, no
+        deleted site to purge and nothing left behind. Remove-SPContentDatabase deletes the database
+        from SQL Server. The database is left alone, and the site collections are removed one by one as
+        below, when its name does not start with <prefix>_, when it is not the database of the web
+        application, when it holds a site collection that is not in the manifest, when it is not
+        reported as created by the lab, or when it does not exist any more.
+
         A removed site collection stays in the deleted sites, which blocks its URL. The deleted sites
         that this run removed, and those of the manifest that were removed before, are purged, after a
         confirmation, so that the lab can be built again. Nothing else is purged, a lookalike that was
@@ -1324,6 +1479,76 @@ function Remove-SPSLabFixture {
     $position = 0
     # Nothing is printed with -WhatIf beyond what ShouldProcess prints.
     $quiet = [bool]$WhatIfPreference
+
+    # The content database that the lab created holds the lab and nothing else: removing it removes the lab.
+    if ($PSCmdlet.ParameterSetName -eq 'Manifest' -and $null -ne $manifest.PSObject.Properties['ContentDatabase'] -and
+        -not [System.String]::IsNullOrEmpty([System.String]$manifest.ContentDatabase) -and [bool]$manifest.ContentDatabaseCreated) {
+        $databaseName = [System.String]$manifest.ContentDatabase
+        $reason = ''
+        $inDatabase = [System.Collections.Generic.List[string]]::new()
+        if (-not $databaseName.StartsWith(($prefixValue + '_'), [System.StringComparison]::OrdinalIgnoreCase)) {
+            $reason = "its name does not start with '${prefixValue}_'"
+        }
+        elseif ($null -eq (Get-Command -Name 'Remove-SPContentDatabase' -ErrorAction SilentlyContinue) -or $null -eq (Get-Command -Name 'Get-SPContentDatabase' -ErrorAction SilentlyContinue)) {
+            $reason = 'the commands to remove a content database are not available'
+        }
+        else {
+            $database = Get-SPContentDatabase -Identity $databaseName -ErrorAction SilentlyContinue
+            if ($null -eq $database) {
+                $reason = 'it does not exist'
+            }
+            elseif (-not [System.String]::Equals(([System.String]$database.WebApplication.Url).TrimEnd('/'), $baseUrl, [System.StringComparison]::OrdinalIgnoreCase)) {
+                $reason = 'it is not a content database of the web application of the manifest'
+            }
+            else {
+                $foreign = [System.Collections.Generic.List[string]]::new()
+                $listed = @()
+                try {
+                    $listed = @(Get-SPSite -ContentDatabase $databaseName -Limit All -ErrorAction Stop)
+                }
+                catch {
+                    $reason = "its site collections could not be listed: $($_.Exception.Message)"
+                }
+                foreach ($siteInDatabase in $listed) {
+                    $siteUrl = [System.String]$siteInDatabase.Url
+                    $siteInDatabase.Dispose()
+                    if ($urlList -contains $siteUrl -and $siteUrl.StartsWith($required, [System.StringComparison]::OrdinalIgnoreCase)) {
+                        $inDatabase.Add($siteUrl)
+                    }
+                    else {
+                        $foreign.Add($siteUrl)
+                    }
+                }
+                if ($foreign.Count -gt 0) {
+                    $reason = 'it holds site collections that are not in the manifest: ' + ($foreign -join ', ')
+                }
+            }
+        }
+
+        if ($reason) {
+            Write-SPSLabNote -Message ("The lab content database '{0}' is not removed: {1}. The site collections are removed one by one." -f $databaseName, $reason) -Color 'Yellow' -Quiet:$quiet
+        }
+        elseif ($PSCmdlet.ShouldProcess($databaseName, 'Remove the lab content database, and the lab site collections in it')) {
+            $timer = [System.Diagnostics.Stopwatch]::StartNew()
+            try {
+                Remove-SPContentDatabase -Identity $databaseName -Confirm:$false -Force -ErrorAction Stop
+                foreach ($url in $urlList) {
+                    if ($inDatabase -contains $url) {
+                        $result.Add([PSCustomObject]@{ Url = $url; Status = 'Removed'; Detail = "With the content database '$databaseName'." })
+                    }
+                    else {
+                        $result.Add([PSCustomObject]@{ Url = $url; Status = 'Absent'; Detail = 'The site collection does not exist.' })
+                    }
+                }
+                Write-SPSLabNote -Message ("Removed the content database '{0}' and the {1} site collection(s) in it, in {2} s." -f $databaseName, $inDatabase.Count, [System.Math]::Round($timer.Elapsed.TotalSeconds)) -Color 'Green' -Quiet:$quiet
+                return $result.ToArray()
+            }
+            catch {
+                Write-SPSLabNote -Message ("The lab content database '{0}' could not be removed: {1} The site collections are removed one by one." -f $databaseName, $_.Exception.Message) -Color 'Yellow' -Quiet:$quiet
+                $result.Clear()
+            }
+        }
+    }
 
     foreach ($url in $urlList) {
         $position++

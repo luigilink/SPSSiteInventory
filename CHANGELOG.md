@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   what to do and the reference, instead of a table of long texts. Each indicator exposes whether
   its filter is on (`aria-pressed`), and below 640 px the indicators and the alert lines reflow
   instead of making the page wider than the screen. (#90)
+- The lab test script creates the lab site collections in a content database of its own
+  (`<prefix>_Content`, or the name given with `-ContentDatabaseName`) and removes that database at
+  the end when it holds nothing but the lab, so that a test run leaves nothing behind in the
+  content database of the web application. When it cannot create the database it says why and
+  falls back to the content database of the web application, which `-NoContentDatabase` asks for.
+  (#88)
 
 ### Fixed
 

@@ -11,6 +11,7 @@ The scripts are in the `tools/lab` folder of the repository. They are not part o
 - A lab SharePoint Server farm (2016, 2019 or Subscription Edition) and a lab web application.
 - The **SharePoint Management Shell**, elevated (Windows PowerShell 5.1), signed in as the farm account.
 - The toolkit to test: the extracted release ZIP, or the `src` folder of the repository.
+- A farm account that can create a content database (the farm account can). The lab then has a content database of its own, `<prefix>_Content`. When the script cannot create one, it says why and the lab goes in the content database of the web application, as before.
 
 ## Run it
 
@@ -20,10 +21,10 @@ The scripts are in the `tools/lab` folder of the repository. They are not part o
 
 By default, the script runs these steps in order (`-Action` runs one of them):
 
-1. **Provision**: writes the lab settings from the example configuration of the toolkit being tested (only the environment name, the web application, the report folder and the large-content thresholds change), then creates one site collection per scenario, `<web application>/sites/<prefix>-<scenario>`, and marks it as a lab site. A confirmation is asked before each one; `-Force` skips it and `-WhatIf` shows what would be created.
+1. **Provision**: writes the lab settings from the example configuration of the toolkit being tested (only the environment name, the web application, the report folder and the large-content thresholds change), then creates a content database for the lab and one site collection per scenario in it, `<web application>/sites/<prefix>-<scenario>`, and marks it as a lab site. A confirmation is asked before each one; `-Force` skips it and `-WhatIf` shows what would be created.
 2. **Inventory**: runs `Invoke-SPSSiteInventory.ps1` of the toolkit with the lab settings.
 3. **Verify**: checks the reports against the expectations of every scenario (see below) and prints the result. The exit code is 1 when a check fails.
-4. **Remove**: removes the lab site collections. It runs only with `-Cleanup`, or on its own with `-Action Remove`. With `-Cleanup` it also runs when an earlier step failed, so that a half-built lab is not left behind, and the failure of that step is still the one reported.
+4. **Remove**: removes the lab: its content database when it has one, the lab site collections otherwise (see Safety). It runs only with `-Cleanup`, or on its own with `-Action Remove`. With `-Cleanup` it also runs when an earlier step failed, so that a half-built lab is not left behind, and the failure of that step is still the one reported.
 
 With `-WhatIf`, nothing is written: no settings file, no manifest and no site collection. The inventory and the verification are skipped too, because there is nothing for them to read.
 
@@ -36,6 +37,8 @@ With `-WhatIf`, nothing is written: no settings file, no manifest and no site co
 | `-WorkFolder` | Where the lab settings, the manifest (`lab-manifest.json`) and the reports go. Defaults to `.\SPSLab`. |
 | `-Prefix` | The prefix of the site collection names (lowercase letters and digits). Defaults to `spslab`. When the lab is removed with the manifest of the work folder, it must be the prefix of that manifest. |
 | `-Owner` | The owner of the site collections. Defaults to the current account. |
+| `-ContentDatabaseName` | The content database of the lab. It must start with `<prefix>_`. Defaults to `<prefix>_Content`. |
+| `-NoContentDatabase` | Does not create a content database: the lab goes in the content database of the web application. |
 | `-Cleanup` | With `-Action All`, removes the lab at the end. |
 | `-Force` | Does not ask for a confirmation before each creation or removal. |
 
@@ -111,10 +114,12 @@ The lab does not build these, because they need services, packages or farm-level
 
 ## Safety
 
-- The web application is explicit, and every site collection of the lab has a name prefix and a marker (a property of its root web). `Remove` touches nothing that does not have both, and `-WhatIf` and `-Confirm` are supported: the script passes them to every step that can change something.
+- The web application is explicit, and every site collection of the lab has a name prefix and a marker (a property of its root web). `Remove` touches nothing that does not have both (the content database of the lab has its own conditions, below), and `-WhatIf` and `-Confirm` are supported: the script passes them to every step that can change something.
 - The manifest in the work folder belongs to one web application and one prefix. `Remove` refuses a manifest that is not for the `-WebApplicationUrl` you gave (or for the `-Prefix`, when you gave one) and removes nothing, so a manifest left in a work folder cannot be used against another lab.
 - Removing a site collection unlocks it first. A removed site collection stays in the deleted sites, which blocks its URL: the script purges, after a confirmation, only the deleted sites that it removed itself or that the manifest lists as already removed, so that the lab can be built again with the same URLs. A site that merely looks like a lab site is never purged.
 - An existing site collection at a lab URL is never reused or changed: remove the lab first.
+- The content database of the lab is removed only when the manifest says that the script created it, its name starts with the prefix, it belongs to the web application of the manifest, its site collections can be listed, and every one of them is a site collection of the manifest. Otherwise the lab site collections are removed one by one, and the database is left alone. `Remove-SPContentDatabase` deletes the database from SQL Server, which is why these conditions are required. A database that already exists with the lab name and belongs to the same web application is reused and, because the script did not create it, never removed.
+- The inventory still scans the whole web application, not only the content database of the lab: the database makes the lab easy to remove and keeps it out of the other content databases, it does not narrow the scan.
 
 ## Add a scenario
 

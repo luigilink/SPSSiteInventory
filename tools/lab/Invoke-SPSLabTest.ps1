@@ -12,17 +12,23 @@
 
     1. Provision: writes the lab settings from the example configuration of the toolkit being
        tested, then creates one small site collection per scenario, named
-       <web application>/sites/<prefix>-<scenario>, and marks it as a lab site.
+       <web application>/sites/<prefix>-<scenario>, and marks it as a lab site. The site
+       collections go in a content database of their own, <prefix>_Content, that the script
+       creates (the farm account needs the right to create a database). When it cannot, it says
+       why and they go in the content database of the web application, as before.
     2. Inventory: runs Invoke-SPSSiteInventory.ps1 of the toolkit with the lab settings, after
        printing the settings file and the report folder that it uses. The whole web application
        is scanned, so use a lab web application.
     3. Verify: checks the reports against what each scenario must produce and prints PASS, FAIL,
        INFO or SKIP for every check, with the assessment status of every lab site. The exit code is
        1 when a check fails.
-    4. Remove: removes the lab site collections, and only those (the name prefix and the marker are
-       both required). With -Action All, it runs only when -Cleanup is given, and then it runs even
-       when an earlier step failed. A manifest in the work folder is used only if it is the one of
-       the web application (and of the prefix, when it is given) that is asked for.
+    4. Remove: removes the lab. When the lab has a content database of its own, and that database holds
+       nothing but the lab site collections, it removes the database (Remove-SPContentDatabase deletes
+       it from SQL Server), which takes the site collections with it. Otherwise it removes the lab site
+       collections one by one, and only those (the name prefix and the marker are both required). With
+       -Action All, it runs only when -Cleanup is given, and then it runs even when an earlier step
+       failed. A manifest in the work folder is used only if it is the one of the web application (and of
+       the prefix, when it is given) that is asked for.
 
     The scenarios are listed in the wiki page "Lab testing" and by Get-SPSLabScenario. Everything
     the script writes goes to -WorkFolder: the lab settings, the manifest and the reports.
@@ -49,6 +55,13 @@
     .PARAMETER Scenario
     The scenarios to build and check. Defaults to all of them. Remove removes every site collection
     of the manifest, whatever the scenario.
+
+    .PARAMETER ContentDatabaseName
+    The name of the content database of the lab. It must start with <prefix>_. Defaults to
+    <prefix>_Content.
+
+    .PARAMETER NoContentDatabase
+    Keeps the lab in the content database of the web application, without creating a database.
 
     .PARAMETER Cleanup
     With -Action All, removes the lab site collections at the end.
@@ -104,6 +117,15 @@ param
     $Scenario,
 
     [Parameter()]
+    [ValidatePattern('^[A-Za-z][A-Za-z0-9_]{2,100}$')]
+    [System.String]
+    $ContentDatabaseName,
+
+    [Parameter()]
+    [switch]
+    $NoContentDatabase,
+
+    [Parameter()]
     [switch]
     $Cleanup,
 
@@ -157,7 +179,14 @@ try {
     if ($runProvision) {
         Write-Host ''
         Write-Host '== Provision ==' -ForegroundColor Cyan
-        $manifest = New-SPSLabFixture -WebApplicationUrl $WebApplicationUrl -ManifestPath $manifestPath -Prefix $Prefix -Owner $Owner -Scenario $Scenario @preview @confirm
+        $database = @{}
+        if ($PSBoundParameters.ContainsKey('ContentDatabaseName')) {
+            $database['ContentDatabaseName'] = $ContentDatabaseName
+        }
+        if ($NoContentDatabase) {
+            $database['NoContentDatabase'] = $true
+        }
+        $manifest = New-SPSLabFixture -WebApplicationUrl $WebApplicationUrl -ManifestPath $manifestPath -Prefix $Prefix -Owner $Owner -Scenario $Scenario @database @preview @confirm
         $manifest.Scenario | Format-Table -Property Name, Status, Detail -AutoSize | Out-String -Width 200 | Write-Host
         Write-Host ('Manifest: {0}' -f $manifestPath) -ForegroundColor Cyan
     }

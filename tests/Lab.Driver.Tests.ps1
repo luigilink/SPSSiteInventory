@@ -139,7 +139,10 @@ function New-SPSLabSettings {
 }
 function New-SPSLabFixture {
     [CmdletBinding(SupportsShouldProcess = $true)]
-    param ($WebApplicationUrl, $ManifestPath, $Prefix, $Owner, $Scenario)
+    param ($WebApplicationUrl, $ManifestPath, $Prefix, $Owner, $Scenario, $ContentDatabaseName, [switch]$NoContentDatabase)
+    if ($PSBoundParameters.ContainsKey('ContentDatabaseName') -or $NoContentDatabase) {
+        Add-Content -LiteralPath $env:SPSLAB_LOG -WhatIf:$false -Value ('database name={0} none={1}' -f $ContentDatabaseName, [bool]$NoContentDatabase)
+    }
     Add-Content -LiteralPath $env:SPSLAB_LOG -WhatIf:$false -Value ('fixture whatif={0} confirm={1} scenario={2} prefix={3} whatifbound={4}' -f [bool]$WhatIfPreference, $ConfirmPreference, ($Scenario -join ','), $Prefix, $PSBoundParameters.ContainsKey('WhatIf'))
     if ($env:SPSLAB_FAIL -match 'fixture') { throw 'The fixture failed.' }
     if (-not $WhatIfPreference) {
@@ -205,6 +208,24 @@ function Remove-SPSLabFixture {
 
         $run.ExitCode | Should -Be 0
         @($run.Call | ForEach-Object { ($_ -split ' ')[0] }) | Should -Be @('settings', 'fixture', 'inventory', 'verify')
+    }
+
+    It 'passes the content database options on to the provisioning, and only when they are given' {
+        $harness = New-Harness
+
+        $without = Invoke-Steps $harness @('-Action', 'Provision', '-Force')
+        $named = Invoke-Steps (New-Harness) @('-Action', 'Provision', '-Force', '-ContentDatabaseName', 'spslab_Mine')
+        $none = Invoke-Steps (New-Harness) @('-Action', 'Provision', '-Force', '-NoContentDatabase')
+
+        @($without.Call | Where-Object { $_ -like 'database *' }) | Should -HaveCount 0
+        @($named.Call | Where-Object { $_ -like 'database *' }) | Should -Be @('database name=spslab_Mine none=False')
+        @($none.Call | Where-Object { $_ -like 'database *' }) | Should -Be @('database name= none=True')
+    }
+
+    It 'rejects a content database name that is not a name' {
+        $run = Invoke-Steps (New-Harness) @('-Action', 'Provision', '-Force', '-ContentDatabaseName', 'bad name;drop')
+
+        $run.ExitCode | Should -Not -Be 0
     }
 
     It 'removes the lab at the end with -Cleanup' {
