@@ -5,6 +5,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A site collection locked with `NoAccess` is now reported as `NoAccess`, as a blocker. SharePoint
+  refuses to read anything from such a site collection, its lock flags included: they raise
+  "Access to this Web site has been blocked" (0x81020071), which PowerShell turns into `$null`
+  when a property is read the usual way, so the lock was reported as `Unknown`, `HasNoAccessLock`
+  never fired, the `NoAccessSite` alert was never raised and the site collection landed in the
+  Simple category. The flags are read in a way that keeps the error, and that error (or
+  `IsReadLocked`, which still reads on such a site) is taken for the NoAccess lock. A flag that
+  cannot be read for another reason leaves the state `Unknown`, marks the site collection partial
+  and writes a warning. The site collection stays `Partial` because nothing else can be read in
+  it. The lab scenario `lock-noaccess` now has to pass. (#83)
+
 ## [2.0.0] - 2026-10-28
 
 ### Added

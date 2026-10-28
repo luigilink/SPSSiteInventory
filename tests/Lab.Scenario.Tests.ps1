@@ -109,7 +109,7 @@ Describe 'The lab scenarios' {
         (& $script:SourceOf 'subsites') | Should -Match "\`$b\.Webs\.Add\('c'"
     }
 
-    It 'treat the three lock states differently: a NoAccess lock is only informational, the others must be reported as a lock and not as a blocker' {
+    It 'treat the three lock states differently: a NoAccess lock must be reported as a blocker, the others as a lock and not as a blocker' {
         foreach ($state in @('readonly', 'noadditions')) {
             $scenario = $script:Scenario | Where-Object { $_.Name -eq "lock-$state" }
             @($scenario.Expect | Where-Object { $_.Info }).Count | Should -Be 0 -Because $state
@@ -117,7 +117,11 @@ Describe 'The lab scenarios' {
             @($scenario.Expect | Where-Object { $_.Alert -eq 'LockedSite' }).Count | Should -Be 1
         }
         $noAccess = $script:Scenario | Where-Object { $_.Name -eq 'lock-noaccess' }
-        @($noAccess.Expect | Where-Object { -not $_.Info }).Count | Should -Be 0
+        @($noAccess.Expect | Where-Object { $_.Info }).Count | Should -Be 0
+        @($noAccess.Expect | Where-Object { $_.Property -eq 'SiteLockState' }).Value | Should -Be 'NoAccess'
+        @($noAccess.Expect | Where-Object { $_.Property -eq 'IsLockedSite' }).Value | Should -BeTrue
+        @($noAccess.Expect | Where-Object { $_.Property -eq 'HasNoAccessLock' }).Value | Should -BeTrue
+        @($noAccess.Expect | Where-Object { $_.Property -eq 'Category' }).Value | Should -Be 4
         @($noAccess.Expect | Where-Object { $_.Alert -eq 'NoAccessSite' }).Count | Should -Be 1
     }
 

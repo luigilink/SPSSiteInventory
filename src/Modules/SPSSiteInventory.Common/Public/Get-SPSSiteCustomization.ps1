@@ -41,7 +41,12 @@
         NoAccess lock makes the site unreadable, so that the migration tools skip it:
         HasNoAccessLock flags it, and the example configuration treats it as blocking.
         NoAdditions and ReadOnly restrict changes, not reading, and are often a deliberate
-        migration freeze.
+        migration freeze. A NoAccess lock also makes SharePoint refuse to read the lock flags
+        themselves ("Access to this Web site has been blocked"): that error is how the lock is
+        recognized (IsReadLocked, which still reads, says the same), and the rest of the site
+        collection cannot be read either, so its assessment stays Partial. A flag that cannot be
+        read for another reason leaves the state Unknown, marks the site collection partial and
+        writes a warning.
 
         PublishingInfrastructureEnabled, PublishingWebCount, PublishingPageCount and
         PublishingPageLayoutCount describe classic publishing dependencies: the
@@ -377,27 +382,52 @@
     }
 
     try {
-        $readLockedProperty = $Site.PSObject.Properties['ReadLocked']
-        $writeLockedProperty = $Site.PSObject.Properties['WriteLocked']
-        $readOnlyProperty = $Site.PSObject.Properties['ReadOnly']
+        # The flags are read with Get-SPSPropertyValue so that an exception of the getter reaches this
+        # block: PowerShell turns it into $null when the property is read the usual way, and a site
+        # collection whose lock could not be read looked like one with no lock information.
+        $readLocked = $null
+        $isNoAccess = $false
+        try {
+            $readLocked = Get-SPSPropertyValue -InputObject $Site -Name 'ReadLocked'
+            $isNoAccess = $null -ne $readLocked -and [bool]$readLocked
+        }
+        catch {
+            # SharePoint refuses every read of a site collection that is locked with NoAccess, its lock
+            # flags included: they raise "Access to this Web site has been blocked" (0x81020071). That error
+            # is the lock. IsReadLocked still reads on such a site and says the same, whichever error the
+            # flag raised. Any other error is a flag that could not be read: it is reported as such below.
+            $readLockedError = $_
+            $isReadLocked = $false
+            try {
+                $isReadLocked = [bool](Get-SPSPropertyValue -InputObject $Site -Name 'IsReadLocked')
+            }
+            catch {
+                Write-Verbose -Message "IsReadLocked could not be read for site collection '$($Site.Url)': $($_.Exception.Message)"
+            }
+            if (-not ($isReadLocked -or (Test-SPSBlockedAccessException -Exception $readLockedError.Exception))) {
+                throw $readLockedError
+            }
+            $isNoAccess = $true
+        }
 
-        $hasReadLocked = $null -ne $readLockedProperty -and $null -ne $readLockedProperty.Value
-        $hasWriteLocked = $null -ne $writeLockedProperty -and $null -ne $writeLockedProperty.Value
-        $hasReadOnly = $null -ne $readOnlyProperty -and $null -ne $readOnlyProperty.Value
-
-        # From the most to the least restrictive: SharePoint also sets WriteLocked on a read-only site collection.
-        $lockState = 'Unknown'
-        if ($hasReadLocked -and [bool]$Site.ReadLocked) {
+        if ($isNoAccess) {
             $lockState = 'NoAccess'
         }
-        elseif ($hasReadOnly -and [bool]$Site.ReadOnly) {
-            $lockState = 'ReadOnly'
-        }
-        elseif ($hasWriteLocked -and [bool]$Site.WriteLocked) {
-            $lockState = 'NoAdditions'
-        }
-        elseif ($hasReadLocked -and $hasWriteLocked -and $hasReadOnly) {
-            $lockState = 'Unlock'
+        else {
+            $writeLocked = Get-SPSPropertyValue -InputObject $Site -Name 'WriteLocked'
+            $readOnly = Get-SPSPropertyValue -InputObject $Site -Name 'ReadOnly'
+
+            # From the most to the least restrictive: SharePoint also sets WriteLocked on a read-only site collection.
+            $lockState = 'Unknown'
+            if ($null -ne $readOnly -and [bool]$readOnly) {
+                $lockState = 'ReadOnly'
+            }
+            elseif ($null -ne $writeLocked -and [bool]$writeLocked) {
+                $lockState = 'NoAdditions'
+            }
+            elseif ($null -ne $readLocked -and $null -ne $writeLocked -and $null -ne $readOnly) {
+                $lockState = 'Unlock'
+            }
         }
 
         $signals.SiteLockState = $lockState

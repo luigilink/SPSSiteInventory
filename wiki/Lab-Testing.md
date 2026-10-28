@@ -69,7 +69,7 @@ Each scenario is a site collection built to trigger known signals, and what the 
 | `subsites` | Five subsites, three levels deep: a, a/b, a/b/c, d and e. | `SubsiteCount = 5`; `MaxSubsiteDepth = 3`; `SubWebCount = 6`; `SubsiteExamples like "a/b/c (level 3)*"`; alert `Subsites` |
 | `lock-readonly` | A ReadOnly lock: the site is reported as locked but not as a blocker. | `SiteLockState = "ReadOnly"`; `IsLockedSite = true`; `HasNoAccessLock = false`; alert `LockedSite` |
 | `lock-noadditions` | A NoAdditions lock: the site is reported as locked but not as a blocker. | `SiteLockState = "NoAdditions"`; `IsLockedSite = true`; `HasNoAccessLock = false`; alert `LockedSite` |
-| `lock-noaccess` | A NoAccess lock. The site cannot be read, so what the inventory does with it is informational: look at its assessment status. | `SiteLockState = "NoAccess"` (info); `IsLockedSite = true` (info); `HasNoAccessLock = true` (info); alert `NoAccessSite` (info) |
+| `lock-noaccess` | A NoAccess lock. The site cannot be read, so its assessment stays partial, but the lock must be recognized and reported as a blocker. | `SiteLockState = "NoAccess"`; `IsLockedSite = true`; `HasNoAccessLock = true`; `Category = 4`; alert `NoAccessSite` |
 | `large-content` | A list above the large-list threshold with a view that has a high row limit, a document with several versions and a checked-out document. | `LargeListCount >= 1`; `LargeListViewCount >= 1`; `CheckedOutFileCount >= 1`; `FileVersionCount >= 1`; alert `LargeLists`; alert `LargeListViews`; alert `CheckedOutFiles`; alert `FileVersions` |
 | `permissions` | A custom permission level. | `CustomPermissionLevelCount >= 1`; alert `CustomPermissionLevels` |
 | `alerts` | Two SharePoint alerts ("Alert Me" subscriptions) of the owner of the site on a list. | `SharePointAlertCount >= 2`; alert `AlertSubscriptions` |
@@ -91,7 +91,7 @@ Notes:
 - `EventReceivers` and `CustomMasterPage` are columns of the inventory, so the lab reads them there, not in the `Reasons` of the score.
 - While it creates the site collections, the script prints one line before each (`[3/18] Creating https://lab.contoso.local/sites/spslab-lock-readonly ...`) and one after it with the result and the seconds it took (`[3/18] Created in 41 s`, `Skipped in 3 s: <reason>` or `Failed in 3 s: <message>`). `Remove` prints the same for each site collection it removes. With `-WhatIf` they print nothing.
 - Before the inventory starts, the script prints the settings file and the report folder that it uses, so that you can check that they are the lab ones and not those of another environment.
-- `lock-noaccess` is informational on purpose: a `NoAccess` lock makes the site unreadable, so what the inventory does with it is something to look at, not to assert.
+- `lock-noaccess` is a site that cannot be read, so its **assessment stays partial** and the `Assessment` line of the report says `INFO` for it. What must pass is the lock itself: SharePoint refuses to read even its lock flags ("Access to this Web site has been blocked"), and the inventory has to recognize that error as the NoAccess lock and report the site as a blocker.
 - When the lab runs as the farm account, the edits of the farm account are those of the System Account, which the inventory ignores for customized pages: run it as another account to see `customized-page` pass.
 
 ## What stays manual

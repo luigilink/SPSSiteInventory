@@ -303,13 +303,16 @@ function Get-SPSLabScenario {
         $lockState = $state
         $isNoAccess = ($state -eq 'NoAccess')
         $expectation = @(
-            (Get-SPSLabExpectation SiteLockState eq $lockState -Info:$isNoAccess)
-            (Get-SPSLabExpectation IsLockedSite eq $true -Info:$isNoAccess)
-            (Get-SPSLabExpectation HasNoAccessLock eq $isNoAccess -Info:$isNoAccess)
-            (Get-SPSLabExpectation -Alert $(if ($isNoAccess) { 'NoAccessSite' } else { 'LockedSite' }) -Info:$isNoAccess)
+            (Get-SPSLabExpectation SiteLockState eq $lockState)
+            (Get-SPSLabExpectation IsLockedSite eq $true)
+            (Get-SPSLabExpectation HasNoAccessLock eq $isNoAccess)
+            (Get-SPSLabExpectation -Alert $(if ($isNoAccess) { 'NoAccessSite' } else { 'LockedSite' }))
         )
+        if ($isNoAccess) {
+            $expectation += (Get-SPSLabExpectation Category eq 4)
+        }
         $description = if ($isNoAccess) {
-            'A NoAccess lock. The site cannot be read, so what the inventory does with it is informational: look at its assessment status.'
+            'A NoAccess lock. The site cannot be read, so its assessment stays partial, but the lock must be recognized and reported as a blocker.'
         }
         else {
             "A $state lock: the site is reported as locked but not as a blocker."
