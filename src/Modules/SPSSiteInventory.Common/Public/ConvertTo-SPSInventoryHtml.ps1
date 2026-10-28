@@ -16,6 +16,12 @@
         headings (rgb(31, 56, 100)) and a summary box that breaks the estate down by
         migration-complexity category (1 Simple to 4 Blocking).
 
+        The report is made to be read: the inventory table has one compact row per site
+        collection, worst first, and opening a row shows the context of the site collection,
+        the signals it raises and its assessment warnings. The content types and the other
+        large detail tables are summarized or limited (see MaxDetailRow), because the CSV and
+        JSON files hold every row and every column.
+
         Every field value is HTML-encoded, so URLs, titles and reasons cannot break the
         markup.
 
@@ -77,6 +83,13 @@
 
         .PARAMETER ExcludedSiteMasterCount
         Number of site masters that the scan left out. When above 0, the summary box says so.
+
+        .PARAMETER MaxDetailRow
+        Maximum number of rows that each detail table shows (farm solutions, sites bound to
+        full-trust code, managed metadata lists, external lists and BCS applications). A table
+        with more rows says how many are not shown and which files hold all of them. Defaults
+        to 200. The content types are never listed in the report: it shows a summary, and the
+        CSV and JSON files hold every row.
 
         .EXAMPLE
         $html = ConvertTo-SPSInventoryHtml -InputObject $scored -EnvName 'PROD'
@@ -147,7 +160,12 @@
 
         [Parameter()]
         [System.Int32]
-        $ExcludedSiteMasterCount = 0
+        $ExcludedSiteMasterCount = 0,
+
+        [Parameter()]
+        [ValidateRange(1, 100000)]
+        [System.Int32]
+        $MaxDetailRow = 200
     )
 
     # Category metadata: name and accent colour for each complexity level. A plain
@@ -371,6 +389,42 @@ td.reasons { max-width: 340px; color: var(--muted); }
 .card.plain { border-top-color: var(--brand); } .card.plain .num { color: var(--brand); }
 td.muted, .muted { color: var(--muted); }
 .footer { color: var(--muted); font-size: 12px; margin-top: 18px; text-align: center; }
+.toolbar { margin: 8px 0 12px; display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.toolbar .filters { margin: 0; }
+.toolbar input[type="search"] {
+    font: inherit;
+    padding: 5px 14px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: #fff;
+    min-width: 260px;
+}
+.toolbar .count { margin-left: auto; color: var(--muted); font-size: 13px; }
+#inv thead th.tgl { cursor: default; width: 30px; }
+#inv td.tgl { width: 30px; padding-right: 0; }
+.toggle { font: inherit; font-size: 16px; line-height: 1; border: 0; background: none; cursor: pointer; color: var(--brand); padding: 3px 8px; border-radius: 4px; }
+.toggle::before { content: "\25B8"; display: inline-block; }
+.toggle:hover { background: var(--brand-soft); }
+tbody.open .toggle::before { transform: rotate(90deg); }
+.site-cell { min-width: 240px; max-width: 380px; }
+.site-title { font-weight: 600; overflow-wrap: anywhere; }
+.site-url { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+td.tpl { white-space: nowrap; }
+.clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+tr.detail { display: none; }
+tbody.open tr.detail { display: table-row; }
+tr.detail td { background: #f8f9fb; padding: 6px 10px 14px; }
+.ctx { color: var(--muted); font-size: 12.5px; margin: 0 0 8px; }
+.ctx strong { color: var(--text); font-weight: 600; }
+dl.signals { display: grid; grid-template-columns: max-content 1fr; gap: 3px 18px; margin: 0 0 8px; }
+dl.signals dt { font-weight: 600; }
+dl.signals dd { margin: 0; overflow-wrap: anywhere; }
+.sig-value { font-weight: 600; color: var(--brand); }
+.sig-detail { color: var(--muted); }
+.note { border-left: 3px solid var(--border); padding: 2px 10px; margin: 6px 0; font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+.note strong { color: var(--text); }
+.note.warn { border-left-color: var(--cat2); }
+@media print { tr.detail { display: table-row; } .toolbar { display: none; } }
 </style>
 '@
 
@@ -527,6 +581,172 @@ td.muted, .muted { color: var(--muted); }
         [void]$sb.AppendLine('</div>')
     }
 
+    # Inventory table: one compact row per site collection, worst first. Opening a row shows the
+    # context of the site collection, the signals it raises and its assessment warnings, so the page
+    # stays readable on a large farm. The CSV and JSON files keep every column.
+    $inventoryRecords = @($records | Sort-Object -Property `
+        @{ Expression = { $sortCategory = 0; if ($null -ne $_.Category) { $sortCategory = [int]$_.Category }; if ($sortCategory -eq 0) { 5 } else { $sortCategory } }; Descending = $true },
+        @{ Expression = { try { [double]$_.Score } catch { 0.0 } }; Descending = $true },
+        @{ Expression = { [string]$_.Url } })
+    $notAssessedCount = @($inventoryRecords | Where-Object { $null -eq $_.Category -or [int]$_.Category -eq 0 }).Count
+    # The blocking reasons answer "why is this site blocking?", so the compact row shows them first.
+    $orderReasons = {
+        param([System.String]$Reasons)
+        if ($Reasons -notmatch 'blocking: ') { return $Reasons }
+        $parts = @($Reasons -split '; ')
+        return ((@($parts | Where-Object { $_ -like 'blocking: *' }) + @($parts | Where-Object { $_ -notlike 'blocking: *' })) -join '; ')
+    }
+    $formatInventoryNumber = {
+        param($Value)
+        if ($null -eq $Value) { return '' }
+        if ($Value -is [double] -or $Value -is [single] -or $Value -is [decimal] -or $Value -is [int] -or $Value -is [long]) {
+            return ([System.IConvertible]$Value).ToString($invariant)
+        }
+        return [string]$Value
+    }
+
+    [void]$sb.AppendLine('<h2 id="inventory-table">Site collections</h2>')
+    [void]$sb.AppendLine('<p>Worst first. Open a row to see the context of the site collection, the signals it raises and its assessment warnings. The CSV and JSON files hold every column.</p>')
+    [void]$sb.AppendLine('<div class="toolbar">')
+    [void]$sb.AppendLine('<input type="search" id="inv-search" placeholder="Search site collections" aria-label="Search site collections">')
+    [void]$sb.AppendLine('<div class="filters">')
+    [void]$sb.AppendLine('<button data-filter="all" class="active">All</button>')
+    foreach ($key in 1..4) {
+        [void]$sb.AppendLine(('<button data-filter="{0}">{1}. {2}</button>' -f $key, $key, $categoryMeta[$key].Name))
+    }
+    if ($notAssessedCount -gt 0) {
+        [void]$sb.AppendLine('<button data-filter="0">Not assessed</button>')
+    }
+    [void]$sb.AppendLine('</div>')
+    [void]$sb.AppendLine(('<span class="count" id="inv-count">{0} of {0} shown</span>' -f $inventoryRecords.Count))
+    [void]$sb.AppendLine('</div>')
+
+    $inventoryColumns = @(
+        @{ Label = 'Site'; Type = 'text'; Class = '' }
+        @{ Label = 'Category'; Type = 'num'; Class = '' }
+        @{ Label = 'Score'; Type = 'num'; Class = 'num' }
+        @{ Label = 'Wave'; Type = 'num'; Class = 'num' }
+        @{ Label = 'Size (GB)'; Type = 'num'; Class = 'num' }
+        @{ Label = 'Template'; Type = 'text'; Class = '' }
+        @{ Label = 'Last modified'; Type = 'text'; Class = '' }
+        @{ Label = 'Status'; Type = 'text'; Class = '' }
+        @{ Label = 'Reasons'; Type = 'text'; Class = '' }
+    )
+    [void]$sb.AppendLine('<div class="table-scroll">')
+    [void]$sb.AppendLine('<table id="inv">')
+    [void]$sb.AppendLine('<thead><tr>')
+    [void]$sb.AppendLine('<th class="tgl"></th>')
+    foreach ($col in $inventoryColumns) {
+        $thClass = if ($col.Class -eq 'num') { ' class="num"' } else { '' }
+        [void]$sb.AppendLine(('<th{0} data-type="{1}">{2} <span class="arrow"></span></th>' -f $thClass, $col.Type, (ConvertTo-SPSHtmlText -Value $col.Label)))
+    }
+    [void]$sb.AppendLine('</tr></thead>')
+
+    foreach ($record in $inventoryRecords) {
+        $cat = 0
+        if ($null -ne $record.Category) { $cat = [int]$record.Category }
+        $catName = if ($categoryMeta.Contains($cat)) { $categoryMeta[$cat].Name } elseif ($record.CategoryName) { [string]$record.CategoryName } else { '' }
+        $url = [string]$record.Url
+        $title = [string]$record.Title
+        $statusText = [string]$record.AssessmentStatus
+        $warningsText = [string]$record.AssessmentWarnings
+        # The reasons end with the assessment warnings, which have their own box in the details: do not
+        # show them twice. A row that has warnings only, such as a failed web application, shows them.
+        $reasonsText = [string]$record.Reasons
+        if ($warningsText -and $reasonsText.Contains($warningsText)) {
+            $reasonsText = $reasonsText.Replace($warningsText, '').Trim().TrimEnd(';').Trim()
+        }
+        $reasonsCell = if ($reasonsText) { $reasonsText } else { $warningsText }
+
+        $siteCell = if ([string]$record.InventoryScope -eq 'WebApplication') {
+            '<div class="site-title"><span class="pill no">Web application</span></div><div class="site-url">{0}</div>' -f (ConvertTo-SPSHtmlText -Value $url)
+        }
+        elseif ($title -and $title -ne $url) {
+            '<div class="site-title">{0}</div><div class="site-url">{1}</div>' -f (ConvertTo-SPSHtmlText -Value $title), (ConvertTo-SPSHtmlText -Value $url)
+        }
+        else {
+            '<div class="site-title">{0}</div>' -f (ConvertTo-SPSHtmlText -Value $url)
+        }
+        $statusCell = switch ($statusText) {
+            'Partial' { '<span class="pill warn">Partial</span>' }
+            'Failed' { '<span class="pill yes">Failed</span>' }
+            default { '<span class="muted">{0}</span>' -f (ConvertTo-SPSHtmlText -Value $statusText) }
+        }
+        $modified = $record.LastModified
+        if ($modified -is [datetime]) { $modified = $modified.ToString('yyyy-MM-dd') }
+        $waveText = if ($null -ne $record.Wave -and [int]$record.Wave -ne 0) { [string][int]$record.Wave } else { '-' }
+
+        [void]$sb.AppendLine(('<tbody class="site" data-category="{0}">' -f $cat))
+        [void]$sb.AppendLine('<tr class="main">')
+        [void]$sb.AppendLine('<td class="tgl"><button type="button" class="toggle" aria-expanded="false" aria-label="Show the details of this site collection" title="Show details"></button></td>')
+        [void]$sb.AppendLine(('<td class="site-cell" data-sort="{0}">{1}</td>' -f (ConvertTo-SPSHtmlText -Value $url.ToLowerInvariant()), $siteCell))
+        [void]$sb.AppendLine(('<td data-sort="{0}"><span class="badge b{0}">{1}</span></td>' -f $cat, (ConvertTo-SPSHtmlText -Value $catName)))
+        [void]$sb.AppendLine(('<td class="num">{0}</td>' -f (ConvertTo-SPSHtmlText -Value (& $formatInventoryNumber $record.Score))))
+        [void]$sb.AppendLine(('<td class="num">{0}</td>' -f $waveText))
+        [void]$sb.AppendLine(('<td class="num">{0}</td>' -f (ConvertTo-SPSHtmlText -Value (& $formatInventoryNumber $record.SizeGB))))
+        [void]$sb.AppendLine(('<td class="tpl">{0}</td>' -f (ConvertTo-SPSHtmlText -Value $record.Template)))
+        [void]$sb.AppendLine(('<td>{0}</td>' -f (ConvertTo-SPSHtmlText -Value $modified)))
+        [void]$sb.AppendLine(('<td>{0}</td>' -f $statusCell))
+        [void]$sb.AppendLine(('<td class="reasons"><div class="clamp">{0}</div></td>' -f (ConvertTo-SPSHtmlText -Value (& $orderReasons $reasonsCell))))
+        [void]$sb.AppendLine('</tr>')
+
+        $contextParts = [System.Collections.Generic.List[string]]::new()
+        $webApplicationName = if ($record.WebApp) { [string]$record.WebApp } else { [string]$record.WebAppUrl }
+        $templateLanguage = if ($record.TemplateLanguageTag) { [string]$record.TemplateLanguageTag } else { [string]$record.TemplateLanguageName }
+        $webCount = if ($null -ne $record.SubWebCount) { [string]$record.SubWebCount } else { '' }
+        foreach ($item in @(
+                @{ Label = 'Web application'; Value = $webApplicationName }
+                @{ Label = 'Content database'; Value = [string]$record.ContentDb }
+                @{ Label = 'Authentication'; Value = [string]$record.AuthenticationModes }
+                @{ Label = 'Template language'; Value = $templateLanguage }
+                @{ Label = 'Webs'; Value = $webCount }
+            )) {
+            if (-not [string]::IsNullOrWhiteSpace($item.Value)) {
+                $contextParts.Add(('{0} <strong>{1}</strong>' -f $item.Label, (ConvertTo-SPSHtmlText -Value $item.Value)))
+            }
+        }
+        $contentTypeCount = ConvertTo-SPSSignalNumber -Value $record.ContentTypeCount
+        $contentTypeBindingCount = ConvertTo-SPSSignalNumber -Value $record.ListContentTypeBindingCount
+        if ($contentTypeCount -gt 0 -or $contentTypeBindingCount -gt 0) {
+            $contextParts.Add(('Content types <strong>{0}</strong> definition(s), <strong>{1}</strong> list binding(s)' -f $contentTypeCount.ToString($invariant), $contentTypeBindingCount.ToString($invariant)))
+        }
+
+        $detail = [System.Text.StringBuilder]::new()
+        if ($contextParts.Count -gt 0) {
+            [void]$detail.Append(('<div class="ctx">{0}</div>' -f ($contextParts -join ' &middot; ')))
+        }
+        $signals = @(Get-SPSInventorySiteSignal -Record $record)
+        if ($signals.Count -gt 0) {
+            [void]$detail.Append('<dl class="signals">')
+            foreach ($signal in $signals) {
+                $valueHtml = if ($signal.Value) { '<span class="sig-value">{0}</span>' -f (ConvertTo-SPSHtmlText -Value $signal.Value) } else { '' }
+                $detailHtml = if ($signal.Detail) { ' <span class="sig-detail">{0}</span>' -f (ConvertTo-SPSHtmlText -Value $signal.Detail) } else { '' }
+                [void]$detail.Append(('<dt>{0}</dt><dd>{1}{2}</dd>' -f (ConvertTo-SPSHtmlText -Value $signal.Label), $valueHtml, $detailHtml))
+            }
+            [void]$detail.Append('</dl>')
+        }
+        elseif ($statusText -ne 'Failed') {
+            [void]$detail.Append('<p class="muted">No signal raised.</p>')
+        }
+        if ($warningsText) {
+            [void]$detail.Append(('<div class="note warn"><strong>Assessment warnings</strong> {0}</div>' -f (ConvertTo-SPSHtmlText -Value $warningsText)))
+        }
+        if ($reasonsText) {
+            [void]$detail.Append(('<div class="note"><strong>Reasons</strong> {0}</div>' -f (ConvertTo-SPSHtmlText -Value $reasonsText)))
+        }
+        [void]$sb.AppendLine(('<tr class="detail"><td></td><td colspan="9">{0}</td></tr>' -f $detail.ToString()))
+        [void]$sb.AppendLine('</tbody>')
+    }
+
+    [void]$sb.AppendLine('</table>')
+    [void]$sb.AppendLine('</div>')
+
+    $limitNote = {
+        param([System.Int32]$Total, [System.String]$Files)
+        if ($Total -le $MaxDetailRow) { return '' }
+        return ('<p class="muted">Showing the first {0} of {1} rows. {2} hold all the rows.</p>' -f $MaxDetailRow, $Total, $Files)
+    }
+
     # Farm solutions (WSP) section.
     if ($solutions.Count -gt 0) {
         $solTotal = $solutions.Count
@@ -549,7 +769,7 @@ td.muted, .muted { color: var(--muted); }
         [void]$sb.AppendLine('<table class="solutions">')
         [void]$sb.AppendLine('<thead><tr><th>Solution (WSP)</th><th>Deployed</th><th>Custom</th><th>Full-trust code</th><th>CAS policy</th><th>Web-app resource</th><th class="num">Features</th><th>Scopes</th></tr></thead>')
         [void]$sb.AppendLine('<tbody>')
-        foreach ($solution in ($solutions | Sort-Object -Property @{ E = { [bool]$_.IsFullTrustCode }; Descending = $true }, @{ E = { [bool]$_.IsCustom }; Descending = $true }, @{ E = { [string]$_.SolutionName } })) {
+        foreach ($solution in @($solutions | Sort-Object -Property @{ E = { [bool]$_.IsFullTrustCode }; Descending = $true }, @{ E = { [bool]$_.IsCustom }; Descending = $true }, @{ E = { [string]$_.SolutionName } } | Select-Object -First $MaxDetailRow)) {
             $deployed = if ($solution.DeploymentState) { [string]$solution.DeploymentState } elseif ($solution.Deployed) { 'Deployed' } else { 'NotDeployed' }
             $scopes = (@($solution.FeatureScopes) -join '; ')
             $featureCount = if ($null -ne $solution.FeatureCount) { [int]$solution.FeatureCount } else { 0 }
@@ -566,6 +786,7 @@ td.muted, .muted { color: var(--muted); }
         [void]$sb.AppendLine('</tbody>')
         [void]$sb.AppendLine('</table>')
         [void]$sb.AppendLine('</div>')
+        [void]$sb.AppendLine((& $limitNote $solutions.Count 'The farm solutions CSV and JSON files'))
 
         # Sites bound to full-trust code: link the farm-level finding to the affected
         # sites so a reader can jump from "there is custom full-trust code" to "these are
@@ -577,7 +798,7 @@ td.muted, .muted { color: var(--muted); }
             [void]$sb.AppendLine('<table class="fulltrust">')
             [void]$sb.AppendLine('<thead><tr><th>Site</th><th>Full-trust code</th><th>Category</th><th class="num">Wave</th><th>Reasons</th></tr></thead>')
             [void]$sb.AppendLine('<tbody>')
-            foreach ($site in $fullTrustSites) {
+            foreach ($site in @($fullTrustSites | Select-Object -First $MaxDetailRow)) {
                 $cat = if ($null -ne $site.Category) { [int]$site.Category } else { 0 }
                 $catName = if ($categoryMeta.Contains($cat)) { $categoryMeta[$cat].Name } elseif ($site.CategoryName) { [string]$site.CategoryName } else { '' }
                 $waveLabel = if ($null -ne $site.Wave) { [string]$site.Wave } else { '' }
@@ -592,6 +813,7 @@ td.muted, .muted { color: var(--muted); }
             [void]$sb.AppendLine('</tbody>')
             [void]$sb.AppendLine('</table>')
             [void]$sb.AppendLine('</div>')
+            [void]$sb.AppendLine((& $limitNote $fullTrustSites.Count 'The main CSV and JSON files'))
         }
     }
 
@@ -640,45 +862,18 @@ td.muted, .muted { color: var(--muted); }
 
     if ($hasContentTypeSection) {
         $partialSites = @($siteRecords | Where-Object { $_.ContentTypeInventoryComplete -eq $false })
+        $webDefinitionCount = @($ContentTypes | Where-Object { [string]$_.Scope -eq 'Web' }).Count
+        $listBindingCount = @($ContentTypes | Where-Object { [string]$_.Scope -eq 'List' }).Count
+        $contentTypeSiteCount = @($ContentTypes | ForEach-Object { [string]$_.SiteUrl } | Sort-Object -Unique).Count
         [void]$sb.AppendLine('<h2 id="content-types">Content types and list bindings</h2>')
-        [void]$sb.AppendLine(('<p><strong>{0}</strong> definition/binding row(s). Standard types are included; presence alone is not a migration blocker. List bindings are not item counts or distinct business designs.</p>' -f $ContentTypes.Count))
+        [void]$sb.AppendLine(('<p><strong>{0}</strong> definition/binding row(s): <strong>{1}</strong> web definition(s) and <strong>{2}</strong> list binding(s), in <strong>{3}</strong> site collection(s). Standard types are included; presence alone is not a migration blocker. List bindings are not item counts or distinct business designs.</p>' -f $ContentTypes.Count, $webDefinitionCount, $listBindingCount, $contentTypeSiteCount))
+        [void]$sb.AppendLine('<p class="muted">The rows are not listed here, because there are too many to read in a page: the content types CSV and JSON files hold every one of them, with the IDs, parent IDs, fields and document templates. The number of content types and bindings of each site collection is in its row of the inventory table.</p>')
         if ($enumerationFailureCount -gt 0) {
             [void]$sb.AppendLine(('<p><strong>Coverage warning:</strong> {0} web application(s) had site collection enumeration failures; content-type results do not cover those scopes.</p>' -f $enumerationFailureCount))
         }
         if ($partialSites.Count -gt 0) {
             [void]$sb.AppendLine(('<p><strong>Partial collection:</strong> {0} site collection(s). Counts are lower bounds; consult ContentTypeInventoryComplete and the run warnings.</p>' -f $partialSites.Count))
         }
-        [void]$sb.AppendLine('<div class="table-scroll"><table class="contenttypes">')
-        $contentTypeColumns = @(
-            @{ Key = 'SiteUrl'; Label = 'Site' }
-            @{ Key = 'WebUrl'; Label = 'Web' }
-            @{ Key = 'Scope'; Label = 'Scope' }
-            @{ Key = 'ListTitle'; Label = 'List' }
-            @{ Key = 'ListUrl'; Label = 'List URL' }
-            @{ Key = 'Name'; Label = 'Content type' }
-            @{ Key = 'ContentTypeId'; Label = 'ID' }
-            @{ Key = 'ParentContentTypeId'; Label = 'Parent ID' }
-            @{ Key = 'Group'; Label = 'Group' }
-            @{ Key = 'FieldCount'; Label = 'Fields' }
-            @{ Key = 'FieldTypes'; Label = 'Field types' }
-            @{ Key = 'DocumentTemplateUrl'; Label = 'Document template' }
-            @{ Key = 'Hidden'; Label = 'Hidden' }
-            @{ Key = 'ReadOnly'; Label = 'Read only' }
-            @{ Key = 'Sealed'; Label = 'Sealed' }
-        )
-        [void]$sb.AppendLine('<thead><tr>')
-        foreach ($column in $contentTypeColumns) {
-            [void]$sb.AppendLine(('<th>{0}</th>' -f $column.Label))
-        }
-        [void]$sb.AppendLine('</tr></thead><tbody>')
-        foreach ($contentType in $ContentTypes) {
-            [void]$sb.AppendLine('<tr>')
-            foreach ($column in $contentTypeColumns) {
-                [void]$sb.AppendLine(('<td>{0}</td>' -f (ConvertTo-SPSHtmlText -Value $contentType.($column.Key))))
-            }
-            [void]$sb.AppendLine('</tr>')
-        }
-        [void]$sb.AppendLine('</tbody></table></div>')
     }
 
     if ($hasManagedMetadataSection) {
@@ -710,7 +905,7 @@ td.muted, .muted { color: var(--muted); }
             [void]$sb.AppendLine(('<th>{0}</th>' -f $column.Label))
         }
         [void]$sb.AppendLine('</tr></thead><tbody>')
-        foreach ($managedMetadataList in $ManagedMetadataLists) {
+        foreach ($managedMetadataList in @($ManagedMetadataLists | Select-Object -First $MaxDetailRow)) {
             [void]$sb.AppendLine('<tr>')
             foreach ($column in $managedMetadataColumns) {
                 [void]$sb.AppendLine(('<td>{0}</td>' -f (ConvertTo-SPSHtmlText -Value $managedMetadataList.($column.Key))))
@@ -718,6 +913,7 @@ td.muted, .muted { color: var(--muted); }
             [void]$sb.AppendLine('</tr>')
         }
         [void]$sb.AppendLine('</tbody></table></div>')
+        [void]$sb.AppendLine((& $limitNote $ManagedMetadataLists.Count 'The managed metadata CSV and JSON files'))
     }
 
     if ($hasExternalListSection) {
@@ -745,7 +941,7 @@ td.muted, .muted { color: var(--muted); }
             [void]$sb.AppendLine(('<th>{0}</th>' -f $column.Label))
         }
         [void]$sb.AppendLine('</tr></thead><tbody>')
-        foreach ($externalList in $ExternalLists) {
+        foreach ($externalList in @($ExternalLists | Select-Object -First $MaxDetailRow)) {
             [void]$sb.AppendLine('<tr>')
             foreach ($column in $externalListColumns) {
                 [void]$sb.AppendLine(('<td>{0}</td>' -f (ConvertTo-SPSHtmlText -Value $externalList.($column.Key))))
@@ -753,6 +949,7 @@ td.muted, .muted { color: var(--muted); }
             [void]$sb.AppendLine('</tr>')
         }
         [void]$sb.AppendLine('</tbody></table></div>')
+        [void]$sb.AppendLine((& $limitNote $ExternalLists.Count 'The external lists CSV and JSON files'))
     }
 
     if ($hasBcsSection) {
@@ -776,7 +973,7 @@ td.muted, .muted { color: var(--muted); }
             [void]$sb.AppendLine(('<th>{0}</th>' -f $column.Label))
         }
         [void]$sb.AppendLine('</tr></thead><tbody>')
-        foreach ($bcsApplication in $BcsApplications) {
+        foreach ($bcsApplication in @($BcsApplications | Select-Object -First $MaxDetailRow)) {
             [void]$sb.AppendLine('<tr>')
             foreach ($column in $bcsColumns) {
                 [void]$sb.AppendLine(('<td>{0}</td>' -f (ConvertTo-SPSHtmlText -Value $bcsApplication.($column.Key))))
@@ -784,137 +981,8 @@ td.muted, .muted { color: var(--muted); }
             [void]$sb.AppendLine('</tr>')
         }
         [void]$sb.AppendLine('</tbody></table></div>')
+        [void]$sb.AppendLine((& $limitNote $BcsApplications.Count 'The BCS CSV and JSON files'))
     }
-
-    # Filter bar.
-    [void]$sb.AppendLine('<div class="filters">')
-    [void]$sb.AppendLine('<button data-filter="all" class="active">All</button>')
-    foreach ($key in 1..4) {
-        [void]$sb.AppendLine(('<button data-filter="{0}">{1}. {2}</button>' -f $key, $key, $categoryMeta[$key].Name))
-    }
-    [void]$sb.AppendLine('</div>')
-
-    # Table.
-    $columns = @(
-        @{ Key = 'InventoryScope'; Label = 'Inventory scope'; Class = ''; Type = 'text' }
-        @{ Key = 'Url'; Label = 'URL'; Class = 'url'; Type = 'text' }
-        @{ Key = 'Title'; Label = 'Title'; Class = ''; Type = 'text' }
-        @{ Key = 'WebApp'; Label = 'Web application'; Class = ''; Type = 'text' }
-        @{ Key = 'ContentDb'; Label = 'Content DB'; Class = ''; Type = 'text' }
-        @{ Key = 'Template'; Label = 'Template'; Class = ''; Type = 'text' }
-        @{ Key = 'TemplateCompatibility'; Label = 'Template compatibility'; Class = ''; Type = 'text' }
-        @{ Key = 'IsUnsupportedSiteTemplate'; Label = 'Unsupported template'; Class = ''; Type = 'text' }
-        @{ Key = 'TemplateCompatibilityReason'; Label = 'Template compatibility reason'; Class = 'reasons'; Type = 'text' }
-        @{ Key = 'TemplateLanguageLcid'; Label = 'Template language LCID'; Class = 'num'; Type = 'num' }
-        @{ Key = 'TemplateLanguageTag'; Label = 'Template language'; Class = ''; Type = 'text' }
-        @{ Key = 'TemplateLanguageReviewRequired'; Label = 'Template language review'; Class = ''; Type = 'text' }
-        @{ Key = 'TemplateLanguageReason'; Label = 'Template language reason'; Class = 'reasons'; Type = 'text' }
-        @{ Key = 'AppInstanceCount'; Label = 'App instances'; Class = 'num'; Type = 'num' }
-        @{ Key = 'AppWebCount'; Label = 'App webs'; Class = 'num'; Type = 'num' }
-        @{ Key = 'AppInstanceExamples'; Label = 'App instance examples'; Class = 'reasons'; Type = 'text' }
-        @{ Key = 'PublishingInfrastructureEnabled'; Label = 'Publishing infrastructure'; Class = ''; Type = 'text' }
-        @{ Key = 'PublishingWebCount'; Label = 'Publishing webs'; Class = 'num'; Type = 'num' }
-        @{ Key = 'PublishingPageCount'; Label = 'Publishing pages'; Class = 'num'; Type = 'num' }
-        @{ Key = 'PublishingPageLayoutCount'; Label = 'Page layouts in use'; Class = 'num'; Type = 'num' }
-        @{ Key = 'PublishingPageLayoutExamples'; Label = 'Page layout examples'; Class = 'reasons'; Type = 'text' }
-        @{ Key = 'CustomizedPageCount'; Label = 'Customized pages'; Class = 'num'; Type = 'num' }
-        @{ Key = 'CustomizedPageExamples'; Label = 'Customized page examples'; Class = 'reasons'; Type = 'text' }
-        @{ Key = 'CustomPermissionLevelCount'; Label = 'Custom permission levels'; Class = 'num'; Type = 'num' }
-        @{ Key = 'CustomPermissionLevelExamples'; Label = 'Custom permission level examples'; Class = 'reasons'; Type = 'text' }
-        @{ Key = 'EmailEnabledListCount'; Label = 'E-mail enabled lists'; Class = 'num'; Type = 'num' }
-        @{ Key = 'EmailEnabledListExamples'; Label = 'E-mail enabled list examples'; Class = 'reasons'; Type = 'text' }
-        @{ Key = 'HtmlFileCount'; Label = 'HTML files'; Class = 'num'; Type = 'num' }
-        @{ Key = 'HtmlFileExamples'; Label = 'HTML file examples'; Class = 'reasons'; Type = 'text' }
-        @{ Key = 'BrowserFileHandling'; Label = 'Browser file handling'; Class = ''; Type = 'text' }
-        @{ Key = 'WebAppPolicyCount'; Label = 'Web application policies'; Class = 'num'; Type = 'num' }
-        @{ Key = 'WebAppPolicyExamples'; Label = 'Web application policy examples'; Class = 'reasons'; Type = 'text' }
-        @{ Key = 'ManagedMetadataListCount'; Label = 'Managed metadata lists'; Class = 'num'; Type = 'num' }
-        @{ Key = 'ManagedMetadataColumnCount'; Label = 'Managed metadata columns'; Class = 'num'; Type = 'num' }
-        @{ Key = 'ManagedMetadataTermSetCount'; Label = 'Term sets in use'; Class = 'num'; Type = 'num' }
-        @{ Key = 'ManagedMetadataExamples'; Label = 'Managed metadata examples'; Class = 'reasons'; Type = 'text' }
-        @{ Key = 'ExternalListCount'; Label = 'External lists'; Class = 'num'; Type = 'num' }
-        @{ Key = 'ExternalListExamples'; Label = 'External list examples'; Class = 'reasons'; Type = 'text' }
-        @{ Key = 'SharePointAlertCount'; Label = 'SharePoint alerts'; Class = 'num'; Type = 'num' }
-        @{ Key = 'SizeGB'; Label = 'Size (GB)'; Class = 'num'; Type = 'num' }
-        @{ Key = 'SubWebCount'; Label = 'Webs'; Class = 'num'; Type = 'num' }
-        @{ Key = 'SubsiteCount'; Label = 'Subsites'; Class = 'num'; Type = 'num' }
-        @{ Key = 'MaxSubsiteDepth'; Label = 'Subsite depth'; Class = 'num'; Type = 'num' }
-        @{ Key = 'SubsiteExamples'; Label = 'Subsite examples'; Class = 'reasons'; Type = 'text' }
-        @{ Key = 'LastModified'; Label = 'Last modified'; Class = ''; Type = 'text' }
-        @{ Key = 'AssessmentStatus'; Label = 'Assessment status'; Class = ''; Type = 'text' }
-        @{ Key = 'SiteInventoryComplete'; Label = 'Site inventory complete'; Class = ''; Type = 'text' }
-        @{ Key = 'CustomizationInventoryComplete'; Label = 'Customization complete'; Class = ''; Type = 'text' }
-        @{ Key = 'AssessmentWarnings'; Label = 'Assessment warnings'; Class = 'reasons'; Type = 'text' }
-        @{ Key = 'AuthenticationModes'; Label = 'Authentication'; Class = ''; Type = 'text' }
-        @{ Key = 'HasFbaZone'; Label = 'FBA configured'; Class = ''; Type = 'text' }
-        @{ Key = 'IsLargeSite'; Label = 'Large site'; Class = ''; Type = 'text' }
-        @{ Key = 'SiteLockState'; Label = 'Site lock state'; Class = ''; Type = 'text' }
-        @{ Key = 'IsLockedSite'; Label = 'Site locked'; Class = ''; Type = 'text' }
-        @{ Key = 'HasNoAccessLock'; Label = 'NoAccess lock'; Class = ''; Type = 'text' }
-        @{ Key = 'IrmEnabledListCount'; Label = 'IRM-enabled lists'; Class = 'num'; Type = 'num' }
-        @{ Key = 'Workflow2010RunningInstanceCount'; Label = 'Running WF 2010'; Class = 'num'; Type = 'num' }
-        @{ Key = 'Workflow2013RunningInstanceCount'; Label = 'Running WF 2013'; Class = 'num'; Type = 'num' }
-        @{ Key = 'LargeListCount'; Label = 'Large lists'; Class = 'num'; Type = 'num' }
-        @{ Key = 'LargeListExamples'; Label = 'Large list examples'; Class = 'reasons'; Type = 'text' }
-        @{ Key = 'LargeListViewCount'; Label = 'Large-list views'; Class = 'num'; Type = 'num' }
-        @{ Key = 'LargeListViewExamples'; Label = 'Large-list view examples'; Class = 'reasons'; Type = 'text' }
-        @{ Key = 'CheckedOutFileCount'; Label = 'Checked-out files'; Class = 'num'; Type = 'num' }
-        @{ Key = 'CheckedOutFileExamples'; Label = 'Checked-out examples'; Class = 'reasons'; Type = 'text' }
-        @{ Key = 'FileVersionCount'; Label = 'High-version files'; Class = 'num'; Type = 'num' }
-        @{ Key = 'FileVersionExamples'; Label = 'High-version examples'; Class = 'reasons'; Type = 'text' }
-        @{ Key = 'ContentTypeCount'; Label = 'Content types (unique web IDs)'; Class = 'num'; Type = 'num' }
-        @{ Key = 'ListContentTypeBindingCount'; Label = 'List content-type bindings'; Class = 'num'; Type = 'num' }
-        @{ Key = 'ContentTypeInventoryComplete'; Label = 'Content types complete'; Class = ''; Type = 'text' }
-        @{ Key = 'UsesCustomFarmFeature'; Label = 'Custom farm feature'; Class = ''; Type = 'text' }
-        @{ Key = 'SandboxSolutions'; Label = 'Sandbox solutions'; Class = 'num'; Type = 'num' }
-        @{ Key = 'CustomMasterPage'; Label = 'Custom master page'; Class = ''; Type = 'text' }
-        @{ Key = 'EventReceivers'; Label = 'Custom event receivers'; Class = 'num'; Type = 'num' }
-        @{ Key = 'UniquePermissionsCount'; Label = 'Unique permission assignments'; Class = 'num'; Type = 'num' }
-        @{ Key = 'Wave'; Label = 'Wave'; Class = 'num'; Type = 'num' }
-        @{ Key = 'Score'; Label = 'Score'; Class = 'num'; Type = 'num' }
-    )
-
-    [void]$sb.AppendLine('<div class="table-scroll" id="inventory-table">')
-    [void]$sb.AppendLine('<table id="inv">')
-    [void]$sb.AppendLine('<thead><tr>')
-    foreach ($col in $columns) {
-        $thClass = if ($col.Class -eq 'num') { ' class="num"' } else { '' }
-        [void]$sb.AppendLine(('<th{0} data-type="{1}">{2} <span class="arrow"></span></th>' -f $thClass, $col.Type, (ConvertTo-SPSHtmlText -Value $col.Label)))
-    }
-    [void]$sb.AppendLine('<th data-type="num">Category <span class="arrow"></span></th>')
-    [void]$sb.AppendLine('<th data-type="text">Reasons <span class="arrow"></span></th>')
-    [void]$sb.AppendLine('</tr></thead>')
-    [void]$sb.AppendLine('<tbody>')
-
-    foreach ($record in $records) {
-        $cat = 0
-        if ($null -ne $record.Category) { $cat = [int]$record.Category }
-        $catName = if ($categoryMeta.Contains($cat)) { $categoryMeta[$cat].Name } elseif ($record.CategoryName) { [string]$record.CategoryName } else { '' }
-
-        [void]$sb.AppendLine(('<tr data-category="{0}">' -f $cat))
-        foreach ($col in $columns) {
-            $raw = $record.$($col.Key)
-            if ($col.Key -eq 'HasFbaZone' -and $null -eq $raw -and
-                $null -ne $record.PSObject.Properties['HasFbaZone']) {
-                $raw = 'Unknown'
-            }
-            elseif ($col.Key -eq 'LastModified' -and $raw -is [datetime]) {
-                $raw = $raw.ToString('yyyy-MM-dd')
-            }
-            elseif ($col.Type -eq 'num' -and ($raw -is [double] -or $raw -is [single] -or $raw -is [decimal] -or $raw -is [int] -or $raw -is [long])) {
-                $raw = ([System.IConvertible]$raw).ToString($invariant)
-            }
-            $tdClass = if ($col.Class) { (' class="{0}"' -f $col.Class) } else { '' }
-            [void]$sb.AppendLine(('<td{0}>{1}</td>' -f $tdClass, (ConvertTo-SPSHtmlText -Value $raw)))
-        }
-        [void]$sb.AppendLine(('<td data-sort="{0}"><span class="badge b{0}">{1}</span></td>' -f $cat, (ConvertTo-SPSHtmlText -Value $catName)))
-        [void]$sb.AppendLine(('<td class="reasons">{0}</td>' -f (ConvertTo-SPSHtmlText -Value $record.Reasons)))
-        [void]$sb.AppendLine('</tr>')
-    }
-
-    [void]$sb.AppendLine('</tbody>')
-    [void]$sb.AppendLine('</table>')
-    [void]$sb.AppendLine('</div>')
 
     [void]$sb.AppendLine('<div class="footer">Generated by SPSSiteInventory &middot; read-only inventory &middot; no farm changes</div>')
     [void]$sb.AppendLine('</div>')
@@ -924,10 +992,16 @@ td.muted, .muted { color: var(--muted); }
 (function () {
     var table = document.getElementById('inv');
     if (!table) { return; }
-    var tbody = table.tBodies[0];
+    var sites = Array.prototype.slice.call(table.tBodies);
+    var headers = table.tHead.rows[0].cells;
+    var search = document.getElementById('inv-search');
+    var counter = document.getElementById('inv-count');
+    var buttons = document.querySelectorAll('.filters button');
+    var activeFilter = 'all';
+    var texts = null;
 
-    function cellSortValue(row, index, type) {
-        var cell = row.cells[index];
+    function cellSortValue(site, index, type) {
+        var cell = site.rows[0].cells[index];
         var raw = cell.getAttribute('data-sort');
         if (raw === null) { raw = cell.textContent.trim(); }
         if (type === 'num') {
@@ -937,11 +1011,26 @@ td.muted, .muted { color: var(--muted); }
         return raw.toLowerCase();
     }
 
-    var headers = table.tHead.rows[0].cells;
+    function applyFilters() {
+        var query = search ? search.value.trim().toLowerCase() : '';
+        if (query !== '' && texts === null) {
+            texts = sites.map(function (site) { return site.textContent.toLowerCase(); });
+        }
+        var shown = 0;
+        for (var i = 0; i < sites.length; i++) {
+            var visible = (activeFilter === 'all' || sites[i].getAttribute('data-category') === activeFilter) &&
+                (query === '' || texts[i].indexOf(query) !== -1);
+            sites[i].hidden = !visible;
+            if (visible) { shown++; }
+        }
+        if (counter) { counter.textContent = shown + ' of ' + sites.length + ' shown'; }
+    }
+
     for (var i = 0; i < headers.length; i++) {
         (function (index) {
             var th = headers[index];
-            var type = th.getAttribute('data-type') || 'text';
+            var type = th.getAttribute('data-type');
+            if (!type) { return; }
             th.addEventListener('click', function () {
                 var asc = th.getAttribute('data-dir') !== 'asc';
                 for (var h = 0; h < headers.length; h++) {
@@ -953,32 +1042,36 @@ td.muted, .muted { color: var(--muted); }
                 var arrow = th.querySelector('.arrow');
                 if (arrow) { arrow.textContent = asc ? '\u25B2' : '\u25BC'; }
 
-                var rows = Array.prototype.slice.call(tbody.rows);
-                rows.sort(function (r1, r2) {
-                    var v1 = cellSortValue(r1, index, type);
-                    var v2 = cellSortValue(r2, index, type);
+                var ordered = sites.slice().sort(function (s1, s2) {
+                    var v1 = cellSortValue(s1, index, type);
+                    var v2 = cellSortValue(s2, index, type);
                     if (v1 < v2) { return asc ? -1 : 1; }
                     if (v1 > v2) { return asc ? 1 : -1; }
                     return 0;
                 });
-                for (var r = 0; r < rows.length; r++) { tbody.appendChild(rows[r]); }
+                for (var r = 0; r < ordered.length; r++) { table.appendChild(ordered[r]); }
             });
         })(i);
     }
 
-    var buttons = document.querySelectorAll('.filters button');
     for (var b = 0; b < buttons.length; b++) {
         buttons[b].addEventListener('click', function () {
-            var filter = this.getAttribute('data-filter');
+            activeFilter = this.getAttribute('data-filter');
             for (var k = 0; k < buttons.length; k++) { buttons[k].classList.remove('active'); }
             this.classList.add('active');
-            var rows = tbody.rows;
-            for (var r = 0; r < rows.length; r++) {
-                var cat = rows[r].getAttribute('data-category');
-                rows[r].style.display = (filter === 'all' || filter === cat) ? '' : 'none';
-            }
+            applyFilters();
         });
     }
+
+    if (search) { search.addEventListener('input', applyFilters); }
+
+    table.addEventListener('click', function (event) {
+        var toggle = event.target.closest ? event.target.closest('.toggle') : null;
+        if (!toggle) { return; }
+        var site = toggle.closest('tbody');
+        var open = site.classList.toggle('open');
+        toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
 })();
 </script>
 '@

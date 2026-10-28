@@ -136,9 +136,11 @@ Describe 'Export-SPSInventoryReport content types' {
         $manifest.Files.LargeContentJson | Should -Be $output.LargeContentJsonPath
         $manifest.Files.ContentTypesJson | Should -Be $output.ContentTypesJsonPath
         $manifest.Summary.AlertCount | Should -BeGreaterThan 0
-        (Get-Content $output.HtmlPath -Raw) | Should -Match 'Legal, &amp; Compliance'
-        (Get-Content $output.HtmlPath -Raw) | Should -Match '/sites/team/legal\?a=1&amp;b=2'
-        (Get-Content $output.HtmlPath -Raw) | Should -Match '(?s)<th>Hidden</th>.*<th>Read only</th>.*<th>Sealed</th>'
+        # The HTML summarizes the content types: the rows are in the CSV and JSON files only.
+        $html = Get-Content $output.HtmlPath -Raw
+        $html | Should -Match '<strong>1</strong> definition/binding row\(s\): <strong>0</strong> web definition\(s\) and <strong>1</strong> list binding\(s\), in <strong>1</strong> site collection\(s\)'
+        $html | Should -Not -Match 'Legal, &amp; Compliance'
+        $html | Should -Not -Match 'class="contenttypes"'
     }
 
     It 'writes a valid empty content-type report instead of dropping the files' {

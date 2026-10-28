@@ -209,6 +209,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`Summary.ExcludedPersonalSites` and `Summary.ExcludedSiteMasters`) say how many were left
   out. (#85)
 
+### Changed
+
+- The HTML report is made to be read, and stays small on a large farm. On the lab farm it was
+  1.5 MB for 27 site collections and 242,000 px tall, and about 150 MB would be expected for
+  3,000 site collections, because 93 % of it was the content type table and the inventory table
+  had 78 columns, which a reader had to scroll across. The inventory table is now right after
+  the wave plan (it was the last element of the page) and has one compact row per site
+  collection: title and URL, category, score, wave, size, template, last modification, status
+  and reasons, worst first. Opening a row shows the context of the site collection, the signals
+  it raises with their count and examples (a signal at zero is not listed), its assessment
+  warnings and its full reasons, and a search box and a count of the site collections shown sit
+  next to the category filters. The content types are summarized (definitions, list bindings,
+  site collections) instead of listed, and the managed metadata, external list, BCS, farm
+  solution and full-trust site tables show at most 200 rows (`-MaxDetailRow` of
+  `ConvertTo-SPSInventoryHtml`), with a line that says where the other rows are. The CSV and JSON
+  files are not changed: they keep every column and every row. (#101)
+
 ### Security
 
 - The CSV reports now neutralize spreadsheet formulas (CSV injection, CWE-1236). Titles of

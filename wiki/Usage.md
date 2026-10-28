@@ -33,7 +33,7 @@ report pack, plus a dedicated farm-solution report, to the output folder:
 | --- | --- |
 | `*.csv` | Site inventory for review in Excel; one row per site collection. |
 | `*.json` | Site inventory for downstream automation (for example feeding migration wave planning). |
-| `*.html` | A shareable, self-contained dashboard report with summary/risk cards, migration wave plan, authentication and a sortable/filterable site table. |
+| `*.html` | A shareable, self-contained report to read: summary and risk indicators, alerts, migration wave plan, a compact table of the site collections (worst first, one row to open for the details) and the detail sections. See [Reading the HTML report](#reading-the-html-report). |
 | `*-manifest-*.json` | Report-pack manifest with generation metadata, top-level counters and file references. |
 | `*-sites-*.json` | Site inventory dataset used by the dashboard/report-pack consumers. |
 | `*-auth-*.json` | Authentication-by-web-application dataset (zone/provider summary + collection counts). |
@@ -101,7 +101,7 @@ OWASP states that no CSV sanitization is safe for every spreadsheet. Two things 
 
 The HTML report also includes configured authentication by web application/zone,
 an alerts section that groups the alerts by type with what to do about each, a content-type
-detail section, a managed metadata section, an external list section and a BCS application
+summary, a managed metadata section, an external list section and a BCS application
 section. Authentication errors stop the scan rather than silently
 producing Windows-only results. Unrecognized/federated providers are flagged for identity
 review; a missing provider identity leaves `HasFbaZone` unknown unless FBA was positively
@@ -198,6 +198,31 @@ Each row in the `*-solutions-*` CSV/JSON describes one farm solution (WSP):
 | `FeatureCount` / `FeatureScopes` / `FeatureIds` | Features the solution registers |
 
 ## Reading the results
+
+### Reading the HTML report
+
+The HTML report is made to be read. The CSV and JSON files keep every column and every row.
+
+- **Summary, risk indicators, alerts and migration waves** come first.
+- **Site collections** is the inventory table, right after the wave plan. Each site collection
+  has one row with its title and URL, category, score, wave, size, template, last modification,
+  status and reasons, **worst first** (not assessed, Blocking, Complex, Moderate, then Simple, by
+  score). The reasons that block a site come first in the row. Open the row (the arrow on its
+  left) to see the context of the site collection (web application, content database,
+  authentication, template language, number of webs, content types), **the signals it raises**
+  with their count and examples, its assessment warnings and its full reasons. A signal that is
+  at zero is not listed. Click a column heading to sort, use the category buttons to filter, and
+  type in the search box to find a site collection by name, URL, template or signal; the count
+  next to them says how many site collections are shown.
+- **Farm solutions, authentication, web application policies, content types, managed
+  metadata, external lists and BCS applications** follow. The managed metadata, external list,
+  BCS, farm solution and full-trust site tables show at most 200 rows and say how many are not
+  shown and which files hold all of them. The content types are not listed in the report,
+  because there are thousands of them: it shows how many definitions and list bindings there
+  are, and the `*-contenttypes-*` files hold every row.
+
+The fields of the web application sections (browser file handling, policies, authentication)
+are shown once per web application in their section, not on every site collection.
 
 ### Content-type detail
 
