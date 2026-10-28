@@ -5,6 +5,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-10-28
+
 ### Added
 
 - Site scans now retain web-application enumeration failures and collector warning
@@ -30,11 +32,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   file is not found, the check now shows a skipped `Comparison with the example` result
   instead of silently leaving the comparison out; the verdict and the exit code do not
   change. (#32, #89)
-- Workflow counts now exclude historical "previous version" workflow associations
-  when SharePoint metadata flags them (with a marker-based fallback for English
-  and French previous-version names when metadata is unavailable), so migration
-  complexity is based on active workflows and does not misclassify qualifiers such
-  as `SLA: 48`. (#31)
 - Site scans now report IRM-enabled lists (`IrmEnabledListCount`) and site lock
   state (`SiteLockState` / `IsLockedSite`) in CSV/JSON/HTML outputs. The example
   scoring configuration treats both as migration blockers; for locks this was later
@@ -46,8 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `HasNoAccessLock` signal replaces `IsLockedSite` in `Scoring.BlockingSignals`; `IsLockedSite` and
   `SiteLockState` still report every lock, and a settings file that lists `IsLockedSite` keeps its
   behavior. The alert follows the state: `NoAccessSite` (`High`) for `NoAccess`, and `LockedSite`
-  (`Medium`) for `NoAdditions` and `ReadOnly`. The HTML report gains a card and a column, and the
-  orchestrator warns when `NoAccess` sites exist and neither signal is listed. (#65)
+  (`Medium`) for `NoAdditions` and `ReadOnly`. The HTML report gains a card and shows the lock in the details of a site
+  collection, and the orchestrator warns when `NoAccess` sites exist and neither signal is listed. (#65)
 - Reporting now emits a modular JSON report pack (`-sites-`, `-auth-`,
   `-workflows-`, `-irm-locks-`, `-alerts-`) with a `-manifest-` file while
   preserving the existing CSV/JSON/HTML outputs. The HTML report now includes
@@ -76,8 +73,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `EventReceivers` (custom receivers only), `CustomMasterPage`, `SandboxSolutions`,
   `UniquePermissionsCount` and `UsesCustomFarmFeature`. They were only visible in the `Reasons`
   text, and not at all when their weight was 0 or missing, so the CSV could not be filtered on
-  them and the HTML report had nothing for them. They are in the CSV, JSON and HTML table, with
-  a summary card for four of them, and the failure rows carry them empty like the other signals.
+  them and the HTML report had nothing for them. They are in the CSV and JSON, and in the
+  details of a site collection in the HTML report, with a summary card for four of them, and the
+  failure rows carry them empty like the other signals.
   Tests keep every signal that the example configuration weights or blocks on a field of the
   record. Their scores and categories are unchanged. (#77)
 - Added SMAT apps parity signals: `AppInstanceCount`, `AppWebCount`, and
@@ -114,8 +112,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   weighted lightly in the example configuration (`SubsiteCount = 0.05`, `MaxSubsiteDepth = 0.25`)
   and are not blocking, and a new `Low` alert, `Subsites`, carries the restructuring guidance
   with its Microsoft Learn reference. A web that cannot be placed below its site collection marks
-  the site partial. The HTML column `Sub-webs`, which counts every web of the site collection,
-  the root web included, is renamed `Webs`. (#33)
+  the site partial. The HTML report calls the number of webs of the site collection, the root web
+  included, `Webs` (it was `Sub-webs`). (#33)
 - Added SMAT managed metadata parity: `ManagedMetadataListCount`,
   `ManagedMetadataColumnCount`, `ManagedMetadataTermSetCount` and `ManagedMetadataExamples`
   (Managed Metadata Columns). A managed metadata column is a visible `TaxonomyFieldType`
@@ -211,6 +209,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Workflow counts now exclude historical "previous version" workflow associations
+  when SharePoint metadata flags them (with a marker-based fallback for English
+  and French previous-version names when metadata is unavailable), so migration
+  complexity is based on active workflows and does not misclassify qualifiers such
+  as `SLA: 48`. The counts can be lower than the ones of 1.1.0. (#31)
+- The example configuration weights the new signals and lists more of them in
+  `Scoring.BlockingSignals`: `HasFbaZone`, `IrmEnabledListCount`,
+  `IsUnsupportedSiteTemplate`, `HasNoAccessLock` and `ExternalListCount`. A configuration
+  copied from this release classifies more sites as Blocking than 1.1.0 did. Settings files
+  are not rewritten: a file written for 1.x keeps working, the new sections
+  (`LargeContentThresholds`, `TemplateParity`, `PermissionLevels`, `SharePointAlerts`, `Scope`)
+  fall back to their defaults, and the run warns when it finds one of these blockers and the
+  file does not list the signal.
+- Personal sites and site masters are no longer inventoried by default, so a run reports fewer
+  site collections than 1.x. Set `Scope.IncludePersonalSites` and `Scope.IncludeSiteMasters` to
+  `$true` to restore the scope of 1.x. (#85)
+- The CSV and JSON exports gain a column for every new signal and for five classic signals that
+  were scored since 1.0.0 but never exported (`EventReceivers`, `CustomMasterPage`,
+  `SandboxSolutions`, `UniquePermissionsCount` and `UsesCustomFarmFeature`), and the run writes
+  more files next to them. Read the files by column name, not by position. The CSV files also put
+  a quote in front of text that starts with a formula character (see Security below).
+- The readiness check (`Test-SPSSiteInventoryReadiness.ps1`) exits with code 1 when a check
+  fails, and returns a summary object only with `-PassThru`: it used to return a small object of
+  its own by default, so a script that reads its result must pass `-PassThru`. (#32)
+- The HTML report calls the number of webs of a site collection, the root web included, `Webs`
+  (it was `Sub-webs`). The new `SubsiteCount` counts the webs below the root web. (#33)
 - The HTML report is made to be read, and stays small on a large farm. On the lab farm it was
   1.5 MB for 27 site collections and 242,000 px tall, and about 150 MB would be expected for
   3,000 site collections, because 93 % of it was the content type table and the inventory table
