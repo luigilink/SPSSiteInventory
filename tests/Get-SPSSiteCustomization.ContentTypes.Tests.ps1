@@ -1458,6 +1458,50 @@ Describe 'Get-SPSSiteCustomization content types' {
         $signals.HasNoAccessLock | Should -BeFalse
     }
 
+    It 'does not report the master page that SharePoint provisions, whatever the template, and reports a master page of its own' -ForEach @(
+        @{ Master = '/_catalogs/masterpage/seattle.master'; Expected = $false }
+        @{ Master = '/_catalogs/masterpage/oslo.master'; Expected = $false }
+        @{ Master = '/_catalogs/masterpage/v4.master'; Expected = $false }
+        @{ Master = '/_catalogs/masterpage/mysite15.master'; Expected = $false }
+        @{ Master = ''; Expected = $false }
+        @{ Master = '/_catalogs/masterpage/lab.master'; Expected = $true }
+        @{ Master = '/_catalogs/masterpage/contoso-v4.master'; Expected = $true }
+    ) {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.CustomMasterUrl = $Master
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            ReadLocked = $false
+            WriteLocked = $false
+            ReadOnly = $false
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site
+
+        $signals.CustomMasterPage | Should -Be $Expected
+    }
+
+    It 'reports a custom master page when only one web of the site collection has one' {
+        $plain = Get-TestWeb -Definitions @() -Bindings @()
+        $plain.CustomMasterUrl = '/_catalogs/masterpage/seattle.master'
+        $branded = Get-TestWeb -Definitions @() -Bindings @()
+        $branded.CustomMasterUrl = '/_catalogs/masterpage/brand.master'
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            ReadLocked = $false
+            WriteLocked = $false
+            ReadOnly = $false
+            AllWebs = @($plain, $branded)
+        }
+
+        (Get-SPSSiteCustomization -Site $site).CustomMasterPage | Should -BeTrue
+    }
+
     It 'does not count lists when IRM is disabled' {
         $web = Get-TestWeb -Definitions @() -Bindings @()
         $site = [PSCustomObject]@{

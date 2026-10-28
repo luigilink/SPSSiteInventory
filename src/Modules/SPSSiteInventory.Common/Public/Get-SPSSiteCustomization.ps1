@@ -1169,8 +1169,7 @@
                     $signals.UniquePermissionsCount += @($web.RoleAssignments).Count
                 }
 
-                $master = [string]$web.CustomMasterUrl
-                if ($master -and $master -notmatch 'seattle\.master|oslo\.master|v4\.master') {
+                if (Test-SPSCustomMasterPage -Url ([string]$web.CustomMasterUrl)) {
                     $signals.CustomMasterPage = $true
                 }
 
