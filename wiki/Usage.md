@@ -126,10 +126,10 @@ CSV/JSON rows describe site collections and any web-application enumeration fail
 | `AuthenticationReviewRequired` | A federated/custom or unidentified provider requires identity review |
 | `ContentDb` | Content database name |
 | `Template` | Root web template (e.g. `STS#3`, `SITEPAGEPUBLISHING#0`) |
-| `TemplateCompatibility` / `TemplateCompatibilityReason` | Baseline SPO template mapping result: `Compatible`, `Unsupported`, or `Review`, with the rule that triggered it |
+| `TemplateCompatibility` / `TemplateCompatibilityReason` | Baseline SPO template mapping result: `Compatible`, `Unsupported`, or `Review`, with the rule that triggered it. `NotCollected` when the template could not be read (the root web raised an error, as that of a `NoAccess` lock does): `Template` is then empty and the site collection is partial |
 | `IsUnsupportedSiteTemplate` | Template is explicitly mapped as unsupported for direct SPO migration |
-| `TemplateLanguageLcid` / `TemplateLanguageTag` / `TemplateLanguageName` | Root-web language metadata used for template-language parity checks |
-| `TemplateLanguageReviewRequired` / `TemplateLanguageReason` | Language metadata is missing/unrecognized or outside configured allow-list and needs review |
+| `TemplateLanguageLcid` / `TemplateLanguageTag` / `TemplateLanguageName` | Root-web language metadata used for template-language parity checks. Empty when the language could not be read |
+| `TemplateLanguageReviewRequired` / `TemplateLanguageReason` | Language metadata is unrecognized or outside configured allow-list and needs review. Empty (not `False`) when the language could not be read: that is not a language to review, the site collection is partial and its warnings say what could not be read |
 | `SizeGB` | Storage used, in GB, to four decimals (about 100 KB), so that small site collections are not all 0 |
 | `SubWebCount` | Number of webs in the site collection, the root web included |
 | `SubsiteCount` / `MaxSubsiteDepth` / `SubsiteExamples` | Webs below the root web (app webs left out), the deepest level of that hierarchy (1 = directly below the root web) and up to five of the deepest subsites as `path (level n)`. SharePoint Online supports subsites, but modern SharePoint favors flat site collections connected by hub sites: weighted lightly, never blocking |
