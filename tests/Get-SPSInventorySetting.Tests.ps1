@@ -122,6 +122,60 @@ Describe 'Get-SPSInventorySetting' {
         { Get-SPSInventorySetting -Path $path } | Should -Throw -ExpectedMessage "*scope-array.psd1*'Scope' section must be a hashtable*"
     }
 
+    It 'accepts a Report section, or no section at all' {
+        $path = Join-Path $TestDrive 'report-valid.psd1'
+        @'
+@{
+    Scoring = @{ Weights = @{}; Thresholds = @{ Moderate = 1.0; Complex = 6.0 }; BlockingSignals = @() }
+    Report = @{ HtmlSplitThreshold = 0; HtmlRowsPerPage = 1000 }
+}
+'@ | Set-Content -Path $path -Encoding UTF8
+
+        $settings = Get-SPSInventorySetting -Path $path
+
+        $settings.Report.HtmlSplitThreshold | Should -Be 0
+        $settings.Report.HtmlRowsPerPage | Should -Be 1000
+        $without = Join-Path $TestDrive 'report-absent.psd1'
+        @'
+@{
+    Scoring = @{ Weights = @{}; Thresholds = @{ Moderate = 1.0; Complex = 6.0 }; BlockingSignals = @() }
+}
+'@ | Set-Content -Path $without -Encoding UTF8
+
+        (Get-SPSInventorySetting -Path $without).ContainsKey('Report') | Should -BeFalse
+    }
+
+    It 'rejects a Report option that is not a whole number in its range, naming the file' -ForEach @(
+        @{ Name = 'HtmlSplitThreshold'; Literal = "'3000'" }
+        @{ Name = 'HtmlSplitThreshold'; Literal = '$true' }
+        @{ Name = 'HtmlSplitThreshold'; Literal = '-1' }
+        @{ Name = 'HtmlRowsPerPage'; Literal = '49' }
+        @{ Name = 'HtmlRowsPerPage'; Literal = '5001' }
+        @{ Name = 'HtmlRowsPerPage'; Literal = '500.5' }
+    ) {
+        $path = Join-Path $TestDrive 'report-invalid.psd1'
+        @"
+@{
+    Scoring = @{ Weights = @{}; Thresholds = @{ Moderate = 1.0; Complex = 6.0 }; BlockingSignals = @() }
+    Report = @{ $Name = $Literal }
+}
+"@ | Set-Content -Path $path -Encoding UTF8
+
+        { Get-SPSInventorySetting -Path $path } | Should -Throw -ExpectedMessage "*report-invalid.psd1*Report.$Name must be a whole number from*"
+    }
+
+    It 'rejects a Report section that is not a hashtable' {
+        $path = Join-Path $TestDrive 'report-array.psd1'
+        @'
+@{
+    Scoring = @{ Weights = @{}; Thresholds = @{ Moderate = 1.0; Complex = 6.0 }; BlockingSignals = @() }
+    Report = @('HtmlSplitThreshold')
+}
+'@ | Set-Content -Path $path -Encoding UTF8
+
+        { Get-SPSInventorySetting -Path $path } | Should -Throw -ExpectedMessage "*report-array.psd1*'Report' section must be a hashtable*"
+    }
+
     It 'throws when the mandatory Scoring section is missing' {
         $path = Join-Path $TestDrive 'no-scoring.psd1'
         "@{ EnvName = 'TEST' }" | Set-Content -Path $path -Encoding UTF8

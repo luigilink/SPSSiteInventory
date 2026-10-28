@@ -36,7 +36,7 @@ report pack, plus a dedicated farm-solution report, to the output folder:
 | --- | --- |
 | `*.csv` | Site inventory for review in Excel; one row per site collection. |
 | `*.json` | Site inventory for downstream automation (for example feeding migration wave planning). |
-| `*.html` | A shareable, self-contained report to read: summary and risk indicators, alerts, migration wave plan, a compact table of the site collections (worst first, one row to open for the details) and the detail sections. See [Reading the HTML report](#reading-the-html-report). |
+| `*.html` | A shareable, self-contained report to read: summary and risk indicators, alerts, migration wave plan, a compact table of the site collections (worst first, one row to open for the details) and the detail sections. A farm with more than 3000 site collections gets an entry page and table pages in the same folder, named after it (`*-sites-<category>-<n>.html`): see [Reading the HTML report](#reading-the-html-report) and the [`Report` section](Configuration#report-section). |
 | `*-manifest-*.json` | Report-pack manifest with the layout version (`ReportPackVersion`), generation metadata, top-level counters and file references. |
 | `*-sites-*.json` | Site inventory dataset used by the dashboard/report-pack consumers. |
 | `*-auth-*.json` | Authentication-by-web-application dataset (zone/provider summary + collection counts). |
@@ -205,6 +205,15 @@ Each row in the `*-solutions-*` CSV/JSON describes one farm solution (WSP):
 ### Reading the HTML report
 
 The HTML report is made to be read. The CSV and JSON files keep every column and every row.
+
+A farm with up to 3000 site collections (the `Report.HtmlSplitThreshold` setting) gets **one file**. A
+larger one gets an **entry page**, which is the file named like the other reports, and **table pages** in
+the same folder: the site collections are on pages of at most 500 of them (`Report.HtmlRowsPerPage`), one
+series per category, worst first. Open the entry page: its *Site collections* section lists the pages, and a
+risk indicator opens the first page that has a site collection that raises it, with the filter on (`#ind=...`
+in the address). That page links to the previous and the next page that have the indicator, and its search,
+sort and details work on the page. Keep the pages together: they link to each other with relative links, so the
+folder can be moved, zipped and sent. The manifest lists the pages in `Files.InventoryHtmlPages`.
 
 - **Summary, risk indicators, alerts and migration waves** come first.
   - The **risk indicators** are a ranked list: each signal that at least one site collection

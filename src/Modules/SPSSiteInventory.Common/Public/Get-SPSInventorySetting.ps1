@@ -10,7 +10,8 @@
         not run with an incomplete configuration. The optional SharePointAlerts section is
         validated too: it must be a hashtable and IncludeUserLogin must be $true or $false.
         So is the optional Scope section: IncludePersonalSites and IncludeSiteMasters must
-        be $true or $false.
+        be $true or $false. And the optional Report section: HtmlSplitThreshold must be a
+        whole number from 0 to 10000000 and HtmlRowsPerPage one from 50 to 5000.
 
         .PARAMETER Path
         Full path to the settings .psd1 file.
@@ -55,6 +56,18 @@
         }
         try {
             $null = Get-SPSScopeOption -Settings $settings['Scope']
+        }
+        catch {
+            throw "Inventory settings file '$Path': $($_.Exception.Message)"
+        }
+    }
+
+    if ($settings.ContainsKey('Report')) {
+        if ($settings['Report'] -isnot [System.Collections.IDictionary]) {
+            throw "Inventory settings file '$Path': the 'Report' section must be a hashtable."
+        }
+        try {
+            $null = Get-SPSReportOption -Settings $settings['Report']
         }
         catch {
             throw "Inventory settings file '$Path': $($_.Exception.Message)"

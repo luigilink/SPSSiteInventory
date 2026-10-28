@@ -1044,8 +1044,8 @@ Describe 'ConvertTo-SPSInventoryHtml' {
 
         $style = [regex]::Match($html, '(?s)@media \(max-width: 640px\) \{(.*?)\r?\n\}').Groups[1].Value
         $style | Should -Not -BeNullOrEmpty
-        # The label of a bar has a row of its own above the bar and the count.
-        $style | Should -Match 'button\.risk \{[^}]*grid-template-columns: minmax\(0, 1fr\) auto;[^}]*grid-template-areas: "label label" "bar count"'
+        # The label of a bar, a button in one file and a link in a split report, has a row of its own above the bar and the count.
+        $style | Should -Match '\.risk \{[^}]*grid-template-columns: minmax\(0, 1fr\) auto;[^}]*grid-template-areas: "label label" "bar count"'
         # The marker, the severity and the count share the first row of an alert line and the name wraps under them.
         $style | Should -Match '\.alert-item summary \{[^}]*grid-template-columns: 16px auto minmax\(0, 1fr\);[^}]*grid-template-areas: "mark pill count" "name name name"'
         $style | Should -Match '\.alert-item summary \.alert-name \{[^}]*overflow-wrap: anywhere'

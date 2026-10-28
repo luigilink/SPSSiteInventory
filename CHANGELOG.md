@@ -5,6 +5,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The HTML report is split in several pages for a very large farm. Up to `Report.HtmlSplitThreshold`
+  site collections (default 3000, about 5 MB) it stays one file; above, the entry page, named like
+  the single file, keeps the summary, the risk indicators, the alerts, the wave plan and the detail
+  sections, and the table of the site collections moves to pages of at most `Report.HtmlRowsPerPage`
+  of them (default 500, about 1 MB), one series per category, worst first, named after the entry page
+  (`...-sites-blocking-1.html`). Every page has the same header and navigation, a search box, sortable
+  columns and the details of each site collection, and is as self-contained as the single file, with
+  relative links only, so the folder can be moved, zipped and sent. A risk indicator of the entry page
+  is a link to the first table page that has a site collection that raises it, with the filter in the
+  address (`#ind=large-lists`); that page links to the previous and the next page that have the
+  indicator. With 30,000 site collections: 62 files, the largest 1.3 MB, the entry page 42 KB, and a
+  filter takes a few milliseconds. The manifest lists the pages (`Files.InventoryHtmlPages`), and
+  `ConvertTo-SPSInventoryHtml -FileName` returns the pages as objects (the report is still a string
+  without it). (#105)
+
 ### Changed
 
 - The risk indicators of the HTML report are a ranked list instead of a grid of 33 cards, 16 of
