@@ -184,6 +184,14 @@
     $total = $siteRecords.Count
     $partialCount = @($siteRecords | Where-Object { $_.AssessmentStatus -eq 'Partial' }).Count
     $failedCount = @($siteRecords | Where-Object { $_.AssessmentStatus -eq 'Failed' }).Count
+    # The wave names come from the settings, so the sites that wait in Needs review are told by the rule
+    # that puts them there (partial, Simple, wave 0) and not by a name that a numbered wave could have.
+    $needsReviewCount = @($siteRecords | Where-Object {
+            $_.AssessmentStatus -eq 'Partial' -and
+            $null -ne $_.Category -and [int]$_.Category -eq 1 -and
+            $null -ne $_.Wave -and [int]$_.Wave -eq 0 -and
+            $_.WaveName -eq 'Needs review'
+        }).Count
     $enumerationFailureCount = @($records | Where-Object { $_.InventoryScope -eq 'WebApplication' }).Count
     $assessedTotal = $total - $failedCount
 
@@ -278,9 +286,10 @@
         $waveGroupKey = '{0}|{1}' -f $waveNumber, $waveName
 
         if (-not $waveAgg.ContainsKey($waveGroupKey)) {
-            $waveAgg[$waveGroupKey] = [PSCustomObject]@{ Wave = $waveNumber; Name = $waveName; Count = 0; SizeGB = 0.0 }
+            $waveAgg[$waveGroupKey] = [PSCustomObject]@{ Wave = $waveNumber; Name = $waveName; Count = 0; SizeGB = 0.0; PartialCount = 0 }
         }
         $waveAgg[$waveGroupKey].Count++
+        if ($record.AssessmentStatus -eq 'Partial') { $waveAgg[$waveGroupKey].PartialCount++ }
         if ($null -ne $record.SizeGB) {
             try { $waveAgg[$waveGroupKey].SizeGB += [double]$record.SizeGB } catch { Write-Verbose -Message "Ignoring non-numeric SizeGB in wave aggregation: $($_.Exception.Message)" }
         }
@@ -569,6 +578,9 @@ button.risk.active { background: var(--brand-soft); box-shadow: inset 3px 0 0 va
     # Summary box.
     [void]$sb.AppendLine('<div class="summary" id="summary">')
     [void]$sb.AppendLine(('<div class="summary-total"><strong>{0}</strong> site collection(s) &middot; <strong>{1} GB</strong> total content &middot; <strong>{2}</strong> partial &middot; <strong>{3}</strong> failed</div>' -f $total, (ConvertTo-SPSHtmlText -Value $totalSizeText), $partialCount, $failedCount))
+    if ($needsReviewCount -gt 0) {
+        [void]$sb.AppendLine(('<div class="summary-total"><strong>{0}</strong> Simple site collection(s) with a partial assessment wait in the <strong>Needs review</strong> wave until they are read in full.</div>' -f $needsReviewCount))
+    }
     $excludedParts = @()
     if ($ExcludedPersonalSiteCount -gt 0) {
         $excludedParts += '<strong>{0}</strong> personal site(s)' -f $ExcludedPersonalSiteCount
@@ -686,12 +698,13 @@ button.risk.active { background: var(--brand-soft); box-shadow: inset 3px 0 0 va
         [void]$sb.AppendLine('<h2 id="wave-plan">Migration wave plan</h2>')
         [void]$sb.AppendLine('<div class="table-scroll">')
         [void]$sb.AppendLine('<table class="waves">')
-        [void]$sb.AppendLine('<thead><tr><th>Wave</th><th>Name</th><th class="num">Sites</th><th class="num">Content (GB)</th></tr></thead>')
+        [void]$sb.AppendLine('<thead><tr><th>Wave</th><th>Name</th><th class="num">Sites</th><th class="num">Content (GB)</th><th class="num">Partial</th></tr></thead>')
         [void]$sb.AppendLine('<tbody>')
         foreach ($key in $waveKeys) {
             $agg = $waveAgg[$key]
             $waveLabel = if ($agg.Wave -eq 0) { '-' } else { [string]$agg.Wave }
-            [void]$sb.AppendLine(('<tr><td class="num">{0}</td><td>{1}</td><td class="num">{2}</td><td class="num">{3}</td></tr>' -f $waveLabel, (ConvertTo-SPSHtmlText -Value $agg.Name), $agg.Count, (ConvertTo-SPSHtmlText -Value (ConvertTo-SPSSizeText -SizeGB $agg.SizeGB))))
+            $partialLabel = if ($agg.PartialCount -gt 0) { [string]$agg.PartialCount } else { '-' }
+            [void]$sb.AppendLine(('<tr><td class="num">{0}</td><td>{1}</td><td class="num">{2}</td><td class="num">{3}</td><td class="num">{4}</td></tr>' -f $waveLabel, (ConvertTo-SPSHtmlText -Value $agg.Name), $agg.Count, (ConvertTo-SPSHtmlText -Value (ConvertTo-SPSSizeText -SizeGB $agg.SizeGB)), $partialLabel))
         }
         [void]$sb.AppendLine('</tbody>')
         [void]$sb.AppendLine('</table>')

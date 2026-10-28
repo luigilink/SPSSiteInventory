@@ -27,7 +27,9 @@ function Get-SPSLabThreshold {
         The thresholds of the example configuration are made for production farms (a list of
         5000 items). The lab lowers them so that small fixtures trigger the signals, but not
         below what the system lists of a new site (the Master Page Gallery, for example)
-        reach, so that an empty site does not look large.
+        reach, so that an empty site does not look large. The cap of the alert rows that are
+        exported per site collection is lowered as well, so that a small fixture reaches it and
+        the assessment is partial.
     #>
     [CmdletBinding()]
     [OutputType([System.Collections.Specialized.OrderedDictionary])]
@@ -38,6 +40,8 @@ function Get-SPSLabThreshold {
         LargeListViewRowLimit = 100
         CheckedOutFileCount   = 1
         FileVersionCount      = 5
+        # The alerts scenario has two alerts, which the cap lets through; partial-simple has three.
+        MaxAlertRowsPerSite   = 2
     }
 }
 
@@ -404,6 +408,32 @@ function Get-SPSLabScenario {
             Expect      = @(
                 (Get-SPSLabExpectation SharePointAlertCount ge 2)
                 (Get-SPSLabExpectation -Alert 'AlertSubscriptions')
+            )
+        })
+
+    $scenario.Add([PSCustomObject]@{
+            Name        = 'partial-simple'
+            Description = 'Three SharePoint alerts, one more than the lab lets the inventory export (MaxAlertRowsPerSite): the assessment is partial and nothing else is flagged, so the site is Simple and waits in the Needs review wave, not in the quick wins.'
+            Template    = 'STS#0'
+            Provision   = {
+                param ($Context)
+                $list = Add-SPSLabList -Web $Context.Web -Title 'LabAlerts'
+                $user = $Context.Web.EnsureUser($Context.Owner)
+                if ([System.String]::IsNullOrEmpty($user.Email)) {
+                    $user.Email = 'lab@example.invalid'
+                    $user.Update()
+                }
+                $null = $user.Alerts.Add($list, [Microsoft.SharePoint.SPEventType]::All, [Microsoft.SharePoint.SPAlertFrequency]::Immediate)
+                $null = $user.Alerts.Add($list, [Microsoft.SharePoint.SPEventType]::Add, [Microsoft.SharePoint.SPAlertFrequency]::Daily)
+                $null = $user.Alerts.Add($list, [Microsoft.SharePoint.SPEventType]::Delete, [Microsoft.SharePoint.SPAlertFrequency]::Weekly)
+            }
+            Expect      = @(
+                (Get-SPSLabExpectation AssessmentStatus eq 'Partial')
+                (Get-SPSLabExpectation SharePointAlertCount ge 3)
+                (Get-SPSLabExpectation Category eq 1)
+                (Get-SPSLabExpectation Wave eq 0)
+                (Get-SPSLabExpectation WaveName eq 'Needs review')
+                (Get-SPSLabExpectation -Alert 'AssessmentPartial')
             )
         })
 

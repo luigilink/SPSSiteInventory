@@ -36,6 +36,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   page gallery instead of on a part of the text, so a copy of `seattle.master` in another folder or
   a master page such as `contoso-v4.master`, which the old comparison took for the original, is
   reported. (#107)
+- A Simple site collection whose assessment is partial is no longer put in the quick wins. What
+  could not be read counts as 0 in its score, so a site collection that was only read in part
+  could be categorized Simple and land in the first wave. It is now in a `Needs review` bucket of
+  wave 0, like `Not assessed` and `Unassigned`, whatever wave the mapping gives to the category 1,
+  until it is read in full. Its `Category` and `Score` are not changed, a site collection that was
+  read in full is not affected, and a partial site collection of another category keeps the wave
+  of its category. The wave plan of the HTML report has a `Partial` column that counts the
+  partial site collections of each wave, the summary says how many Simple site collections wait
+  in `Needs review`, and the `AssessmentPartial` alert says so. The lab has a `partial-simple`
+  scenario (three alerts, with the cap of the alert rows lowered to 2) that must end in
+  `Needs review`. (#106)
 
 ## [2.0.0] - 2026-10-28
 

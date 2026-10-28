@@ -546,6 +546,19 @@ A site whose category is not listed in any wave lands in an **Unassigned** bucke
 surfaced in the report rather than silently dropped. When `MigrationWaves` is omitted from
 the settings, the one-wave-per-category default is applied.
 
+Two other buckets of wave 0 do not come from the mapping:
+
+- **Not assessed**: the assessment of the site collection failed, so it has no category.
+- **Needs review**: the assessment is partial and the category is 1 (Simple). What could not
+  be read counts as 0 in the score, so the site collection can look simple without being so:
+  it waits in this bucket until it is read in full, and the mapping does not move it, whatever
+  wave takes the category 1. Its `Category` and `Score` are not changed. A partial site
+  collection of another category keeps the wave of its category, because what could not be
+  read can only raise its score; the wave plan of the HTML report counts the partial site
+  collections of each wave. To plan a site collection that is in this bucket, fix what the
+  warnings of its record say (an unreadable item, or a cap such as
+  `LargeContentThresholds.MaxItemsForVersionScanPerLibrary`) and run the inventory again.
+
 ## Tuning
 
 Start from the example weights and run the inventory once. Review the distribution of

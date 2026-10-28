@@ -66,6 +66,78 @@ Describe 'Group-SPSMigrationWave' {
         $result.WaveName | Should -Be 'Not assessed'
     }
 
+    It 'puts a Simple site whose assessment is partial in Wave 0 / Needs review, and leaves its category and score alone' {
+        $partial = [PSCustomObject]@{
+            Url = 'https://s/partial'; AssessmentStatus = 'Partial'; CategoryName = 'Simple'; Category = 1; Score = 0.5
+        }
+
+        $result = Group-SPSMigrationWave -InputObject @($partial) -MigrationWaves $script:DefaultWaves
+
+        $result.Wave | Should -Be 0
+        $result.WaveName | Should -Be 'Needs review'
+        $result.Category | Should -Be 1
+        $result.CategoryName | Should -Be 'Simple'
+        $result.Score | Should -Be 0.5
+        $result.AssessmentStatus | Should -Be 'Partial'
+    }
+
+    It 'keeps a Simple site that was read in full in the wave of its category' {
+        foreach ($status in @('Complete', $null)) {
+            $site = [PSCustomObject]@{ Url = 'https://s/full'; AssessmentStatus = $status; CategoryName = 'Simple'; Category = 1; Score = 0 }
+
+            $result = Group-SPSMigrationWave -InputObject @($site) -MigrationWaves $script:DefaultWaves
+
+            $result.Wave | Should -Be 1
+            $result.WaveName | Should -Be 'Quick wins'
+        }
+    }
+
+    It 'keeps a partial site of another category in the wave of its category' {
+        $partials = foreach ($category in 2..4) {
+            [PSCustomObject]@{ Url = "https://s/partial$category"; AssessmentStatus = 'Partial'; CategoryName = 'x'; Category = $category; Score = $category }
+        }
+
+        $result = Group-SPSMigrationWave -InputObject @($partials) -MigrationWaves $script:DefaultWaves
+
+        @($result | ForEach-Object { $_.Wave }) | Should -Be @(2, 3, 4)
+        @($result | ForEach-Object { $_.WaveName }) | Should -Be @('Light remediation', 'Rebuild', 'Projects / blockers')
+    }
+
+    It 'does not depend on how the waves are mapped: a partial Simple site is never in the wave of the Simple category' {
+        $partialSimple = [PSCustomObject]@{ Url = 'https://s/ps'; AssessmentStatus = 'Partial'; CategoryName = 'Simple'; Category = 1; Score = 0 }
+        $partialModerate = [PSCustomObject]@{ Url = 'https://s/pm'; AssessmentStatus = 'Partial'; CategoryName = 'Moderate'; Category = 2; Score = 2 }
+        $grouped = @(
+            @{ Wave = 1; Name = 'Migrate now'; Categories = @(1, 2, 3) }
+            @{ Wave = 2; Name = 'Projects'; Categories = @(4) }
+        )
+        $withoutSimple = @(
+            @{ Wave = 2; Name = 'Light remediation'; Categories = @(2) }
+        )
+
+        $inGroupedWave = Group-SPSMigrationWave -InputObject @($partialSimple, $partialModerate) -MigrationWaves $grouped
+        $inGroupedWave[0].WaveName | Should -Be 'Needs review'
+        $inGroupedWave[0].Wave | Should -Be 0
+        $inGroupedWave[1].WaveName | Should -Be 'Migrate now'
+
+        # Needs review is what it is called even when no wave takes the Simple category.
+        $unmapped = Group-SPSMigrationWave -InputObject @($partialSimple) -MigrationWaves $withoutSimple
+        $unmapped.WaveName | Should -Be 'Needs review'
+    }
+
+    It 'leaves a failed assessment in Not assessed, and reassigns a partial site when it is read in full on a later run' {
+        $failed = [PSCustomObject]@{ Url = 'https://s/failed'; AssessmentStatus = 'Failed'; Category = 1; CategoryName = 'Simple' }
+        $partial = [PSCustomObject]@{ Url = 'https://s/partial'; AssessmentStatus = 'Partial'; Category = 1; CategoryName = 'Simple' }
+
+        $first = Group-SPSMigrationWave -InputObject @($failed, $partial) -MigrationWaves $script:DefaultWaves
+        $first[0].WaveName | Should -Be 'Not assessed'
+        $first[1].WaveName | Should -Be 'Needs review'
+
+        $first[1].AssessmentStatus = 'Complete'
+        $second = Group-SPSMigrationWave -InputObject @($first[1]) -MigrationWaves $script:DefaultWaves
+        $second.WaveName | Should -Be 'Quick wins'
+        @($second.PSObject.Properties.Name | Where-Object { $_ -eq 'Wave' }).Count | Should -Be 1
+    }
+
     It 'inserts Wave and WaveName right after CategoryName, preserving other columns' {
         $result = Group-SPSMigrationWave -InputObject $script:Sites -MigrationWaves $script:DefaultWaves
 

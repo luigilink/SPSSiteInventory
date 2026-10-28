@@ -22,6 +22,14 @@
         A site whose category is not covered by the mapping is assigned Wave 0 /
         'Unassigned' so it is surfaced rather than silently dropped.
 
+        A site that could not be assessed (AssessmentStatus Failed) is assigned Wave 0 /
+        'Not assessed'. A site whose assessment is partial (AssessmentStatus Partial) and whose
+        category is 1 (Simple) is assigned Wave 0 / 'Needs review', whatever the mapping says:
+        what could not be read counts as 0 in its score, so it can look simple without being
+        so, and it waits there until it is read in full. Its Category and Score are not changed.
+        A partial site of any other category keeps the wave of its category: what could not be
+        read can only raise its score, and the report marks the site as partial.
+
         .PARAMETER InputObject
         The scored inventory records to assign to waves.
 
@@ -66,6 +74,9 @@
         $waveName = 'Unassigned'
         if ($record.AssessmentStatus -eq 'Failed') {
             $waveName = 'Not assessed'
+        }
+        elseif ($record.AssessmentStatus -eq 'Partial' -and $category -eq 1) {
+            $waveName = 'Needs review'
         }
         elseif ($lookup.ContainsKey($category)) {
             $waveNumber = $lookup[$category].Wave

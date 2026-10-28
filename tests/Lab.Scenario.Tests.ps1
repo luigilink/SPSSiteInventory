@@ -20,6 +20,10 @@ BeforeAll {
         }
     }
 
+    # Wave and WaveName are added to the record after the assessment, by Group-SPSMigrationWave.
+    $waved = @(Group-SPSMigrationWave -InputObject @([PSCustomObject]@{ Category = 1; CategoryName = 'Simple' }) -MigrationWaves @())
+    $script:RecordField += @($waved[0].PSObject.Properties.Name | Where-Object { $_ -in @('Wave', 'WaveName') })
+
     $script:Wiki = Get-Content -Path (Join-Path $repoRoot 'wiki/Lab-Testing.md') -Raw
     $script:ExampleThresholds = (Get-SPSInventorySetting -Path (Join-Path $repoRoot 'src/config/inventory-settings.example.psd1')).LargeContentThresholds
     $script:SourceOf = {
@@ -123,6 +127,35 @@ Describe 'The lab scenarios' {
         @($noAccess.Expect | Where-Object { $_.Property -eq 'HasNoAccessLock' }).Value | Should -BeTrue
         @($noAccess.Expect | Where-Object { $_.Property -eq 'Category' }).Value | Should -Be 4
         @($noAccess.Expect | Where-Object { $_.Alert -eq 'NoAccessSite' }).Count | Should -Be 1
+    }
+
+    It 'build a Simple site collection with a partial assessment and expect it in the Needs review wave, not in the quick wins' {
+        $scenario = $script:Scenario | Where-Object { $_.Name -eq 'partial-simple' }
+
+        @($scenario.Expect | Where-Object { $_.Info }).Count | Should -Be 0
+        @($scenario.Expect | Where-Object { $_.Property -eq 'AssessmentStatus' }).Value | Should -Be 'Partial'
+        @($scenario.Expect | Where-Object { $_.Property -eq 'Category' }).Value | Should -Be 1
+        @($scenario.Expect | Where-Object { $_.Property -eq 'Wave' }).Value | Should -Be 0
+        @($scenario.Expect | Where-Object { $_.Property -eq 'WaveName' }).Value | Should -Be 'Needs review'
+        @($scenario.Expect | Where-Object { $_.Alert -eq 'AssessmentPartial' }).Count | Should -Be 1
+
+        $needsReview = [PSCustomObject]@{ AssessmentStatus = 'Partial'; SharePointAlertCount = 3; Category = 1; Wave = 0; WaveName = 'Needs review' }
+        $quickWin = [PSCustomObject]@{ AssessmentStatus = 'Partial'; SharePointAlertCount = 3; Category = 1; Wave = 1; WaveName = 'Quick wins' }
+        foreach ($expectation in @($scenario.Expect | Where-Object { $_.ContainsKey('Property') })) {
+            (Test-SPSLabExpectation -Expectation $expectation -Record $needsReview -Alert @('AssessmentPartial')).Status | Should -Be 'PASS' -Because $expectation.Property
+        }
+        # The old behavior, a partial Simple site in the quick wins, must fail the scenario.
+        $failed = @($scenario.Expect | Where-Object { $_.ContainsKey('Property') } | Where-Object { (Test-SPSLabExpectation -Expectation $_ -Record $quickWin -Alert @('AssessmentPartial')).Status -eq 'FAIL' } | ForEach-Object { $_.Property })
+        $failed | Should -Be @('Wave', 'WaveName')
+    }
+
+    It 'give the partial-simple scenario one alert more than the lab lets the inventory export, and the alerts scenario no more than that' {
+        $cap = (Get-SPSLabThreshold).MaxAlertRowsPerSite
+        $partialAlerts = [regex]::Matches((& $script:SourceOf 'partial-simple'), '\.Alerts\.Add\(').Count
+        $alertsAlerts = [regex]::Matches((& $script:SourceOf 'alerts'), '\.Alerts\.Add\(').Count
+
+        $partialAlerts | Should -BeGreaterThan $cap -Because 'the alert rows left out by the cap are what makes the assessment partial'
+        $alertsAlerts | Should -BeLessOrEqual $cap -Because 'the alerts scenario must stay complete'
     }
 
     It 'build the large-content scenario from the lab thresholds, so that it triggers whatever they are' {

@@ -20,8 +20,11 @@ Collection read failures are recorded as partial or failed assessments and do no
 prevent later site collections from being processed. A web application whose site
 list cannot be read, or whose lazy enumeration stops early, is represented by a
 `WebApplication`-scope failure row; earlier site records are retained. Partial scores
-are provisional; failed site assessments have no category or score and are placed in
-the `Not assessed` wave. Review collector warning details, transcript progress and
+are provisional, because what could not be read counts as 0: a Simple site collection
+with a partial assessment is placed in the `Needs review` wave, not in the quick wins,
+until it is read in full, and a partial site collection of another category keeps the
+wave of its category. Failed site assessments have no category or score and are placed
+in the `Not assessed` wave. Review collector warning details, transcript progress and
 the report's status fields before planning migration waves.
 
 ## Output files
@@ -171,12 +174,12 @@ CSV/JSON rows describe site collections and any web-application enumeration fail
 | `ContentTypeCount` | Distinct content-type IDs seen in web definition collections, deduplicated within this site collection |
 | `ListContentTypeBindingCount` | Number of content-type bindings across the collection's lists, not the number of distinct designs |
 | `ContentTypeInventoryComplete` | False means partial collection: review warnings before interpreting counts or missing definitions |
-| `AssessmentStatus` | `Complete`, `Partial` (score may omit unreadable inputs), or `Failed` (not scored) |
+| `AssessmentStatus` | `Complete`, `Partial` (score may omit unreadable inputs; a Simple site collection that is partial is in the `Needs review` wave), or `Failed` (not scored) |
 | `AssessmentWarnings` | Collection/assessment failures associated with this record; also shown in the HTML report. Warnings of the same kind in one site collection, which differ only by the names between quotes of their subject (list titles, web URLs), are written once: the first one in full followed by ` [+N similar]`, where N is the number of other occurrences. Warnings that differ by anything else (the reason, a number) stay separate. The same grouped text appears in `Reasons`; the assessment status does not change |
 | `Category` | Complexity category 1–4 |
 | `CategoryName` | Simple / Moderate / Complex / Blocking |
-| `Wave` | Proposed migration wave number (from the category-to-wave mapping) |
-| `WaveName` | Proposed migration wave name |
+| `Wave` | Proposed migration wave number (from the category-to-wave mapping); 0 for a site collection that is in no wave (see `WaveName`) |
+| `WaveName` | Proposed migration wave name, or `Needs review` (a Simple site collection whose assessment is partial), `Not assessed` (a failed assessment) or `Unassigned` (a category that no wave takes) |
 | `Score` | Numeric complexity score |
 | `Reasons` | Human-readable drivers of the score |
 
@@ -213,6 +216,9 @@ The HTML report is made to be read. The CSV and JSON files keep every column and
     again, or the button that appears next to the filters, to remove the filter.
   - The **alerts** are lines with their severity, name and number of affected site collections.
     Open one to read what it means, what to do about it and the Microsoft Learn page.
+  - The **migration wave plan** gives, for each wave, the number of site collections, their
+    content and how many of them are partial. The `Needs review` wave holds the Simple site
+    collections whose assessment is partial, and the summary says how many wait there.
 - **Site collections** is the inventory table, right after the wave plan. Each site collection
   has one row with its title and URL, category, score, wave, size, template, last modification,
   status and reasons, **worst first** (not assessed, Blocking, Complex, Moderate, then Simple, by
