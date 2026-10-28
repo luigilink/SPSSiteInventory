@@ -5,6 +5,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The risk indicators of the HTML report are a ranked list instead of a grid of 33 cards, 16 of
+  them at 0 and all in red. Each signal that at least one site collection raises has a bar for
+  the share of site collections, with the count and the percentage, grouped by the severity of
+  its alert (High, Medium, Low, as in the alert catalog; a signal with no alert has its own
+  severity), and the signals that no site collection raises are named on one line. A click on an
+  indicator filters the inventory table to the site collections that raise it. The alerts are
+  collapsible lines (severity, name, number affected) that open to show what the alert means,
+  what to do and the reference, instead of a table of long texts. Each indicator exposes whether
+  its filter is on (`aria-pressed`), and below 640 px the indicators and the alert lines reflow
+  instead of making the page wider than the screen. (#90)
+
 ### Fixed
 
 - A site collection locked with `NoAccess` is now reported as `NoAccess`, as a blocker. SharePoint

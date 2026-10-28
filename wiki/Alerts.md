@@ -10,8 +10,10 @@ Those are inventoried in their own `*-sharepointalerts-*` files (see
 ## Where to find them
 
 - The **Alerts and remediation** section of the HTML report groups the alerts by type, most
-  severe first, with the number of site collections or web applications concerned, what each
-  one means and what to do about it.
+  severe first, with the number of site collections or web applications concerned. Each type is
+  a line that opens to show what it means, what to do about it and the Microsoft Learn page.
+  The **Risk indicators** above it rank the signals by the share of site collections that raise
+  them, grouped by the severity of the alert of each signal.
 - `*-alerts-*.csv` (for Excel) and `*-alerts-*.json` list every alert with the URL it is
   about. The files are described in [Usage](Usage#output-files).
 

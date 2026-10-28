@@ -79,6 +79,13 @@ BeforeAll {
             FeatureCount = 6; FeatureScopes = @('Farm'); FeatureIds = @()
         }
     )
+
+    # The number of site collections that an indicator of the ranked list shows, 0 when it is not listed.
+    function Get-RiskCount {
+        param ([string]$Html, [string]$Label)
+        $match = [regex]::Match($Html, ('<span class="risk-label">{0}</span>.*?<strong>(\d+)</strong>' -f [regex]::Escape($Label)))
+        if ($match.Success) { [int]$match.Groups[1].Value } else { 0 }
+    }
 }
 
 Describe 'ConvertTo-SPSInventoryHtml' {
@@ -149,10 +156,10 @@ Describe 'ConvertTo-SPSInventoryHtml' {
     It 'shows permission and policy signals in summary cards and in the details of a site' {
         $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
 
-        $html | Should -Match '<div class="num">1</div><div class="lbl">Sites with custom permission levels</div>'
-        $html | Should -Match '<div class="num">1</div><div class="lbl">Sites with e-mail enabled lists</div>'
-        $html | Should -Match '<div class="num">1</div><div class="lbl">Sites with HTML files</div>'
-        $html | Should -Match '<div class="num">1</div><div class="lbl">Sites in web applications with permissive browser file handling</div>'
+        (Get-RiskCount -Html $html -Label 'Sites with custom permission levels') | Should -Be 1
+        (Get-RiskCount -Html $html -Label 'Sites with e-mail enabled lists') | Should -Be 1
+        (Get-RiskCount -Html $html -Label 'Sites with HTML files') | Should -Be 1
+        (Get-RiskCount -Html $html -Label 'Sites in web applications with permissive browser file handling') | Should -Be 1
         $html | Should -Match '<dt>Custom permission levels</dt><dd><span class="sig-value">2</span> <span class="sig-detail">Project Manager \(https://intranet/sites/legacy\)</span></dd>'
         $html | Should -Match '<dt>E-mail enabled lists</dt><dd><span class="sig-value">1</span> <span class="sig-detail">Invoices \(/sites/legacy/Invoices\)</span></dd>'
         $html | Should -Match '<dt>HTML files</dt><dd><span class="sig-value">4</span> <span class="sig-detail">/sites/legacy/Docs/a\.htm</span></dd>'
@@ -164,7 +171,7 @@ Describe 'ConvertTo-SPSInventoryHtml' {
     It 'shows managed metadata signals in the summary card and in the details of a site' {
         $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
 
-        $html | Should -Match '<div class="num">1</div><div class="lbl">Sites with managed metadata columns</div>'
+        (Get-RiskCount -Html $html -Label 'Sites with managed metadata columns') | Should -Be 1
         $html | Should -Match '<dt>Managed metadata</dt><dd><span class="sig-value">2 list\(s\), 3 column\(s\), 2 term set\(s\)</span>'
         $html | Should -Match 'Projects &lt;Q&amp;A&gt; \(Department\)'
         $html | Should -Not -Match 'Projects <Q&A>'
@@ -173,7 +180,7 @@ Describe 'ConvertTo-SPSInventoryHtml' {
     It 'shows external list signals in the summary card and in the details of a site' {
         $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
 
-        $html | Should -Match '<div class="num">1</div><div class="lbl">Sites with external lists</div>'
+        (Get-RiskCount -Html $html -Label 'Sites with external lists') | Should -Be 1
         $html | Should -Match '<dt>External lists</dt><dd><span class="sig-value">2</span>'
         $html | Should -Match 'Orders &lt;SAP&gt; \(Contoso.Sap.Order\)'
         $html | Should -Not -Match 'Orders <SAP>'
@@ -182,7 +189,7 @@ Describe 'ConvertTo-SPSInventoryHtml' {
     It 'shows the SharePoint alert count in the summary card and in the details of a site, without the alert rows' {
         $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
 
-        $html | Should -Match '<div class="num">1</div><div class="lbl">Sites with SharePoint alerts</div>'
+        (Get-RiskCount -Html $html -Label 'Sites with SharePoint alerts') | Should -Be 1
         $html | Should -Match '<dt>SharePoint alerts</dt><dd><span class="sig-value">1234</span></dd>'
     }
 
@@ -198,10 +205,10 @@ Describe 'ConvertTo-SPSInventoryHtml' {
 
         $html = ConvertTo-SPSInventoryHtml -InputObject $records
 
-        $html | Should -Match '<div class="num">1</div><div class="lbl">Sites with custom farm features</div>'
-        $html | Should -Match '<div class="num">2</div><div class="lbl">Sites with a custom master page</div>'
-        $html | Should -Match '<div class="num">3</div><div class="lbl">Sites with sandbox solutions</div>'
-        $html | Should -Match '<div class="num">4</div><div class="lbl">Sites with custom event receivers</div>'
+        (Get-RiskCount -Html $html -Label 'Sites with custom farm features') | Should -Be 1
+        (Get-RiskCount -Html $html -Label 'Sites with a custom master page') | Should -Be 2
+        (Get-RiskCount -Html $html -Label 'Sites with sandbox solutions') | Should -Be 3
+        (Get-RiskCount -Html $html -Label 'Sites with custom event receivers') | Should -Be 4
         # The details list a signal only for the sites that raise it.
         ([regex]::Matches($html, '<dt>Custom farm feature</dt>')).Count | Should -Be 1
         ([regex]::Matches($html, '<dt>Sandbox solutions</dt>')).Count | Should -Be 3
@@ -222,8 +229,8 @@ Describe 'ConvertTo-SPSInventoryHtml' {
 
         $html = ConvertTo-SPSInventoryHtml -InputObject $records
 
-        $html | Should -Match '<div class="num">2</div><div class="lbl">Sites with SharePoint alerts</div>'
-        $html | Should -Match '<div class="num">1</div><div class="lbl">Sites with external lists</div>'
+        (Get-RiskCount -Html $html -Label 'Sites with SharePoint alerts') | Should -Be 2
+        (Get-RiskCount -Html $html -Label 'Sites with external lists') | Should -Be 1
     }
 
     It 'shows the subsite structure in a summary card and in the details, and counts only the sites that have subsites' {
@@ -235,7 +242,7 @@ Describe 'ConvertTo-SPSInventoryHtml' {
 
         $html = ConvertTo-SPSInventoryHtml -InputObject $records
 
-        $html | Should -Match '<div class="num">1</div><div class="lbl">Sites with subsites</div>'
+        (Get-RiskCount -Html $html -Label 'Sites with subsites') | Should -Be 1
         $html | Should -Match '<dt>Subsites</dt><dd><span class="sig-value">3 \(depth 2\)</span> <span class="sig-detail">payroll/&lt;2026&gt; \(level 2\); payroll \(level 1\)</span></dd>'
         ([regex]::Matches($html, '<dt>Subsites</dt>')).Count | Should -Be 1
         # The number of webs, which includes the root web, is in the context line of the site.
@@ -246,7 +253,7 @@ Describe 'ConvertTo-SPSInventoryHtml' {
     It 'shows the NoAccess lock in a summary card and in the details of a site' {
         $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
 
-        $html | Should -Match '<div class="num">1</div><div class="lbl">Sites locked with NoAccess</div>'
+        (Get-RiskCount -Html $html -Label 'Sites locked with NoAccess') | Should -Be 1
         $html | Should -Match '<dt>Site lock</dt><dd><span class="sig-value">NoAccess</span></dd>'
     }
 
@@ -260,8 +267,8 @@ Describe 'ConvertTo-SPSInventoryHtml' {
 
         $html = ConvertTo-SPSInventoryHtml -InputObject $records
 
-        $html | Should -Match '<div class="num">3</div><div class="lbl">Sites with locked state</div>'
-        $html | Should -Match '<div class="num">1</div><div class="lbl">Sites locked with NoAccess</div>'
+        (Get-RiskCount -Html $html -Label 'Sites with locked state') | Should -Be 3
+        (Get-RiskCount -Html $html -Label 'Sites locked with NoAccess') | Should -Be 1
     }
 
     It 'renders a web application policies section grouped by web application' {
@@ -308,9 +315,9 @@ Describe 'ConvertTo-SPSInventoryHtml' {
     It 'shows publishing and customized-page signals in summary cards and in the details of a site' {
         $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
 
-        $html | Should -Match '<div class="num">1</div><div class="lbl">Sites with publishing features</div>'
-        $html | Should -Match '<div class="num">1</div><div class="lbl">Sites with publishing pages</div>'
-        $html | Should -Match '<div class="num">1</div><div class="lbl">Sites with customized pages</div>'
+        (Get-RiskCount -Html $html -Label 'Sites with publishing features') | Should -Be 1
+        (Get-RiskCount -Html $html -Label 'Sites with publishing pages') | Should -Be 1
+        (Get-RiskCount -Html $html -Label 'Sites with customized pages') | Should -Be 1
         foreach ($label in @('Publishing infrastructure', 'Publishing webs', 'Publishing pages', 'Page layouts in use', 'Customized pages')) {
             $html | Should -Match ('<dt>{0}</dt>' -f $label)
         }
@@ -418,8 +425,8 @@ Describe 'ConvertTo-SPSInventoryHtml' {
     It 'puts a category on each site collection and keeps the details in the same body' {
         $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
 
-        $html | Should -Match '<tbody class="site" data-category="1">'
-        $html | Should -Match '<tbody class="site" data-category="4">'
+        $html | Should -Match '<tbody class="site" data-category="1"'
+        $html | Should -Match '<tbody class="site" data-category="4"'
         ([regex]::Matches($html, '<tbody class="site"')).Count | Should -Be 2
         ([regex]::Matches($html, '<tr class="main">')).Count | Should -Be 2
         ([regex]::Matches($html, '<tr class="detail">')).Count | Should -Be 2
@@ -822,7 +829,7 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         ([regex]::Matches($html, '<dt>Site lock</dt>')).Count | Should -Be 1
     }
 
-    It 'renders navigation shortcuts and risk indicator cards' {
+    It 'renders navigation shortcuts and the ranked risk indicators' {
         $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
 
         $html | Should -Match 'href="#summary"'
@@ -830,24 +837,167 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $html | Should -Match 'href="#wave-plan"'
         $html | Should -Match 'href="#inventory-table"'
         $html | Should -Match 'Risk indicators'
-        $html | Should -Match 'Sites with locked state'
-        $html | Should -Match 'Sites with IRM-enabled lists'
-        $html | Should -Match 'Sites with unsupported templates'
-        $html | Should -Match 'Sites with template compatibility review'
-        $html | Should -Match 'Sites with template-language review'
-        $html | Should -Match 'Sites with Workflow 2010'
-        $html | Should -Match 'Sites with running Workflow 2010'
-        $html | Should -Match 'Sites with running Workflow 2013'
-        $html | Should -Match 'Sites above large-size threshold'
-        $html | Should -Match 'Sites with large lists'
-        $html | Should -Match 'Sites with checked-out files'
-        $html | Should -Match 'Sites with high file-version counts'
+        foreach ($label in @('Sites with locked state', 'Sites with IRM-enabled lists', 'Sites with template compatibility review', 'Sites with template-language review', 'Sites with running Workflow 2010', 'Sites with running Workflow 2013', 'Sites above large-size threshold', 'Sites with large lists', 'Sites with checked-out files', 'Sites with high file-version counts')) {
+            $html | Should -Match ('<span class="risk-label">{0}</span>' -f [regex]::Escape($label))
+        }
+        # No site raises these: they are named on one line instead of listed with a bar at 0.
+        $html | Should -Match 'No site collection has: .*unsupported templates.*Workflow 2010'
+        $html | Should -Not -Match '<span class="risk-label">Sites with unsupported templates</span>'
         $html | Should -Not -Match 'href="#farm-solutions"'
         $html | Should -Not -Match 'href="#authentication"'
         $html | Should -Not -Match 'href="#content-types"'
         $html | Should -Not -Match 'href="#managed-metadata"'
         $html | Should -Not -Match 'href="#external-lists"'
         $html | Should -Not -Match 'href="#bcs-applications"'
+    }
+
+    It 'lists only the indicators that a site collection raises, most frequent first, grouped by severity' {
+        $records = @(
+            1..3 | ForEach-Object { [PSCustomObject]@{ Url = "https://intranet/sites/large$_"; Category = 2; CategoryName = 'Moderate'; LargeListCount = 2 } }
+            1..2 | ForEach-Object { [PSCustomObject]@{ Url = "https://intranet/sites/sandbox$_"; Category = 2; CategoryName = 'Moderate'; SandboxSolutions = 1 } }
+            [PSCustomObject]@{ Url = 'https://intranet/sites/forms'; Category = 4; CategoryName = 'Blocking'; InfoPathFormCount = 1 }
+            1..2 | ForEach-Object { [PSCustomObject]@{ Url = "https://intranet/sites/sub$_"; Category = 1; CategoryName = 'Simple'; SubsiteCount = 4 } }
+        )
+
+        $html = ConvertTo-SPSInventoryHtml -InputObject $records
+
+        $order = @([regex]::Matches($html, '<span class="risk-label">([^<]+)</span>') | ForEach-Object { $_.Groups[1].Value })
+        $order | Should -Be @('Sites with InfoPath forms', 'Sites with large lists', 'Sites with sandbox solutions', 'Sites with subsites')
+        $html | Should -Match '(?s)<span class="pill yes">High</span> block or break a migration.*Sites with InfoPath forms.*<span class="pill warn">Medium</span> need a plan or a check.*Sites with large lists.*Sites with sandbox solutions.*<span class="pill no">Low</span> information to pass on.*Sites with subsites'
+        (Get-RiskCount -Html $html -Label 'Sites with large lists') | Should -Be 3
+        (Get-RiskCount -Html $html -Label 'Sites with full-trust code') | Should -Be 0
+    }
+
+    It 'gives an indicator the severity of its alert, and its own severity when it has no alert' {
+        $records = @([PSCustomObject]@{
+            Url = 'https://intranet/sites/all'; Category = 4; CategoryName = 'Blocking'
+            UsesFullTrustCode = $true; UsesCustomFarmFeature = $true; SandboxSolutions = 1; CustomMasterPage = $true; EventReceivers = 1
+            ExternalListCount = 1; LargeListCount = 1; SubsiteCount = 1
+        })
+
+        $html = ConvertTo-SPSInventoryHtml -InputObject $records
+
+        $groups = @{}
+        $current = ''
+        foreach ($line in ($html -split "`r?`n")) {
+            if ($line -match '<span class="pill \w+">(High|Medium|Low)</span> (block or break|need a plan|information to pass)') { $current = $Matches[1] }
+            elseif ($line -match '<span class="risk-label">([^<]+)</span>') { $groups[$Matches[1]] = $current }
+        }
+        # Alert FullTrustCode and ExternalLists are High, LargeLists is Medium and Subsites is Low in the catalog.
+        $groups['Sites with full-trust code'] | Should -Be 'High'
+        $groups['Sites with external lists'] | Should -Be 'High'
+        $groups['Sites with large lists'] | Should -Be 'Medium'
+        $groups['Sites with subsites'] | Should -Be 'Low'
+        # No alert for these: a custom farm feature blocks, the others need a check.
+        $groups['Sites with custom farm features'] | Should -Be 'High'
+        $groups['Sites with sandbox solutions'] | Should -Be 'Medium'
+        $groups['Sites with a custom master page'] | Should -Be 'Medium'
+        $groups['Sites with custom event receivers'] | Should -Be 'Medium'
+    }
+
+    It 'names the indicators that no site collection raises on one line' {
+        $records = @([PSCustomObject]@{ Url = 'https://intranet/sites/a'; Category = 1; CategoryName = 'Simple'; LargeListCount = 1 })
+
+        $html = ConvertTo-SPSInventoryHtml -InputObject $records
+
+        $line = [regex]::Match($html, '<p class="risk-none">No site collection has: ([^<]+)\.</p>').Groups[1].Value
+        $line | Should -Match '^full-trust code, custom farm features, sandbox solutions, a custom master page'
+        $line | Should -Match 'a size above the large-size threshold'
+        $line | Should -Not -Match 'large lists'
+        ([regex]::Matches($html, '<span class="risk-label">')).Count + ($line -split ', ').Count | Should -Be 33
+    }
+
+    It 'draws each bar with the share of the site collections that raise the signal' {
+        $records = @(
+            [PSCustomObject]@{ Url = 'https://intranet/sites/a'; Category = 2; CategoryName = 'Moderate'; LargeListCount = 1 }
+            [PSCustomObject]@{ Url = 'https://intranet/sites/b'; Category = 1; CategoryName = 'Simple' }
+            [PSCustomObject]@{ Url = 'https://intranet/sites/c'; Category = 1; CategoryName = 'Simple' }
+            [PSCustomObject]@{ Url = 'https://intranet/sites/d'; Category = 1; CategoryName = 'Simple' }
+        )
+        $many = @(1..300 | ForEach-Object { [PSCustomObject]@{ Url = "https://intranet/sites/many$_"; Category = 1; CategoryName = 'Simple'; CheckedOutFileCount = $(if ($_ -eq 1) { 1 } else { 0 }) } })
+
+        $html = ConvertTo-SPSInventoryHtml -InputObject $records
+        $thin = ConvertTo-SPSInventoryHtml -InputObject $many
+
+        $html | Should -Match '<span class="risk-bar"><span style="width:25%"></span></span><span class="risk-count"><strong>1</strong> <span class="muted">25%</span></span>'
+        # A share under 1 % keeps a bar that can be seen, and the share is written in full.
+        $thin | Should -Match '<span class="risk-bar"><span style="width:1%"></span></span><span class="risk-count"><strong>1</strong> <span class="muted">0\.3%</span></span>'
+    }
+
+    It 'writes the shares the same way in every culture' {
+        $records = @(
+            [PSCustomObject]@{ Url = 'https://intranet/sites/a'; Category = 2; CategoryName = 'Moderate'; LargeListCount = 1 }
+            [PSCustomObject]@{ Url = 'https://intranet/sites/b'; Category = 1; CategoryName = 'Simple' }
+            [PSCustomObject]@{ Url = 'https://intranet/sites/c'; Category = 1; CategoryName = 'Simple' }
+        )
+        $previous = [System.Threading.Thread]::CurrentThread.CurrentCulture
+        try {
+            [System.Threading.Thread]::CurrentThread.CurrentCulture = [System.Globalization.CultureInfo]::GetCultureInfo('fr-FR')
+            $html = ConvertTo-SPSInventoryHtml -InputObject $records
+        }
+        finally {
+            [System.Threading.Thread]::CurrentThread.CurrentCulture = $previous
+        }
+
+        $html | Should -Match '<span style="width:33\.3%"></span>'
+        $html | Should -Match '<span class="muted">33\.3%</span>'
+    }
+
+    It 'renders the indicators as buttons that filter the inventory table, and tags the rows they select' {
+        $records = @(
+            [PSCustomObject]@{ Url = 'https://intranet/sites/a'; Category = 2; CategoryName = 'Moderate'; LargeListCount = 1; CheckedOutFileCount = 2; SandboxSolutions = 0 }
+            [PSCustomObject]@{ Url = 'https://intranet/sites/b'; Category = 1; CategoryName = 'Simple' }
+            [PSCustomObject]@{ InventoryScope = 'WebApplication'; Url = 'https://intranet'; AssessmentStatus = 'Failed'; LargeListCount = 5 }
+        )
+
+        $html = ConvertTo-SPSInventoryHtml -InputObject $records
+
+        $html | Should -Match '<button type="button" class="risk sev-medium" data-ind="large-lists" aria-pressed="false">'
+        $html | Should -Match '<button type="button" class="chip" id="inv-indicator" hidden></button>'
+        # The row of the site collection is tagged with every indicator it raises, and in the order of the list.
+        $html | Should -Match '<tbody class="site" data-category="2" data-ind="large-lists checked-out-files">'
+        # A site collection that raises nothing, and a web application row, carry no tag.
+        $html | Should -Match '<tbody class="site" data-category="1">'
+        $html | Should -Match '<tbody class="site" data-category="0">'
+        (Get-RiskCount -Html $html -Label 'Sites with large lists') | Should -Be 1
+    }
+
+    It 'exposes the state of every indicator with aria-pressed, off until a filter is applied, and keeps it in step with the active class' {
+        $records = @(
+            [PSCustomObject]@{ Url = 'https://intranet/sites/a'; Category = 2; CategoryName = 'Moderate'; LargeListCount = 1; CheckedOutFileCount = 2 }
+            [PSCustomObject]@{ Url = 'https://intranet/sites/b'; Category = 1; CategoryName = 'Simple' }
+        )
+
+        $html = ConvertTo-SPSInventoryHtml -InputObject $records
+
+        $buttons = @([regex]::Matches($html, '<button type="button" class="risk [^"]*" data-ind="[^"]*"[^>]*>'))
+        $buttons.Count | Should -BeGreaterThan 0
+        foreach ($button in $buttons) { $button.Value | Should -Match ' aria-pressed="false">$' }
+        # The script sets the attribute together with the class, for the chip and for a second click as well,
+        # because both go through the same function.
+        $html | Should -Match "indicators\[n\]\.classList\.toggle\('active', on\);\s*indicators\[n\]\.setAttribute\('aria-pressed', on \? 'true' : 'false'\);"
+        $html | Should -Match "indicatorChip\.addEventListener\('click', function \(\) \{ setIndicator\('', ''\); \}\)"
+    }
+
+    It 'reflows the indicators and the alert lines on a narrow screen instead of widening the page' {
+        $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
+
+        $style = [regex]::Match($html, '(?s)@media \(max-width: 640px\) \{(.*?)\r?\n\}').Groups[1].Value
+        $style | Should -Not -BeNullOrEmpty
+        # The label of a bar has a row of its own above the bar and the count.
+        $style | Should -Match 'button\.risk \{[^}]*grid-template-columns: minmax\(0, 1fr\) auto;[^}]*grid-template-areas: "label label" "bar count"'
+        # The marker, the severity and the count share the first row of an alert line and the name wraps under them.
+        $style | Should -Match '\.alert-item summary \{[^}]*grid-template-columns: 16px auto minmax\(0, 1fr\);[^}]*grid-template-areas: "mark pill count" "name name name"'
+        $style | Should -Match '\.alert-item summary \.alert-name \{[^}]*overflow-wrap: anywhere'
+        $style | Should -Match '\.alert-body \{ padding-left: 12px; \}'
+    }
+
+    It 'says that there is no site collection to assess instead of listing indicators at 0' {
+        $html = ConvertTo-SPSInventoryHtml -InputObject @()
+
+        $html | Should -Match 'There is no site collection in this inventory\.'
+        $html | Should -Not -Match 'class="risk '
+        $html | Should -Not -Match 'No site collection has:'
     }
 
     It 'shows the large-content, workflow and template signals in the details of a site' {
@@ -1058,18 +1208,31 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $html | Should -Match '<h2 id="alerts">Alerts and remediation</h2>'
         $html | Should -Match '<a href="#alerts">Alerts</a>'
         $html | Should -Match '<strong>8</strong> alert\(s\) of <strong>4</strong> type\(s\): <strong>2</strong> high, <strong>4</strong> medium and <strong>2</strong> low'
-        $html | Should -Match '(?s)<table class="alerts">.*<th>Severity</th><th>Alert</th><th class="num">Affected</th><th>What it means</th><th>What to do</th><th>Reference</th>'
-        $html | Should -Match '(?s)<td>InfoPath</td>.*<td>CheckedOutFiles</td>.*<td>FileVersions</td>.*<td>InformationOnly</td>'
-        $html | Should -Match '<span class="pill no">Low</span></td><td>InformationOnly</td><td class="num">2</td>'
+        $html | Should -Match '(?s)alert-name">InfoPath<.*alert-name">CheckedOutFiles<.*alert-name">FileVersions<.*alert-name">InformationOnly<'
+        $html | Should -Match '<summary><span class="pill no">Low</span><span class="alert-name">InformationOnly</span><span class="alert-count">2 affected</span></summary>'
         $html | Should -Match 'Pass this on to the users\.'
-        $html | Should -Match '<span class="pill yes">High</span></td><td>InfoPath</td><td class="num">2</td>'
-        $html | Should -Match '<span class="pill warn">Medium</span></td><td>CheckedOutFiles</td><td class="num">3</td>'
-        $html | Should -Match 'Checked-out files were detected and should be checked in before migration\.'
+        $html | Should -Match '<summary><span class="pill yes">High</span><span class="alert-name">InfoPath</span><span class="alert-count">2 affected</span></summary>'
+        $html | Should -Match '<summary><span class="pill warn">Medium</span><span class="alert-name">CheckedOutFiles</span><span class="alert-count">3 affected</span></summary>'
+        $html | Should -Match '<strong>What it means</strong> Checked-out files were detected and should be checked in before migration\.'
         $html | Should -Not -Match 'site specific'
-        $html | Should -Match 'Ask the users to &lt;check in&gt; their files &amp; retry\.'
+        $html | Should -Match '<strong>What to do</strong> Ask the users to &lt;check in&gt; their files &amp; retry\.'
         $html | Should -Not -Match 'Ask the users to <check in>'
         $html | Should -Match ('<a href="{0}">Microsoft Learn</a>' -f [regex]::Escape($learn))
         ([regex]::Matches($html, 'Microsoft Learn</a>')).Count | Should -Be 1
+    }
+
+    It 'renders each alert as a collapsible entry that is closed until it is opened' {
+        $alerts = @(
+            [PSCustomObject]@{ AlertType = 'InfoPath'; Severity = 'High'; Url = 'https://intranet/sites/hr'; Value = 1; Message = 'm'; Remediation = 'Rebuild the forms.'; Reference = '' }
+            [PSCustomObject]@{ AlertType = 'LargeLists'; Severity = 'Medium'; Url = 'https://intranet/sites/docs'; Value = 1; Message = 'm'; Remediation = 'Clean up.'; Reference = '' }
+        )
+
+        $html = ConvertTo-SPSInventoryHtml -InputObject @() -Alert $alerts
+
+        ([regex]::Matches($html, '<details class="alert-item">')).Count | Should -Be 2
+        $html | Should -Not -Match '<details class="alert-item" open'
+        $html | Should -Not -Match '<table class="alerts">'
+        $html | Should -Match 'open it to read what it means and what to do about it'
     }
 
     It 'falls back to the message of the alert for a type that is not in the catalog' {
@@ -1088,7 +1251,7 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $omitted = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
 
         $empty | Should -Match '<strong>0</strong> alert\(s\) of <strong>0</strong> type\(s\)'
-        $empty | Should -Not -Match '<table class="alerts">'
+        $empty | Should -Not -Match '<div class="alert-list">'
         $omitted | Should -Not -Match 'id="alerts"'
         $omitted | Should -Not -Match 'href="#alerts"'
     }
