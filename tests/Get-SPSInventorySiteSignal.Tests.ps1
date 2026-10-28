@@ -45,12 +45,12 @@ BeforeAll {
 
 Describe 'Get-SPSInventorySiteSignal' {
     It 'returns nothing for a site collection that raises no signal' {
-        (Get-Signal -Record (New-QuietRecord)).Count | Should -Be 0
+        @(Get-Signal -Record (New-QuietRecord)).Count | Should -Be 0
     }
 
     It 'returns nothing for a missing record or a record with no fields' {
-        (Get-Signal -Record $null).Count | Should -Be 0
-        (Get-Signal -Record ([PSCustomObject]@{ Url = 'https://intranet/sites/bare' })).Count | Should -Be 0
+        @(Get-Signal -Record $null).Count | Should -Be 0
+        @(Get-Signal -Record ([PSCustomObject]@{ Url = 'https://intranet/sites/bare' })).Count | Should -Be 0
     }
 
     It 'returns a Label, a Value and a Detail for each signal' {
@@ -181,7 +181,7 @@ Describe 'Get-SPSInventorySiteSignal' {
         # A record with no HasFbaZone field was not assessed for FBA: nothing to say.
         $record = New-QuietRecord
         $record.PSObject.Properties.Remove('HasFbaZone')
-        (Get-Signal -Record $record).Count | Should -Be 0
+        @(Get-Signal -Record $record).Count | Should -Be 0
     }
 
     It 'gives the workflows and their running instances in one line each' {
@@ -217,14 +217,14 @@ Describe 'Get-SPSInventorySiteSignal' {
 
         $signal.Label | Should -Be @('Site inventory incomplete', 'Customization inventory incomplete', 'Content type inventory incomplete')
         # An inventory whose completeness is not known is not reported as incomplete.
-        (Get-Signal -Record (New-RecordWith @{ SiteInventoryComplete = $null })).Count | Should -Be 0
+        @(Get-Signal -Record (New-RecordWith @{ SiteInventoryComplete = $null })).Count | Should -Be 0
     }
 
     It 'treats the text True and False like the booleans and ignores a count that is not a number' {
-        (Get-Signal -Record (New-RecordWith @{ CustomMasterPage = 'True' })).Count | Should -Be 1
-        (Get-Signal -Record (New-RecordWith @{ CustomMasterPage = 'false' })).Count | Should -Be 0
-        (Get-Signal -Record (New-RecordWith @{ SandboxSolutions = '' })).Count | Should -Be 0
-        (Get-Signal -Record (New-RecordWith @{ SandboxSolutions = '2' })).Count | Should -Be 1
+        @(Get-Signal -Record (New-RecordWith @{ CustomMasterPage = 'True' })).Count | Should -Be 1
+        @(Get-Signal -Record (New-RecordWith @{ CustomMasterPage = 'false' })).Count | Should -Be 0
+        @(Get-Signal -Record (New-RecordWith @{ SandboxSolutions = '' })).Count | Should -Be 0
+        @(Get-Signal -Record (New-RecordWith @{ SandboxSolutions = '2' })).Count | Should -Be 1
     }
 
     It 'formats the numbers the same way in every culture' {
