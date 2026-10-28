@@ -161,7 +161,7 @@ CSV/JSON rows describe site collections and any web-application enumeration fail
 | `LargeListViewCount` / `LargeListViewExamples` | Number of large-list views and up to five list/view examples with row limits |
 | `CheckedOutFileCount` / `CheckedOutFileExamples` | Number of checked-out files and up to five impacted libraries |
 | `FileVersionCount` / `FileVersionExamples` | Number of files above the configured file-version threshold and up to five examples |
-| `SiteLockState` / `IsLockedSite` / `HasNoAccessLock` | Site collection lock state (`Unlock`, `ReadOnly`, `NoAdditions`, `NoAccess`, `Unknown`), whether the site has any lock, and whether the lock is `NoAccess`, the only one that makes the site unreadable (and blocking in the example configuration) |
+| `SiteLockState` / `IsLockedSite` / `HasNoAccessLock` | Site collection lock state (`Unlock`, `ReadOnly`, `NoAdditions`, `NoAccess`, `Unknown`), whether the site has any lock, and whether the lock is `NoAccess`, the only one that makes the site unreadable (and blocking in the example configuration). SharePoint refuses to read a `NoAccess` site collection at all, even its lock flags, so the lock is recognized from that error and the site collection stays `Partial`. `Unknown` means that the flags could not be read for another reason, and comes with a warning |
 | `UsesFullTrustCode` | Site activates a feature from a custom full-trust WSP (GAC assembly) |
 | `UsesCustomFarmFeature` | Site activates a feature from a custom farm solution (WSP), as identified by the farm-solution map |
 | `SandboxSolutions` | Sandbox (user) solutions in the solution gallery of the site collection, activated or not |

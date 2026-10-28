@@ -312,7 +312,10 @@ non-portable as-is:
   (a WSP deploying a global assembly to the GAC), correlated through the farm-solution map.
 - `InfoPathFormCount` — the site uses InfoPath forms.
 - `HasNoAccessLock` — the site collection is locked with `NoAccess`: nobody can read it,
-  so the migration tools skip it until it is unlocked. `ReadOnly` and `NoAdditions` locks
+  so the migration tools skip it until it is unlocked. The inventory cannot read such a
+  site collection either (SharePoint answers "Access to this Web site has been blocked"
+  to every read, the lock flags included): it recognizes the lock from that error, and the
+  site collection stays `Partial` with a warning for what could not be read. `ReadOnly` and `NoAdditions` locks
   only restrict changes, so they are not blocking: the content can still be read and
   migrated, and the lock is often a deliberate freeze. They are reported by `IsLockedSite`
   (true for any lock) and `SiteLockState`, and raise the `LockedSite` alert.
