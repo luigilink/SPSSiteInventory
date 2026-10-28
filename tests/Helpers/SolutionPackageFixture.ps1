@@ -332,12 +332,12 @@ function New-TestCabinet {
         }
         # The files at the root come first, before any destination directory is set.
         foreach ($file in @($files | Where-Object { $_.DirectoryName.TrimEnd('\', '/') -eq $sourceFull })) {
-            $directive.Add('"{0}" "{1}"' -f $file.FullName, $file.Name)
+            $directive.Add(('"{0}" "{1}"' -f $file.FullName, $file.Name))
         }
         foreach ($file in @($files | Where-Object { $_.DirectoryName.TrimEnd('\', '/') -ne $sourceFull })) {
             $relative = $file.FullName.Substring($sourceFull.Length + 1)
             $directive.Add(".Set DestinationDir=$(Split-Path -Path $relative -Parent)")
-            $directive.Add('"{0}" "{1}"' -f $file.FullName, $file.Name)
+            $directive.Add(('"{0}" "{1}"' -f $file.FullName, $file.Name))
         }
         $ddf = Join-Path -Path $directory -ChildPath 'package.ddf'
         Set-Content -LiteralPath $ddf -Value $directive -Encoding Ascii
