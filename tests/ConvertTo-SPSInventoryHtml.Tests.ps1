@@ -420,6 +420,27 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         (ConvertTo-SPSInventoryHtml -InputObject $script:Sample) | Should -Not -Match 'Needs review'
     }
 
+    It 'counts the sites that wait in Needs review by the rule that puts them there, not by the name of a wave that the settings can give' {
+        # MigrationWaves.Name is a setting: a numbered wave can be called Needs review too.
+        $records = @(
+            [PSCustomObject]@{ Url = 'https://intranet/sites/a'; AssessmentStatus = 'Complete'; Category = 2; CategoryName = 'Moderate'; SizeGB = 1; Wave = 2; WaveName = 'Needs review' }
+            [PSCustomObject]@{ Url = 'https://intranet/sites/b'; AssessmentStatus = 'Complete'; Category = 3; CategoryName = 'Complex'; SizeGB = 1; Wave = 2; WaveName = 'Needs review' }
+            [PSCustomObject]@{ Url = 'https://intranet/sites/c'; AssessmentStatus = 'Partial'; Category = 2; CategoryName = 'Moderate'; SizeGB = 1; Wave = 2; WaveName = 'Needs review' }
+            [PSCustomObject]@{ Url = 'https://intranet/sites/d'; AssessmentStatus = 'Complete'; Category = 1; CategoryName = 'Simple'; SizeGB = 1; Wave = 0; WaveName = 'Needs review' }
+        )
+
+        $html = ConvertTo-SPSInventoryHtml -InputObject $records
+
+        $html | Should -Not -Match 'wait in the <strong>Needs review</strong> wave'
+        # The wave plan keeps the numbered wave and the wave 0 apart, so the plan is not mixed up either.
+        $html | Should -Match '<td class="num">2</td><td>Needs review</td><td class="num">3</td>'
+        $html | Should -Match '<td class="num">-</td><td>Needs review</td><td class="num">1</td>'
+
+        # Next to them, the site collections that really wait are the only ones that are counted.
+        $withHeldBack = $records + [PSCustomObject]@{ Url = 'https://intranet/sites/e'; AssessmentStatus = 'Partial'; Category = 1; CategoryName = 'Simple'; SizeGB = 1; Wave = 0; WaveName = 'Needs review' }
+        (ConvertTo-SPSInventoryHtml -InputObject $withHeldBack) | Should -Match '<strong>1</strong> Simple site collection\(s\) with a partial assessment wait in the <strong>Needs review</strong> wave'
+    }
+
     It 'counts web-application enumeration failures separately from site collections' {
         $records = @(
             [PSCustomObject]@{

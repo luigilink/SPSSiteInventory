@@ -184,7 +184,14 @@
     $total = $siteRecords.Count
     $partialCount = @($siteRecords | Where-Object { $_.AssessmentStatus -eq 'Partial' }).Count
     $failedCount = @($siteRecords | Where-Object { $_.AssessmentStatus -eq 'Failed' }).Count
-    $needsReviewCount = @($siteRecords | Where-Object { $_.WaveName -eq 'Needs review' }).Count
+    # The wave names come from the settings, so the sites that wait in Needs review are told by the rule
+    # that puts them there (partial, Simple, wave 0) and not by a name that a numbered wave could have.
+    $needsReviewCount = @($siteRecords | Where-Object {
+            $_.AssessmentStatus -eq 'Partial' -and
+            $null -ne $_.Category -and [int]$_.Category -eq 1 -and
+            $null -ne $_.Wave -and [int]$_.Wave -eq 0 -and
+            $_.WaveName -eq 'Needs review'
+        }).Count
     $enumerationFailureCount = @($records | Where-Object { $_.InventoryScope -eq 'WebApplication' }).Count
     $assessedTotal = $total - $failedCount
 
