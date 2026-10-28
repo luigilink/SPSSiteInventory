@@ -2451,6 +2451,32 @@ Describe 'Get-SPSSiteCustomization content types' {
         ($warnings -join ';') | Should -Match 'LargeContentThresholds\.MaxAlertRowsPerSite'
     }
 
+    It 'keeps the site complete when the alerts are exactly as many as the per-site cap, and partial with one more' {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Alerts = @(1..2 | ForEach-Object { Get-TestAlert -Title "Alert$_" })
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $atTheCap = Get-SPSSiteCustomization -Site $site -LargeContentThresholds @{ MaxAlertRowsPerSite = 2 } -WarningVariable atTheCapWarnings -WarningAction SilentlyContinue
+
+        $atTheCap.SharePointAlertCount | Should -Be 2
+        $atTheCap.SharePointAlerts | Should -HaveCount 2
+        $atTheCap.CustomizationInventoryComplete | Should -BeTrue
+        @($atTheCapWarnings | Where-Object { $_ -match 'MaxAlertRowsPerSite' }) | Should -HaveCount 0
+
+        $web.Alerts = @(1..3 | ForEach-Object { Get-TestAlert -Title "Alert$_" })
+        $overTheCap = Get-SPSSiteCustomization -Site $site -LargeContentThresholds @{ MaxAlertRowsPerSite = 2 } -WarningVariable overTheCapWarnings -WarningAction SilentlyContinue
+
+        $overTheCap.SharePointAlertCount | Should -Be 3
+        $overTheCap.SharePointAlerts | Should -HaveCount 2
+        $overTheCap.CustomizationInventoryComplete | Should -BeFalse
+        @($overTheCapWarnings | Where-Object { $_ -match 'MaxAlertRowsPerSite' }) | Should -HaveCount 1
+    }
+
     It 'warns once per site, not once per web, when the alert rows reach the cap' {
         $first = Get-TestWeb -Definitions @() -Bindings @()
         $first.Alerts = @(1..2 | ForEach-Object { Get-TestAlert -Title "First$_" })

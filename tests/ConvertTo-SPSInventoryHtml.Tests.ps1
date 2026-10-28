@@ -381,6 +381,45 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         }
     }
 
+    It 'shows in the wave plan how many site collections of each wave are partial, and the Needs review wave' {
+        $records = @(
+            [PSCustomObject]@{ Url = 'https://intranet/sites/a'; AssessmentStatus = 'Complete'; Category = 1; CategoryName = 'Simple'; SizeGB = 1; Wave = 1; WaveName = 'Quick wins' }
+            [PSCustomObject]@{ Url = 'https://intranet/sites/b'; AssessmentStatus = 'Partial'; Category = 1; CategoryName = 'Simple'; SizeGB = 2; Wave = 0; WaveName = 'Needs review' }
+            [PSCustomObject]@{ Url = 'https://intranet/sites/c'; AssessmentStatus = 'Partial'; Category = 1; CategoryName = 'Simple'; SizeGB = 4; Wave = 0; WaveName = 'Needs review' }
+            [PSCustomObject]@{ Url = 'https://intranet/sites/d'; AssessmentStatus = 'Partial'; Category = 2; CategoryName = 'Moderate'; SizeGB = 8; Wave = 2; WaveName = 'Light remediation' }
+            [PSCustomObject]@{ Url = 'https://intranet/sites/e'; AssessmentStatus = 'Complete'; Category = 2; CategoryName = 'Moderate'; SizeGB = 1; Wave = 2; WaveName = 'Light remediation' }
+        )
+
+        $html = ConvertTo-SPSInventoryHtml -InputObject $records
+
+        $html | Should -Match '<th>Wave</th><th>Name</th><th class="num">Sites</th><th class="num">Content \(GB\)</th><th class="num">Partial</th>'
+        # A wave without a partial site collection shows a dash, a wave with some shows how many.
+        $html | Should -Match '<td class="num">1</td><td>Quick wins</td><td class="num">1</td><td class="num">1</td><td class="num">-</td></tr>'
+        $html | Should -Match '<td class="num">2</td><td>Light remediation</td><td class="num">2</td><td class="num">9</td><td class="num">1</td></tr>'
+        # Needs review is a bucket of wave 0, shown last like the other buckets, and every site collection in it is partial.
+        $html | Should -Match '<td class="num">-</td><td>Needs review</td><td class="num">2</td><td class="num">6</td><td class="num">2</td></tr>'
+        $html.IndexOf('>Needs review</td>') | Should -BeGreaterThan $html.IndexOf('>Light remediation</td>')
+    }
+
+    It 'says in the summary how many Simple site collections wait in the Needs review wave, and says nothing when none does' {
+        $withReview = @(
+            [PSCustomObject]@{ Url = 'https://intranet/sites/a'; AssessmentStatus = 'Partial'; Category = 1; CategoryName = 'Simple'; SizeGB = 1; Wave = 0; WaveName = 'Needs review' }
+            [PSCustomObject]@{ Url = 'https://intranet/sites/b'; AssessmentStatus = 'Partial'; Category = 1; CategoryName = 'Simple'; SizeGB = 1; Wave = 0; WaveName = 'Needs review' }
+            [PSCustomObject]@{ Url = 'https://intranet/sites/c'; AssessmentStatus = 'Complete'; Category = 1; CategoryName = 'Simple'; SizeGB = 1; Wave = 1; WaveName = 'Quick wins' }
+        )
+        $partialOnly = @(
+            [PSCustomObject]@{ Url = 'https://intranet/sites/d'; AssessmentStatus = 'Partial'; Category = 2; CategoryName = 'Moderate'; SizeGB = 1; Wave = 2; WaveName = 'Light remediation' }
+        )
+
+        $html = ConvertTo-SPSInventoryHtml -InputObject $withReview
+
+        $html | Should -Match '<div class="summary-total"><strong>2</strong> Simple site collection\(s\) with a partial assessment wait in the <strong>Needs review</strong> wave until they are read in full\.</div>'
+        # The partial count of the first line is unchanged.
+        $html | Should -Match '<strong>2</strong> partial &middot; <strong>0</strong> failed'
+        (ConvertTo-SPSInventoryHtml -InputObject $partialOnly) | Should -Not -Match 'wait in the <strong>Needs review</strong> wave'
+        (ConvertTo-SPSInventoryHtml -InputObject $script:Sample) | Should -Not -Match 'Needs review'
+    }
+
     It 'counts web-application enumeration failures separately from site collections' {
         $records = @(
             [PSCustomObject]@{

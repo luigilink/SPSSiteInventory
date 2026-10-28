@@ -37,7 +37,7 @@ Describe 'New-SPSLabSettings' {
             $settings.LargeContentThresholds[$threshold.Key] | Should -Be $threshold.Value -Because $threshold.Key
         }
         $settings.LargeContentThresholds.LargeSiteSizeGB | Should -Be $script:Example.LargeContentThresholds.LargeSiteSizeGB
-        $settings.LargeContentThresholds.MaxAlertRowsPerSite | Should -Be $script:Example.LargeContentThresholds.MaxAlertRowsPerSite
+        $settings.LargeContentThresholds.MaxItemsForVersionScanPerLibrary | Should -Be $script:Example.LargeContentThresholds.MaxItemsForVersionScanPerLibrary
     }
 
     It 'changes the thresholds only, not the weights that share their names' {

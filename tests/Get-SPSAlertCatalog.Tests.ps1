@@ -150,6 +150,10 @@ Describe 'Get-SPSAlertCatalog' {
         $entry.Reference | Should -Be 'https://learn.microsoft.com/en-us/sharepoint/planning-hub-sites'
     }
 
+    It 'tells the reader that a partial Simple site collection waits in the Needs review wave' {
+        $script:Catalog['AssessmentPartial'].Remediation | Should -Match 'Simple site collection is held in the Needs review wave until it is read in full'
+    }
+
     It 'is documented in the alerts wiki page, with the same remediation' {
         foreach ($key in $script:Catalog.Keys) {
             $script:WikiAlerts | Should -Match ('\| `{0}` \|' -f $key) -Because "alert $key must be documented"

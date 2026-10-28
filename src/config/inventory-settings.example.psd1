@@ -286,7 +286,10 @@
     # category; to put every non-blocking site in the first wave instead, use:
     #   @{ Wave = 1; Name = 'Migrate now'; Categories = @(1, 2, 3) }
     #   @{ Wave = 2; Name = 'Projects';    Categories = @(4) }
-    # A site whose category is not listed lands in an 'Unassigned' bucket.
+    # A site whose category is not listed lands in an 'Unassigned' bucket. A site whose
+    # assessment failed is in 'Not assessed', and a Simple site (category 1) whose assessment
+    # is partial is in 'Needs review', whatever the entries say: what could not be read counts
+    # as 0, so it waits there until it is read in full.
     # -------------------------------------------------------------------------------
     MigrationWaves = @(
         @{ Wave = 1; Name = 'Quick wins'; Categories = @(1) }
