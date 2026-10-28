@@ -14,7 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   severity), and the signals that no site collection raises are named on one line. A click on an
   indicator filters the inventory table to the site collections that raise it. The alerts are
   collapsible lines (severity, name, number affected) that open to show what the alert means,
-  what to do and the reference, instead of a table of long texts. (#90)
+  what to do and the reference, instead of a table of long texts. Each indicator exposes whether
+  its filter is on (`aria-pressed`), and below 640 px the indicators and the alert lines reflow
+  instead of making the page wider than the screen. (#90)
 
 ### Fixed
 

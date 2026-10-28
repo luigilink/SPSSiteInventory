@@ -952,7 +952,7 @@ Describe 'ConvertTo-SPSInventoryHtml' {
 
         $html = ConvertTo-SPSInventoryHtml -InputObject $records
 
-        $html | Should -Match '<button type="button" class="risk sev-medium" data-ind="large-lists">'
+        $html | Should -Match '<button type="button" class="risk sev-medium" data-ind="large-lists" aria-pressed="false">'
         $html | Should -Match '<button type="button" class="chip" id="inv-indicator" hidden></button>'
         # The row of the site collection is tagged with every indicator it raises, and in the order of the list.
         $html | Should -Match '<tbody class="site" data-category="2" data-ind="large-lists checked-out-files">'
@@ -960,6 +960,36 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $html | Should -Match '<tbody class="site" data-category="1">'
         $html | Should -Match '<tbody class="site" data-category="0">'
         (Get-RiskCount -Html $html -Label 'Sites with large lists') | Should -Be 1
+    }
+
+    It 'exposes the state of every indicator with aria-pressed, off until a filter is applied, and keeps it in step with the active class' {
+        $records = @(
+            [PSCustomObject]@{ Url = 'https://intranet/sites/a'; Category = 2; CategoryName = 'Moderate'; LargeListCount = 1; CheckedOutFileCount = 2 }
+            [PSCustomObject]@{ Url = 'https://intranet/sites/b'; Category = 1; CategoryName = 'Simple' }
+        )
+
+        $html = ConvertTo-SPSInventoryHtml -InputObject $records
+
+        $buttons = @([regex]::Matches($html, '<button type="button" class="risk [^"]*" data-ind="[^"]*"[^>]*>'))
+        $buttons.Count | Should -BeGreaterThan 0
+        foreach ($button in $buttons) { $button.Value | Should -Match ' aria-pressed="false">$' }
+        # The script sets the attribute together with the class, for the chip and for a second click as well,
+        # because both go through the same function.
+        $html | Should -Match "indicators\[n\]\.classList\.toggle\('active', on\);\s*indicators\[n\]\.setAttribute\('aria-pressed', on \? 'true' : 'false'\);"
+        $html | Should -Match "indicatorChip\.addEventListener\('click', function \(\) \{ setIndicator\('', ''\); \}\)"
+    }
+
+    It 'reflows the indicators and the alert lines on a narrow screen instead of widening the page' {
+        $html = ConvertTo-SPSInventoryHtml -InputObject $script:Sample
+
+        $style = [regex]::Match($html, '(?s)@media \(max-width: 640px\) \{(.*?)\r?\n\}').Groups[1].Value
+        $style | Should -Not -BeNullOrEmpty
+        # The label of a bar has a row of its own above the bar and the count.
+        $style | Should -Match 'button\.risk \{[^}]*grid-template-columns: minmax\(0, 1fr\) auto;[^}]*grid-template-areas: "label label" "bar count"'
+        # The marker, the severity and the count share the first row of an alert line and the name wraps under them.
+        $style | Should -Match '\.alert-item summary \{[^}]*grid-template-columns: 16px auto minmax\(0, 1fr\);[^}]*grid-template-areas: "mark pill count" "name name name"'
+        $style | Should -Match '\.alert-item summary \.alert-name \{[^}]*overflow-wrap: anywhere'
+        $style | Should -Match '\.alert-body \{ padding-left: 12px; \}'
     }
 
     It 'says that there is no site collection to assess instead of listing indicators at 0' {

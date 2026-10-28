@@ -499,6 +499,18 @@ button.risk.active { background: var(--brand-soft); box-shadow: inset 3px 0 0 va
 .alert-body { padding: 2px 12px 12px 120px; font-size: 13px; }
 .alert-body p { margin: 4px 0; }
 .chip { font: inherit; color: #fff; background: var(--brand); border: 0; border-radius: 999px; padding: 5px 12px; cursor: pointer; }
+@media (max-width: 640px) {
+    button.risk { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "label label" "bar count"; row-gap: 4px; }
+    button.risk .risk-label { grid-area: label; overflow-wrap: anywhere; }
+    button.risk .risk-bar { grid-area: bar; }
+    button.risk .risk-count { grid-area: count; }
+    .alert-item summary { grid-template-columns: 16px auto minmax(0, 1fr); grid-template-areas: "mark pill count" "name name name"; row-gap: 4px; }
+    .alert-item summary::before { grid-area: mark; }
+    .alert-item summary .pill { grid-area: pill; }
+    .alert-item summary .alert-count { grid-area: count; justify-self: end; }
+    .alert-item summary .alert-name { grid-area: name; overflow-wrap: anywhere; }
+    .alert-body { padding-left: 12px; }
+}
 @media print { tr.detail { display: table-row; } .toolbar { display: none; } }
 </style>
 '@
@@ -600,7 +612,7 @@ button.risk.active { background: var(--brand-soft); box-shadow: inset 3px 0 0 va
             foreach ($row in $severityRows) {
                 $share = [math]::Round(100 * $row.Count / $total, 1)
                 $barWidth = [math]::Max($share, 1)
-                [void]$sb.AppendLine(('<button type="button" class="risk sev-{0}" data-ind="{1}"><span class="risk-label">{2}</span><span class="risk-bar"><span style="width:{3}%"></span></span><span class="risk-count"><strong>{4}</strong> <span class="muted">{5}%</span></span></button>' -f
+                [void]$sb.AppendLine(('<button type="button" class="risk sev-{0}" data-ind="{1}" aria-pressed="false"><span class="risk-label">{2}</span><span class="risk-bar"><span style="width:{3}%"></span></span><span class="risk-count"><strong>{4}</strong> <span class="muted">{5}%</span></span></button>' -f
                     $severityName.ToLowerInvariant(),
                     $row.Key,
                     (ConvertTo-SPSHtmlText -Value $row.Label),
@@ -1178,7 +1190,9 @@ button.risk.active { background: var(--brand-soft); box-shadow: inset 3px 0 0 va
     function setIndicator(key, label) {
         activeIndicator = key;
         for (var n = 0; n < indicators.length; n++) {
-            indicators[n].classList.toggle('active', key !== '' && indicators[n].getAttribute('data-ind') === key);
+            var on = key !== '' && indicators[n].getAttribute('data-ind') === key;
+            indicators[n].classList.toggle('active', on);
+            indicators[n].setAttribute('aria-pressed', on ? 'true' : 'false');
         }
         if (indicatorChip) {
             indicatorChip.hidden = key === '';
