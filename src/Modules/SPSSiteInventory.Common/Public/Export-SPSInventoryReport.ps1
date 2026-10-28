@@ -105,6 +105,17 @@
         Number of site masters that the scan left out (Scope.IncludeSiteMasters). Shown in
         the HTML summary when above 0 and written to the manifest as ExcludedSiteMasters.
 
+        .PARAMETER HtmlSplitThreshold
+        The number of site collections above which the HTML report is split in several pages: an
+        entry page (the file named after the other reports) and the table of the site collections
+        on pages of its own, in the same folder. A smaller farm gets one file. Defaults to 3000;
+        0 never splits. The pages are listed in the manifest (Files.InventoryHtmlPages) and
+        their paths are returned as HtmlPagePaths.
+
+        .PARAMETER HtmlRowsPerPage
+        The number of site collections that a table page of a split HTML report holds at most,
+        from 50 to 5000. Defaults to 500.
+
         .EXAMPLE
         Export-SPSInventoryReport -InputObject $scored -OutputFolder C:\Inventory
     #>
@@ -174,7 +185,17 @@
 
         [Parameter()]
         [System.Int32]
-        $ExcludedSiteMasterCount = 0
+        $ExcludedSiteMasterCount = 0,
+
+        [Parameter()]
+        [ValidateRange(0, 10000000)]
+        [System.Int32]
+        $HtmlSplitThreshold = 3000,
+
+        [Parameter()]
+        [ValidateRange(50, 5000)]
+        [System.Int32]
+        $HtmlRowsPerPage = 500
     )
 
     if (-not (Test-Path -Path $OutputFolder)) {
@@ -466,8 +487,17 @@
             Set-Content -Path $bcsJsonPath -Encoding UTF8
     }
 
-    $html = ConvertTo-SPSInventoryHtml @htmlParams
-    $html | Set-Content -Path $htmlPath -Encoding UTF8
+    # One file for a small farm. A large one gets an entry page, named as the single file would be, and the table
+    # of its site collections on pages of their own in the same folder.
+    $htmlPages = @(ConvertTo-SPSInventoryHtml @htmlParams -FileName ([System.IO.Path]::GetFileName($htmlPath)) -SplitThreshold $HtmlSplitThreshold -RowsPerPage $HtmlRowsPerPage)
+    $htmlPagePaths = [System.Collections.Generic.List[System.String]]::new()
+    foreach ($htmlPage in $htmlPages) {
+        $pagePath = Join-Path -Path $OutputFolder -ChildPath $htmlPage.Name
+        $htmlPage.Html | Set-Content -Path $pagePath -Encoding UTF8
+        if ($htmlPage.Kind -ne 'Entry') {
+            $htmlPagePaths.Add($pagePath)
+        }
+    }
 
     $totalSizeGb = 0.0
     foreach ($record in $siteRecords) {
@@ -502,6 +532,7 @@
             InventoryCsv = $csvPath
             InventoryJson = $jsonPath
             InventoryHtml = $htmlPath
+            InventoryHtmlPages = $htmlPagePaths.ToArray()
             SitesJson = $sitesJsonPath
             AuthJson = $authJsonPath
             WorkflowsJson = $workflowsJsonPath
@@ -531,6 +562,7 @@
         CsvPath  = $csvPath
         JsonPath = $jsonPath
         HtmlPath = $htmlPath
+        HtmlPagePaths = $htmlPagePaths.ToArray()
         SitesJsonPath = $sitesJsonPath
         AuthJsonPath = $authJsonPath
         WorkflowsJsonPath = $workflowsJsonPath

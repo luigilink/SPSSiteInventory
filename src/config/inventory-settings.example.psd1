@@ -145,6 +145,23 @@
     }
 
     # -------------------------------------------------------------------------------
+    # HTML report
+    #
+    # The HTML report is one file until it has more site collections than HtmlSplitThreshold
+    # (3000: about 5 MB, which still filters at once). A larger farm gets an entry page, with
+    # the summary, the risk indicators, the alerts, the wave plan and the detail sections,
+    # and the table of the site collections on pages of at most HtmlRowsPerPage of them
+    # (500, about 1 MB a page), one series per category, in the same folder. The pages link
+    # to each other with relative links: keep them together, and the folder can be moved,
+    # zipped and sent. 0 never splits. The values must be whole numbers: HtmlSplitThreshold
+    # from 0 to 10000000 and HtmlRowsPerPage from 50 to 5000.
+    # -------------------------------------------------------------------------------
+    Report = @{
+        HtmlSplitThreshold = 3000
+        HtmlRowsPerPage = 500
+    }
+
+    # -------------------------------------------------------------------------------
     # SharePoint alerts
     #
     # The SharePoint alerts report lists the "Alert Me" subscriptions of the users, with

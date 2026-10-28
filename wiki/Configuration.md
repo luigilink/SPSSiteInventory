@@ -19,6 +19,7 @@ and adjust it. No client-specific value ships in the repository.
 | `TemplateParity` | hashtable | Template compatibility and language rules (supported/unsupported/review mapping, optional language allow-list). Optional; built-in defaults apply when omitted. |
 | `PermissionLevels` | hashtable | Permission-level names SharePoint provisions, used to tell custom permission levels apart (`BuiltInNames`, added to the built-in English names). Optional. |
 | `Scope` | hashtable | Which site collections are scanned (`IncludePersonalSites` and `IncludeSiteMasters`, both default `$false`). Optional. |
+| `Report` | hashtable | Options of the HTML report: `HtmlSplitThreshold` (default 3000) and `HtmlRowsPerPage` (default 500). Optional. |
 | `SharePointAlerts` | hashtable | Options of the SharePoint alerts report (`IncludeUserLogin`, default `$true`). Optional. |
 | `Scoring` | hashtable | The scoring engine configuration (see below). **Mandatory.** |
 | `MigrationWaves` | hashtable[] | The category-to-wave mapping (see below). Optional; a one-wave-per-category default applies when omitted. |
@@ -464,6 +465,40 @@ the scan then reports as many site collections as 1.x did. A settings file from 
 
 Each option must be `$true` or `$false`. Anything else, such as the string `'false'`, is
 rejected when the settings file is loaded, before any site collection is read.
+
+## Report section
+
+```powershell
+Report = @{
+    # The HTML report is split in several pages above this number of site collections (default 3000, 0 never splits)
+    HtmlSplitThreshold = 3000
+    # The number of site collections that a table page holds at most, from 50 to 5000 (default 500)
+    HtmlRowsPerPage = 500
+}
+```
+
+The HTML report is one file, as long as the farm has no more site collections than
+`HtmlSplitThreshold`. About 3000 site collections weigh about 5 MB, which still filters at once.
+A larger farm gets an **entry page** and, in the same folder, the table of its site collections on
+**pages of at most `HtmlRowsPerPage` of them**, one series of pages per category, worst first:
+
+- The entry page is named like the single file (`SPSSiteInventory-PROD-20261028-1146.html`). It keeps the
+  summary, the risk indicators, the alerts, the wave plan and the detail sections, and lists the table pages
+  by category. It stays small (about 40 KB for 30,000 site collections).
+- The table pages are named after it (`SPSSiteInventory-PROD-20261028-1146-sites-blocking-1.html`,
+  `...-sites-simple-12.html`). Each one has the same header, the way back to the entry page, the other
+  categories, a search box, sortable columns and the details of each site collection.
+- A risk indicator of the entry page links to the first table page that has a site collection that raises it,
+  with the filter in the address (`#ind=large-lists`). The filter applies to that page; the page links to the
+  previous and to the next page that has the indicator, and its other links keep the filter.
+- The pages are as self-contained as the single file and link to each other with relative links only: keep
+  them together, and the folder can be moved, zipped and sent. The manifest lists them
+  (`Files.InventoryHtmlPages`).
+
+With 30,000 site collections, the HTML report is 62 files and about 50 MB, and the largest page is
+about 1.3 MB. The CSV and JSON files are not split. Both options must be whole numbers
+(`HtmlSplitThreshold` from 0 to 10000000, `HtmlRowsPerPage` from 50 to 5000): anything else, such as the
+text `'3000'`, is rejected when the settings file is loaded.
 
 ## SharePointAlerts section
 

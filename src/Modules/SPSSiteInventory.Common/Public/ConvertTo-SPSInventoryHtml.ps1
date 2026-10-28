@@ -1,7 +1,8 @@
 ﻿function ConvertTo-SPSInventoryHtml {
     <#
         .SYNOPSIS
-        Renders the scored inventory as a single self-contained HTML report.
+        Renders the scored inventory as a self-contained HTML report: one file, or several pages
+        for a very large farm.
 
         .DESCRIPTION
         ConvertTo-SPSInventoryHtml is a pure function (no SharePoint calls) so it can be
@@ -24,6 +25,18 @@
 
         Every field value is HTML-encoded, so URLs, titles and reasons cannot break the
         markup.
+
+        By default the function returns the report as one string. With -FileName it returns
+        pages instead, as objects with a Name (the file name), a Kind (Entry or Sites) and the
+        Html. A farm with no more than SplitThreshold site collections still gives one page, the
+        entry page, which is the report above. A larger one is split: the entry page keeps the
+        summary, the risk indicators, the alerts, the wave plan and the detail sections, and the
+        table of the site collections moves to pages of at most RowsPerPage site collections,
+        one series per category, worst first. The pages link to each other with relative links,
+        and are as self-contained as the single file, so that the folder can be moved, zipped
+        and sent. A risk indicator of the entry page links to the first table page that has a
+        site collection raising it, with the filter in the address (#ind=large-lists), and that
+        page links to the previous and the next ones.
 
         .PARAMETER InputObject
         The scored inventory records to render. Each record is expected to expose Url,
@@ -84,6 +97,21 @@
         .PARAMETER ExcludedSiteMasterCount
         Number of site masters that the scan left out. When above 0, the summary box says so.
 
+        .PARAMETER FileName
+        The file name of the entry page, for example SPSSiteInventory-PROD-20261028-1146.html.
+        The table pages are named after it (SPSSiteInventory-PROD-20261028-1146-sites-blocking-1.html),
+        and the links between the pages use these names only. Giving it makes the function return
+        pages, not a string.
+
+        .PARAMETER SplitThreshold
+        The number of site collections above which the report is split in several pages. Defaults
+        to 3000: a report of 3000 site collections weighs about 5 MB and stays comfortable to filter.
+        0 never splits. Only with -FileName.
+
+        .PARAMETER RowsPerPage
+        The number of site collections that a table page holds at most, from 50 to 5000. Defaults
+        to 500, about 1 MB a page. Only with -FileName.
+
         .PARAMETER MaxDetailRow
         Maximum number of rows that each detail table shows (farm solutions, sites bound to
         full-trust code, managed metadata lists, external lists and BCS applications). A table
@@ -97,9 +125,14 @@
 
         .EXAMPLE
         $html = ConvertTo-SPSInventoryHtml -InputObject $scored -SolutionMap $solutionMap
+
+        .EXAMPLE
+        $page = ConvertTo-SPSInventoryHtml -InputObject $scored -FileName 'report.html' -SplitThreshold 3000
+        $page | ForEach-Object { Set-Content -Path (Join-Path $folder $_.Name) -Value $_.Html -Encoding UTF8 }
     #>
-    [CmdletBinding()]
-    [OutputType([System.String])]
+    [CmdletBinding(DefaultParameterSetName = 'Single')]
+    [OutputType([System.String], ParameterSetName = 'Single')]
+    [OutputType([System.Management.Automation.PSObject], ParameterSetName = 'Pages')]
     param
     (
         [Parameter(Mandatory = $true)]
@@ -165,7 +198,22 @@
         [Parameter()]
         [ValidateRange(1, 100000)]
         [System.Int32]
-        $MaxDetailRow = 200
+        $MaxDetailRow = 200,
+
+        [Parameter(ParameterSetName = 'Pages', Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [System.String]
+        $FileName,
+
+        [Parameter(ParameterSetName = 'Pages')]
+        [ValidateRange(0, 10000000)]
+        [System.Int32]
+        $SplitThreshold = 3000,
+
+        [Parameter(ParameterSetName = 'Pages')]
+        [ValidateRange(50, 5000)]
+        [System.Int32]
+        $RowsPerPage = 500
     )
 
     # Category metadata: name and accent colour for each complexity level. A plain
@@ -194,6 +242,17 @@
         }).Count
     $enumerationFailureCount = @($records | Where-Object { $_.InventoryScope -eq 'WebApplication' }).Count
     $assessedTotal = $total - $failedCount
+
+    # A report with more site collections than SplitThreshold is split: the entry page, and the table of the
+    # site collections on pages of at most RowsPerPage of them, one series per category.
+    $paged = $PSCmdlet.ParameterSetName -eq 'Pages'
+    $splitReport = $paged -and $SplitThreshold -gt 0 -and $total -gt $SplitThreshold
+    $entryName = ''
+    $pageBaseName = ''
+    if ($paged) {
+        $entryName = [System.IO.Path]::GetFileName($FileName)
+        $pageBaseName = [System.IO.Path]::GetFileNameWithoutExtension($entryName)
+    }
 
     $invariant = [System.Globalization.CultureInfo]::InvariantCulture
 
@@ -357,6 +416,15 @@ h2 { margin: 28px 0 12px; font-size: 18px; }
     font-size: 13px;
 }
 .nav a:hover { background: var(--brand-soft); }
+.nav a.current { background: var(--brand); color: #fff; border-color: var(--brand); }
+.pager { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 8px 0; }
+.pager a, .pager strong, .pager span { display: inline-block; padding: 3px 10px; border: 1px solid var(--border); border-radius: 999px; background: #fff; font-size: 13px; }
+.pager a { color: var(--brand); text-decoration: none; }
+.pager a:hover { background: var(--brand-soft); }
+.pager strong { background: var(--brand); border-color: var(--brand); color: #fff; }
+.pager span { border-color: transparent; background: none; color: var(--muted); }
+.hop { margin-left: 8px; font-size: 13px; }
+.hop a { color: var(--brand); margin-right: 10px; }
 .summary {
     border: 1px solid var(--border);
     border-left: 4px solid var(--brand);
@@ -462,7 +530,7 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
 .summary > p.muted:first-child { margin-top: 0; }
 .risk-group { margin: 0 0 14px; }
 .risk-head { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; color: var(--muted); font-size: 13px; }
-button.risk {
+.risk {
     display: grid;
     grid-template-columns: minmax(260px, 380px) minmax(120px, 1fr) 100px;
     align-items: center;
@@ -476,9 +544,10 @@ button.risk {
     border-radius: 6px;
     padding: 5px 8px;
     cursor: pointer;
+    text-decoration: none;
 }
-button.risk:hover { background: var(--brand-soft); }
-button.risk.active { background: var(--brand-soft); box-shadow: inset 3px 0 0 var(--brand); }
+.risk:hover { background: var(--brand-soft); }
+.risk.active { background: var(--brand-soft); box-shadow: inset 3px 0 0 var(--brand); }
 .risk-bar { display: block; height: 10px; border-radius: 5px; background: #e9ecf0; overflow: hidden; }
 .risk-bar > span { display: block; height: 100%; border-radius: 5px; }
 .sev-high .risk-bar > span { background: var(--cat4); }
@@ -509,10 +578,10 @@ button.risk.active { background: var(--brand-soft); box-shadow: inset 3px 0 0 va
 .alert-body p { margin: 4px 0; }
 .chip { font: inherit; color: #fff; background: var(--brand); border: 0; border-radius: 999px; padding: 5px 12px; cursor: pointer; }
 @media (max-width: 640px) {
-    button.risk { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "label label" "bar count"; row-gap: 4px; }
-    button.risk .risk-label { grid-area: label; overflow-wrap: anywhere; }
-    button.risk .risk-bar { grid-area: bar; }
-    button.risk .risk-count { grid-area: count; }
+    .risk { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "label label" "bar count"; row-gap: 4px; }
+    .risk .risk-label { grid-area: label; overflow-wrap: anywhere; }
+    .risk .risk-bar { grid-area: bar; }
+    .risk .risk-count { grid-area: count; }
     .alert-item summary { grid-template-columns: 16px auto minmax(0, 1fr); grid-template-areas: "mark pill count" "name name name"; row-gap: 4px; }
     .alert-item summary::before { grid-area: mark; }
     .alert-item summary .pill { grid-area: pill; }
@@ -524,56 +593,80 @@ button.risk.active { background: var(--brand-soft); box-shadow: inset 3px 0 0 va
 </style>
 '@
 
-    $sb = [System.Text.StringBuilder]::new()
-    [void]$sb.AppendLine('<!DOCTYPE html>')
-    [void]$sb.AppendLine('<html lang="en">')
-    [void]$sb.AppendLine('<head>')
-    [void]$sb.AppendLine('<meta charset="utf-8">')
-    [void]$sb.AppendLine('<meta name="viewport" content="width=device-width, initial-scale=1">')
-    [void]$sb.AppendLine(('<title>{0}{1}</title>' -f $encTitle, $(if ($encEnv) { ' - ' + $encEnv } else { '' })))
-    [void]$sb.AppendLine($style)
-    [void]$sb.AppendLine('</head>')
-    [void]$sb.AppendLine('<body>')
-    [void]$sb.AppendLine('<div class="wrap">')
+    # The head, the header and the navigation of a page. The single report and every page of a split one
+    # have the same ones, and the same end.
+    $startPage = {
+        param([System.String]$PageHeading, [System.String]$Navigation)
+        $page = [System.Text.StringBuilder]::new()
+        [void]$page.AppendLine('<!DOCTYPE html>')
+        [void]$page.AppendLine('<html lang="en">')
+        [void]$page.AppendLine('<head>')
+        [void]$page.AppendLine('<meta charset="utf-8">')
+        [void]$page.AppendLine('<meta name="viewport" content="width=device-width, initial-scale=1">')
+        [void]$page.AppendLine(('<title>{0}{1}</title>' -f $PageHeading, $(if ($encEnv) { ' - ' + $encEnv } else { '' })))
+        [void]$page.AppendLine($style)
+        [void]$page.AppendLine('</head>')
+        [void]$page.AppendLine('<body>')
+        [void]$page.AppendLine('<div class="wrap">')
 
-    # Header.
-    [void]$sb.AppendLine('<div class="header">')
-    [void]$sb.AppendLine(('<h1>{0}</h1>' -f $encTitle))
-    $envPart = if ($encEnv) { ('Environment <strong>{0}</strong> &middot; ' -f $encEnv) } else { '' }
-    [void]$sb.AppendLine(('<div class="meta">{0}Generated on <strong>{1}</strong></div>' -f $envPart, $encGenerated))
-    [void]$sb.AppendLine('</div>')
-    [void]$sb.AppendLine('<div class="nav">')
-    [void]$sb.AppendLine('<a href="#summary">Summary</a>')
-    [void]$sb.AppendLine('<a href="#risk-indicators">Risk indicators</a>')
+        # Header.
+        [void]$page.AppendLine('<div class="header">')
+        [void]$page.AppendLine(('<h1>{0}</h1>' -f $encTitle))
+        $envPart = if ($encEnv) { ('Environment <strong>{0}</strong> &middot; ' -f $encEnv) } else { '' }
+        [void]$page.AppendLine(('<div class="meta">{0}Generated on <strong>{1}</strong></div>' -f $envPart, $encGenerated))
+        [void]$page.AppendLine('</div>')
+        [void]$page.AppendLine('<div class="nav">')
+        [void]$page.Append($Navigation)
+        [void]$page.AppendLine('</div>')
+        return $page.ToString()
+    }
+    $endPage = {
+        param([AllowNull()][System.String]$ScriptHtml)
+        $page = [System.Text.StringBuilder]::new()
+        [void]$page.AppendLine('<div class="footer">Generated by SPSSiteInventory &middot; read-only inventory &middot; no farm changes</div>')
+        [void]$page.AppendLine('</div>')
+        if ($null -ne $ScriptHtml) {
+            [void]$page.AppendLine($ScriptHtml)
+        }
+        [void]$page.AppendLine('</body>')
+        [void]$page.AppendLine('</html>')
+        return $page.ToString()
+    }
+
+    $navigation = [System.Text.StringBuilder]::new()
+    [void]$navigation.AppendLine('<a href="#summary">Summary</a>')
+    [void]$navigation.AppendLine('<a href="#risk-indicators">Risk indicators</a>')
     if ($hasAlertSection) {
-        [void]$sb.AppendLine('<a href="#alerts">Alerts</a>')
+        [void]$navigation.AppendLine('<a href="#alerts">Alerts</a>')
     }
     if ($waveKeys.Count -gt 0) {
-        [void]$sb.AppendLine('<a href="#wave-plan">Migration waves</a>')
+        [void]$navigation.AppendLine('<a href="#wave-plan">Migration waves</a>')
     }
-    [void]$sb.AppendLine('<a href="#inventory-table">Inventory table</a>')
+    [void]$navigation.AppendLine('<a href="#inventory-table">Inventory table</a>')
     if ($solutions.Count -gt 0) {
-        [void]$sb.AppendLine('<a href="#farm-solutions">Farm solutions</a>')
+        [void]$navigation.AppendLine('<a href="#farm-solutions">Farm solutions</a>')
     }
     if ($authenticationRecords.Count -gt 0) {
-        [void]$sb.AppendLine('<a href="#authentication">Authentication</a>')
+        [void]$navigation.AppendLine('<a href="#authentication">Authentication</a>')
     }
     if ($policyRecords.Count -gt 0) {
-        [void]$sb.AppendLine('<a href="#web-app-policies">Web application policies</a>')
+        [void]$navigation.AppendLine('<a href="#web-app-policies">Web application policies</a>')
     }
     if ($hasContentTypeSection) {
-        [void]$sb.AppendLine('<a href="#content-types">Content types</a>')
+        [void]$navigation.AppendLine('<a href="#content-types">Content types</a>')
     }
     if ($hasManagedMetadataSection) {
-        [void]$sb.AppendLine('<a href="#managed-metadata">Managed metadata</a>')
+        [void]$navigation.AppendLine('<a href="#managed-metadata">Managed metadata</a>')
     }
     if ($hasExternalListSection) {
-        [void]$sb.AppendLine('<a href="#external-lists">External lists</a>')
+        [void]$navigation.AppendLine('<a href="#external-lists">External lists</a>')
     }
     if ($hasBcsSection) {
-        [void]$sb.AppendLine('<a href="#bcs-applications">BCS applications</a>')
+        [void]$navigation.AppendLine('<a href="#bcs-applications">BCS applications</a>')
     }
-    [void]$sb.AppendLine('</div>')
+
+    $sb = [System.Text.StringBuilder]::new()
+    [void]$sb.Append((& $startPage $encTitle $navigation.ToString()))
 
     # Summary box.
     [void]$sb.AppendLine('<div class="summary" id="summary">')
@@ -610,7 +703,8 @@ button.risk.active { background: var(--brand-soft); box-shadow: inset 3px 0 0 va
         [void]$sb.AppendLine('<p class="muted">There is no site collection in this inventory.</p>')
     }
     else {
-        [void]$sb.AppendLine('<p class="muted">The share of the site collections that raise each signal, grouped by the severity of the alert of the signal. Click an indicator to filter the inventory table.</p>')
+        $riskHint = if ($splitReport) { 'Click an indicator to open the first page of the inventory table that has a site collection that raises it, with the filter on.' } else { 'Click an indicator to filter the inventory table.' }
+        [void]$sb.AppendLine(('<p class="muted">The share of the site collections that raise each signal, grouped by the severity of the alert of the signal. {0}</p>' -f $riskHint))
         $severityMeta = [ordered]@{
             High   = @{ Pill = 'yes'; Meaning = 'block or break a migration' }
             Medium = @{ Pill = 'warn'; Meaning = 'need a plan or a check' }
@@ -624,7 +718,11 @@ button.risk.active { background: var(--brand-soft); box-shadow: inset 3px 0 0 va
             foreach ($row in $severityRows) {
                 $share = [math]::Round(100 * $row.Count / $total, 1)
                 $barWidth = [math]::Max($share, 1)
-                [void]$sb.AppendLine(('<button type="button" class="risk sev-{0}" data-ind="{1}" aria-pressed="false"><span class="risk-label">{2}</span><span class="risk-bar"><span style="width:{3}%"></span></span><span class="risk-count"><strong>{4}</strong> <span class="muted">{5}%</span></span></button>' -f
+                # The page of a split report that an indicator opens is known once the tables are built: a placeholder stands for it until then.
+                $riskOpen = if ($splitReport) { '<a class="risk sev-{0}" data-ind="{1}" href="@@IND-PAGE:{1}@@#ind={1}">' } else { '<button type="button" class="risk sev-{0}" data-ind="{1}" aria-pressed="false">' }
+                $riskClose = if ($splitReport) { '</a>' } else { '</button>' }
+                $riskRowTemplate = $riskOpen + '<span class="risk-label">{2}</span><span class="risk-bar"><span style="width:{3}%"></span></span><span class="risk-count"><strong>{4}</strong> <span class="muted">{5}%</span></span>' + $riskClose
+                [void]$sb.AppendLine(($riskRowTemplate -f
                     $severityName.ToLowerInvariant(),
                     $row.Key,
                     (ConvertTo-SPSHtmlText -Value $row.Label),
@@ -735,22 +833,24 @@ button.risk.active { background: var(--brand-soft); box-shadow: inset 3px 0 0 va
         return [string]$Value
     }
 
-    [void]$sb.AppendLine('<h2 id="inventory-table">Site collections</h2>')
-    [void]$sb.AppendLine('<p>Worst first. Open a row to see the context of the site collection, the signals it raises and its assessment warnings. The CSV and JSON files hold every column.</p>')
-    [void]$sb.AppendLine('<div class="toolbar">')
-    [void]$sb.AppendLine('<input type="search" id="inv-search" placeholder="Search site collections" aria-label="Search site collections">')
-    [void]$sb.AppendLine('<div class="filters">')
-    [void]$sb.AppendLine('<button data-filter="all" class="active">All</button>')
-    foreach ($key in 1..4) {
-        [void]$sb.AppendLine(('<button data-filter="{0}">{1}. {2}</button>' -f $key, $key, $categoryMeta[$key].Name))
+    if (-not $splitReport) {
+        [void]$sb.AppendLine('<h2 id="inventory-table">Site collections</h2>')
+        [void]$sb.AppendLine('<p>Worst first. Open a row to see the context of the site collection, the signals it raises and its assessment warnings. The CSV and JSON files hold every column.</p>')
+        [void]$sb.AppendLine('<div class="toolbar">')
+        [void]$sb.AppendLine('<input type="search" id="inv-search" placeholder="Search site collections" aria-label="Search site collections">')
+        [void]$sb.AppendLine('<div class="filters">')
+        [void]$sb.AppendLine('<button data-filter="all" class="active">All</button>')
+        foreach ($key in 1..4) {
+            [void]$sb.AppendLine(('<button data-filter="{0}">{1}. {2}</button>' -f $key, $key, $categoryMeta[$key].Name))
+        }
+        if ($notAssessedCount -gt 0) {
+            [void]$sb.AppendLine('<button data-filter="0">Not assessed</button>')
+        }
+        [void]$sb.AppendLine('</div>')
+        [void]$sb.AppendLine('<button type="button" class="chip" id="inv-indicator" hidden></button>')
+        [void]$sb.AppendLine(('<span class="count" id="inv-count">{0} of {0} shown</span>' -f $inventoryRecords.Count))
+        [void]$sb.AppendLine('</div>')
     }
-    if ($notAssessedCount -gt 0) {
-        [void]$sb.AppendLine('<button data-filter="0">Not assessed</button>')
-    }
-    [void]$sb.AppendLine('</div>')
-    [void]$sb.AppendLine('<button type="button" class="chip" id="inv-indicator" hidden></button>')
-    [void]$sb.AppendLine(('<span class="count" id="inv-count">{0} of {0} shown</span>' -f $inventoryRecords.Count))
-    [void]$sb.AppendLine('</div>')
 
     $inventoryColumns = @(
         @{ Label = 'Site'; Type = 'text'; Class = '' }
@@ -763,17 +863,24 @@ button.risk.active { background: var(--brand-soft); box-shadow: inset 3px 0 0 va
         @{ Label = 'Status'; Type = 'text'; Class = '' }
         @{ Label = 'Reasons'; Type = 'text'; Class = '' }
     )
-    [void]$sb.AppendLine('<div class="table-scroll">')
-    [void]$sb.AppendLine('<table id="inv">')
-    [void]$sb.AppendLine('<thead><tr>')
-    [void]$sb.AppendLine('<th class="tgl"></th>')
+    $tableOpen = [System.Text.StringBuilder]::new()
+    [void]$tableOpen.AppendLine('<div class="table-scroll">')
+    [void]$tableOpen.AppendLine('<table id="inv">')
+    [void]$tableOpen.AppendLine('<thead><tr>')
+    [void]$tableOpen.AppendLine('<th class="tgl"></th>')
     foreach ($col in $inventoryColumns) {
         $thClass = if ($col.Class -eq 'num') { ' class="num"' } else { '' }
-        [void]$sb.AppendLine(('<th{0} data-type="{1}">{2} <span class="arrow"></span></th>' -f $thClass, $col.Type, (ConvertTo-SPSHtmlText -Value $col.Label)))
+        [void]$tableOpen.AppendLine(('<th{0} data-type="{1}">{2} <span class="arrow"></span></th>' -f $thClass, $col.Type, (ConvertTo-SPSHtmlText -Value $col.Label)))
     }
-    [void]$sb.AppendLine('</tr></thead>')
+    [void]$tableOpen.AppendLine('</tr></thead>')
+    $tableClose = ('</table>{0}</div>{0}' -f [System.Environment]::NewLine)
 
+    # One entry per site collection: its category, the indicators that it raises and its rows. The single
+    # report puts them all in one table, a split one distributes them to its table pages.
+    $rowEntries = [System.Collections.Generic.List[System.Object]]::new()
     foreach ($item in $inventoryRecords) {
+        $row = [System.Text.StringBuilder]::new()
+        $rowTags = @($item.Tags)
         $record = $item.Record
         $cat = 0
         if ($null -ne $record.Category) { $cat = [int]$record.Category }
@@ -809,19 +916,19 @@ button.risk.active { background: var(--brand-soft); box-shadow: inset 3px 0 0 va
         $waveText = if ($null -ne $record.Wave -and [int]$record.Wave -ne 0) { [string][int]$record.Wave } else { '-' }
 
         $indicatorAttribute = if ($item.Tags.Count -gt 0) { ' data-ind="{0}"' -f ($item.Tags -join ' ') } else { '' }
-        [void]$sb.AppendLine(('<tbody class="site" data-category="{0}"{1}>' -f $cat, $indicatorAttribute))
-        [void]$sb.AppendLine('<tr class="main">')
-        [void]$sb.AppendLine('<td class="tgl"><button type="button" class="toggle" aria-expanded="false" aria-label="Show the details of this site collection" title="Show details"></button></td>')
-        [void]$sb.AppendLine(('<td class="site-cell" data-sort="{0}">{1}</td>' -f (ConvertTo-SPSHtmlText -Value $url.ToLowerInvariant()), $siteCell))
-        [void]$sb.AppendLine(('<td data-sort="{0}"><span class="badge b{0}">{1}</span></td>' -f $cat, (ConvertTo-SPSHtmlText -Value $catName)))
-        [void]$sb.AppendLine(('<td class="num">{0}</td>' -f (ConvertTo-SPSHtmlText -Value (& $formatInventoryNumber $record.Score))))
-        [void]$sb.AppendLine(('<td class="num">{0}</td>' -f $waveText))
-        [void]$sb.AppendLine(('<td class="num">{0}</td>' -f (ConvertTo-SPSHtmlText -Value (& $formatInventoryNumber $record.SizeGB))))
-        [void]$sb.AppendLine(('<td class="tpl">{0}</td>' -f (ConvertTo-SPSHtmlText -Value $record.Template)))
-        [void]$sb.AppendLine(('<td>{0}</td>' -f (ConvertTo-SPSHtmlText -Value $modified)))
-        [void]$sb.AppendLine(('<td>{0}</td>' -f $statusCell))
-        [void]$sb.AppendLine(('<td class="reasons"><div class="clamp">{0}</div></td>' -f (ConvertTo-SPSHtmlText -Value (& $orderReasons $reasonsCell))))
-        [void]$sb.AppendLine('</tr>')
+        [void]$row.AppendLine(('<tbody class="site" data-category="{0}"{1}>' -f $cat, $indicatorAttribute))
+        [void]$row.AppendLine('<tr class="main">')
+        [void]$row.AppendLine('<td class="tgl"><button type="button" class="toggle" aria-expanded="false" aria-label="Show the details of this site collection" title="Show details"></button></td>')
+        [void]$row.AppendLine(('<td class="site-cell" data-sort="{0}">{1}</td>' -f (ConvertTo-SPSHtmlText -Value $url.ToLowerInvariant()), $siteCell))
+        [void]$row.AppendLine(('<td data-sort="{0}"><span class="badge b{0}">{1}</span></td>' -f $cat, (ConvertTo-SPSHtmlText -Value $catName)))
+        [void]$row.AppendLine(('<td class="num">{0}</td>' -f (ConvertTo-SPSHtmlText -Value (& $formatInventoryNumber $record.Score))))
+        [void]$row.AppendLine(('<td class="num">{0}</td>' -f $waveText))
+        [void]$row.AppendLine(('<td class="num">{0}</td>' -f (ConvertTo-SPSHtmlText -Value (& $formatInventoryNumber $record.SizeGB))))
+        [void]$row.AppendLine(('<td class="tpl">{0}</td>' -f (ConvertTo-SPSHtmlText -Value $record.Template)))
+        [void]$row.AppendLine(('<td>{0}</td>' -f (ConvertTo-SPSHtmlText -Value $modified)))
+        [void]$row.AppendLine(('<td>{0}</td>' -f $statusCell))
+        [void]$row.AppendLine(('<td class="reasons"><div class="clamp">{0}</div></td>' -f (ConvertTo-SPSHtmlText -Value (& $orderReasons $reasonsCell))))
+        [void]$row.AppendLine('</tr>')
 
         $contextParts = [System.Collections.Generic.List[string]]::new()
         $webApplicationName = if ($record.WebApp) { [string]$record.WebApp } else { [string]$record.WebAppUrl }
@@ -867,12 +974,89 @@ button.risk.active { background: var(--brand-soft); box-shadow: inset 3px 0 0 va
         if ($reasonsText) {
             [void]$detail.Append(('<div class="note"><strong>Reasons</strong> {0}</div>' -f (ConvertTo-SPSHtmlText -Value $reasonsText)))
         }
-        [void]$sb.AppendLine(('<tr class="detail"><td></td><td colspan="9">{0}</td></tr>' -f $detail.ToString()))
-        [void]$sb.AppendLine('</tbody>')
+        [void]$row.AppendLine(('<tr class="detail"><td></td><td colspan="9">{0}</td></tr>' -f $detail.ToString()))
+        [void]$row.AppendLine('</tbody>')
+        $rowEntries.Add([PSCustomObject]@{ Category = $cat; Tags = $rowTags; Html = $row.ToString() })
     }
 
-    [void]$sb.AppendLine('</table>')
-    [void]$sb.AppendLine('</div>')
+    $tablePage = [System.Collections.Generic.List[System.Object]]::new()
+    $bucketList = [System.Collections.Generic.List[System.Object]]::new()
+    $indicatorPage = @{}
+    if (-not $splitReport) {
+        [void]$sb.Append($tableOpen.ToString())
+        foreach ($rowEntry in $rowEntries) {
+            [void]$sb.Append($rowEntry.Html)
+        }
+        [void]$sb.Append($tableClose)
+    }
+    else {
+        # The site collections of a category are on consecutive pages, worst category first. The rows are already
+        # in that order, so a category is a run of them.
+        $bucketOrder = [System.Collections.Generic.List[System.Int32]]::new()
+        $bucketRows = @{}
+        foreach ($rowEntry in $rowEntries) {
+            $bucketId = [System.Int32]$rowEntry.Category
+            if (-not $bucketRows.ContainsKey($bucketId)) {
+                $bucketOrder.Add($bucketId)
+                $bucketRows[$bucketId] = [System.Collections.Generic.List[System.Object]]::new()
+            }
+            $bucketRows[$bucketId].Add($rowEntry)
+        }
+        foreach ($bucketId in $bucketOrder) {
+            $rows = $bucketRows[$bucketId]
+            $bucketSlug = if ($bucketId -eq 0) { 'not-assessed' } elseif ($categoryMeta.Contains($bucketId)) { $categoryMeta[$bucketId].Name.ToLowerInvariant() } else { 'category-{0}' -f $bucketId }
+            $bucketLabel = if ($bucketId -eq 0) { 'Not assessed' } elseif ($categoryMeta.Contains($bucketId)) { '{0}. {1}' -f $bucketId, $categoryMeta[$bucketId].Name } else { 'Category {0}' -f $bucketId }
+            $pageCount = [int][math]::Ceiling($rows.Count / $RowsPerPage)
+            $bucketPages = [System.Collections.Generic.List[System.Object]]::new()
+            for ($number = 1; $number -le $pageCount; $number++) {
+                $start = ($number - 1) * $RowsPerPage
+                $page = [PSCustomObject]@{
+                    Bucket = $bucketId
+                    BucketLabel = $bucketLabel
+                    BucketCount = $rows.Count
+                    Number = $number
+                    Of = $pageCount
+                    Name = '{0}-sites-{1}-{2}.html' -f $pageBaseName, $bucketSlug, $number
+                    Entries = $rows.GetRange($start, [math]::Min($RowsPerPage, $rows.Count - $start))
+                    Pages = $bucketPages
+                }
+                $bucketPages.Add($page)
+                $tablePage.Add($page)
+            }
+            $bucketList.Add([PSCustomObject]@{ Id = $bucketId; Label = $bucketLabel; Count = $rows.Count; Pages = $bucketPages })
+        }
+
+        # The pages that have a site collection that raises each indicator, so that an indicator opens the first of them
+        # and a page links to the previous and the next one.
+        for ($index = 0; $index -lt $tablePage.Count; $index++) {
+            $seen = [System.Collections.Generic.HashSet[System.String]]::new()
+            foreach ($rowEntry in $tablePage[$index].Entries) {
+                foreach ($tag in $rowEntry.Tags) {
+                    [void]$seen.Add($tag)
+                }
+            }
+            foreach ($tag in $seen) {
+                if (-not $indicatorPage.ContainsKey($tag)) {
+                    $indicatorPage[$tag] = [System.Collections.Generic.List[System.Int32]]::new()
+                }
+                $indicatorPage[$tag].Add($index)
+            }
+        }
+
+        [void]$sb.AppendLine('<h2 id="inventory-table">Site collections</h2>')
+        [void]$sb.AppendLine(('<p>This report has <strong>{0}</strong> site collections, more than the {1} that one page shows well, so the table is split in <strong>{2}</strong> pages, by category, worst first. Open a page to search it, to sort it and to open the details of its site collections. A risk indicator above opens the first page that has a site collection that raises it, with the filter on, and that page links to the next ones. The CSV and JSON files hold every column.</p>' -f $total, $SplitThreshold, $tablePage.Count))
+        [void]$sb.AppendLine('<div class="table-scroll">')
+        [void]$sb.AppendLine('<table class="waves">')
+        [void]$sb.AppendLine('<thead><tr><th>Category</th><th class="num">Site collections</th><th>Pages</th></tr></thead>')
+        [void]$sb.AppendLine('<tbody>')
+        foreach ($bucket in $bucketList) {
+            $pageLinks = @($bucket.Pages | ForEach-Object { '<a href="{0}">{1}</a>' -f [System.Uri]::EscapeDataString($_.Name), $_.Number })
+            [void]$sb.AppendLine(('<tr><td>{0}</td><td class="num">{1}</td><td>{2}</td></tr>' -f (ConvertTo-SPSHtmlText -Value $bucket.Label), $bucket.Count, ($pageLinks -join ' ')))
+        }
+        [void]$sb.AppendLine('</tbody>')
+        [void]$sb.AppendLine('</table>')
+        [void]$sb.AppendLine('</div>')
+    }
 
     $limitNote = {
         param([System.Int32]$Total, [System.String]$Files)
@@ -1117,9 +1301,6 @@ button.risk.active { background: var(--brand-soft); box-shadow: inset 3px 0 0 va
         [void]$sb.AppendLine((& $limitNote $BcsApplications.Count 'The BCS CSV and JSON files'))
     }
 
-    [void]$sb.AppendLine('<div class="footer">Generated by SPSSiteInventory &middot; read-only inventory &middot; no farm changes</div>')
-    [void]$sb.AppendLine('</div>')
-
     $script = @'
 <script>
 (function () {
@@ -1241,9 +1422,172 @@ button.risk.active { background: var(--brand-soft); box-shadow: inset 3px 0 0 va
 })();
 </script>
 '@
-    [void]$sb.AppendLine($script)
-    [void]$sb.AppendLine('</body>')
-    [void]$sb.AppendLine('</html>')
 
-    return $sb.ToString()
+    if (-not $paged) {
+        [void]$sb.Append((& $endPage $script))
+        return $sb.ToString()
+    }
+
+    if (-not $splitReport) {
+        [void]$sb.Append((& $endPage $script))
+        return [PSCustomObject]@{ Name = $entryName; Kind = 'Entry'; Html = $sb.ToString() }
+    }
+
+    # The entry page of a split report has no table, so it has no script. Each indicator opens the first table page
+    # that has a site collection that raises it.
+    $entryHtml = $sb.ToString() + (& $endPage $null)
+    foreach ($row in $riskRows) {
+        if ($indicatorPage.ContainsKey($row.Key)) {
+            $entryHtml = $entryHtml.Replace(('@@IND-PAGE:{0}@@' -f $row.Key), [System.Uri]::EscapeDataString($tablePage[$indicatorPage[$row.Key][0]].Name))
+        }
+    }
+
+    # What a table page needs to follow the indicator of its address: the label of each indicator, the pages, and the
+    # pages that have a site collection that raises each indicator. A JSON text in a script element that does not run.
+    $jsonString = {
+        param([System.String]$Value)
+        return '"' + $Value.Replace('\', '\\').Replace('"', '\"').Replace('<', '\u003c') + '"'
+    }
+    $labelJson = '{' + ((@($riskRows | ForEach-Object { '{0}:{1}' -f (& $jsonString $_.Key), (& $jsonString $_.Label) })) -join ',') + '}'
+    $pageJson = '[' + ((@($tablePage | ForEach-Object { & $jsonString ([System.Uri]::EscapeDataString($_.Name)) })) -join ',') + ']'
+    $indicatorJson = '{' + ((@($indicatorPage.Keys | Sort-Object | ForEach-Object { '{0}:[{1}]' -f (& $jsonString $_), ($indicatorPage[$_] -join ',') })) -join ',') + '}'
+
+    $splitScript = @'
+    var splitData = document.getElementById('inv-split');
+    if (splitData) {
+        var data = JSON.parse(splitData.textContent);
+        var keepLinks = document.querySelectorAll('a[data-keep]');
+        var hop = document.getElementById('inv-hop');
+
+        function indicatorOfAddress() {
+            var found = /(?:^|[#&])ind=([a-z0-9-]+)/.exec(location.hash);
+            return found && Object.prototype.hasOwnProperty.call(data.labels, found[1]) ? found[1] : '';
+        }
+
+        function addHop(page, text, key) {
+            if (page < 0) { return; }
+            var link = document.createElement('a');
+            link.setAttribute('href', data.pages[page] + '#ind=' + key);
+            link.textContent = text;
+            hop.appendChild(link);
+        }
+
+        function followAddress() {
+            var key = indicatorOfAddress();
+            setIndicator(key, key === '' ? '' : data.labels[key]);
+            for (var k = 0; k < keepLinks.length; k++) {
+                keepLinks[k].setAttribute('href', keepLinks[k].getAttribute('data-href') + (key === '' ? '' : '#ind=' + key));
+            }
+            while (hop.firstChild) { hop.removeChild(hop.firstChild); }
+            if (key === '') { return; }
+            var pages = data.indicatorPages[key] || [];
+            var before = -1;
+            var after = -1;
+            for (var p = 0; p < pages.length; p++) {
+                if (pages[p] < data.current) { before = pages[p]; }
+                else if (pages[p] > data.current && after < 0) { after = pages[p]; }
+            }
+            addHop(before, '\u2190 Previous page with this indicator', key);
+            addHop(after, 'Next page with this indicator \u2192', key);
+        }
+
+        if (indicatorChip) {
+            indicatorChip.addEventListener('click', function () {
+                if (window.history && history.replaceState) { history.replaceState(null, '', location.pathname + location.search); }
+                followAddress();
+            });
+        }
+        window.addEventListener('hashchange', followAddress);
+        followAddress();
+    }
+
+'@
+    $tableScript = $script.Insert($script.LastIndexOf('})();'), $splitScript)
+
+    # The names of the files are percent-encoded in the links, so that a name with a space or a # is still a link.
+    $entryLink = [System.Uri]::EscapeDataString($entryName)
+    $pageLink = {
+        param([System.String]$Name, [System.String]$Text, [System.String]$Class)
+        $href = [System.Uri]::EscapeDataString($Name)
+        return ('<a href="{0}" data-href="{0}" data-keep{1}>{2}</a>' -f $href, $Class, $Text)
+    }
+
+    # The pages of a category: the previous and the next one, and the numbers around the current one.
+    $pager = {
+        param($Page)
+        if ($Page.Of -le 1) { return '' }
+        $html = [System.Text.StringBuilder]::new()
+        [void]$html.AppendLine('<div class="pager">')
+        if ($Page.Number -gt 1) {
+            [void]$html.AppendLine((& $pageLink $Page.Pages[$Page.Number - 2].Name '&larr; Previous' ''))
+        }
+        $shown = @(1..$Page.Of | Where-Object { $_ -eq 1 -or $_ -eq $Page.Of -or [math]::Abs($_ - $Page.Number) -le 2 })
+        $before = 0
+        foreach ($number in $shown) {
+            if ($before -gt 0 -and $number - $before -gt 1) {
+                [void]$html.AppendLine('<span>&hellip;</span>')
+            }
+            if ($number -eq $Page.Number) {
+                [void]$html.AppendLine(('<strong>{0}</strong>' -f $number))
+            }
+            else {
+                [void]$html.AppendLine((& $pageLink $Page.Pages[$number - 1].Name ([string]$number) ''))
+            }
+            $before = $number
+        }
+        if ($Page.Number -lt $Page.Of) {
+            [void]$html.AppendLine((& $pageLink $Page.Pages[$Page.Number].Name 'Next &rarr;' ''))
+        }
+        [void]$html.AppendLine('</div>')
+        return $html.ToString()
+    }
+
+    $buildTablePage = {
+        param($Page, [System.Int32]$Index)
+        $label = ConvertTo-SPSHtmlText -Value $Page.BucketLabel
+        $nav = [System.Text.StringBuilder]::new()
+        [void]$nav.AppendLine(('<a href="{0}">Summary</a>' -f $entryLink))
+        [void]$nav.AppendLine(('<a href="{0}#risk-indicators">Risk indicators</a>' -f $entryLink))
+        if ($hasAlertSection) {
+            [void]$nav.AppendLine(('<a href="{0}#alerts">Alerts</a>' -f $entryLink))
+        }
+        if ($waveKeys.Count -gt 0) {
+            [void]$nav.AppendLine(('<a href="{0}#wave-plan">Migration waves</a>' -f $entryLink))
+        }
+        [void]$nav.AppendLine(('<a href="{0}#inventory-table">Inventory table</a>' -f $entryLink))
+        foreach ($bucket in $bucketList) {
+            $current = if ($bucket.Id -eq $Page.Bucket) { ' class="current"' } else { '' }
+            [void]$nav.AppendLine((& $pageLink $bucket.Pages[0].Name ('{0} ({1})' -f (ConvertTo-SPSHtmlText -Value $bucket.Label), $bucket.Count) $current))
+        }
+
+        $first = ($Page.Number - 1) * $RowsPerPage + 1
+        $last = $first + $Page.Entries.Count - 1
+        $out = [System.Text.StringBuilder]::new()
+        [void]$out.Append((& $startPage ('{0} - Site collections - {1}, page {2} of {3}' -f $encTitle, $label, $Page.Number, $Page.Of) $nav.ToString()))
+        [void]$out.AppendLine('<h2 id="inventory-table">Site collections</h2>')
+        [void]$out.AppendLine(('<p><strong>{0}</strong>, page {1} of {2}: site collections {3} to {4} of {5}. Worst first. Open a row to see the context of the site collection, the signals it raises and its assessment warnings. The search box and the columns work on this page. The CSV and JSON files hold every column.</p>' -f $label, $Page.Number, $Page.Of, $first, $last, $Page.BucketCount))
+        [void]$out.AppendLine('<div class="toolbar">')
+        [void]$out.AppendLine('<input type="search" id="inv-search" placeholder="Search this page" aria-label="Search this page">')
+        [void]$out.AppendLine('<button type="button" class="chip" id="inv-indicator" hidden></button>')
+        [void]$out.AppendLine('<span class="hop" id="inv-hop"></span>')
+        [void]$out.AppendLine(('<span class="count" id="inv-count">{0} of {0} shown</span>' -f $Page.Entries.Count))
+        [void]$out.AppendLine('</div>')
+        [void]$out.Append((& $pager $Page))
+        [void]$out.Append($tableOpen.ToString())
+        foreach ($rowEntry in $Page.Entries) {
+            [void]$out.Append($rowEntry.Html)
+        }
+        [void]$out.Append($tableClose)
+        [void]$out.Append((& $pager $Page))
+        $data = ('<script type="application/json" id="inv-split">{{"entry":{0},"current":{1},"pages":{2},"labels":{3},"indicatorPages":{4}}}</script>' -f (& $jsonString $entryLink), $Index, $pageJson, $labelJson, $indicatorJson)
+        [void]$out.Append((& $endPage ($data + [System.Environment]::NewLine + $tableScript)))
+        return $out.ToString()
+    }
+
+    $result = [System.Collections.Generic.List[System.Object]]::new()
+    $result.Add([PSCustomObject]@{ Name = $entryName; Kind = 'Entry'; Html = $entryHtml })
+    for ($index = 0; $index -lt $tablePage.Count; $index++) {
+        $result.Add([PSCustomObject]@{ Name = $tablePage[$index].Name; Kind = 'Sites'; Html = (& $buildTablePage $tablePage[$index] $index) })
+    }
+    return $result.ToArray()
 }
