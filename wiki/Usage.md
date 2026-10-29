@@ -441,8 +441,8 @@ report:
 | `Direction` | `Import` when the value is pulled from the data source, `Export` when it is pushed to it. An Active Directory import connection only imports |
 | `PropertyLength` | The length of the property |
 | `PropertyUsage` | The number of profiles that have the property, as the User Profile service reports it. The documentation does not say whether a profile with an empty value counts; it is empty when it cannot be read |
-| `SynchronizedInSharePointOnline` | `True` when SharePoint Online fills the property: it is one of the properties of the fixed list that Microsoft documents (see below) |
-| `BuiltInProperty` | `True` when SharePoint ships the property (its name is one of the `PropertyConstants` of the User Profile service), `False` for a property that an administrator added, empty when that list could not be read |
+| `SynchronizedInSharePointOnline` | `True` when SharePoint Online fills the property: its internal name is one of the properties of the fixed list that Microsoft documents (see below) |
+| `BuiltInProperty` | `True` when SharePoint ships the property (its name is one of the `PropertyConstants` of the User Profile service), `False` for a property that an administrator added, empty when that list could not be read (the report is then partial: every mapping of a property that SharePoint Online does not fill is reported as a possible custom one) |
 
 Every mapping is listed, as the default mappings of SharePoint that SharePoint Online does not fill are
 in the SMAT report (the Phonetic Search properties, for example): they need nothing unless something
@@ -455,21 +455,27 @@ connection, with the number of its mappings), when `SynchronizedInSharePointOnli
 `SPS-SipAddress` (proxyAddresses), `Office` (PhysicalDeliveryOfficeName), `Title` and `SPS-JobTitle`
 (Title), `Department` and `SPS-Department` (Department), `PublicSiteRedirect` (WWWHomePage),
 `SPS-MUILanguages` (PreferredLanguage), `SPS-HideFromAddressLists` (msExchHideFromAddressList) and
-`Manager`. The page gives the display names, so a property is matched by its name or by its display
-name, ignoring the case and the characters that are not letters or digits.
+`Manager`. The page gives display names, so the list of the toolkit holds the internal name of each of
+those properties. A property is identified by its internal name, in any case, and never by its display
+name, which anybody can give to a property of their own: a custom property that is displayed as
+`Work Email` is a custom property.
 
 The User Profile service application of each web application is found through the service application
 proxy group of the web application, and read with the configuration manager of the service through the
 service context of that group, for the default (non-tenant) partition. Web applications that share a User
 Profile proxy report its mappings once, with every web application that sees it. A service context binds
-the default User Profile proxy of its group, so a group that holds more than one makes the report partial.
+the default User Profile proxy of its group, so that proxy identifies the service: a group that holds
+several is read through its default one, and groups that hold the same proxies with other defaults are
+read once each. A proxy that is the default of no group that was read cannot be read, and neither can the
+connections of a group whose default cannot be told: the report is partial. A farm where no web
+application has a User Profile proxy at all gets a complete, empty report, and the run log says so.
 The mappings of a connection are read from its `PropertyMapping`; an Active Directory import connection,
 which is the default of SharePoint Server 2016 and later, has none, and its mappings are read from the
 method that SharePoint itself uses for them, which is not public. No profile is read and no connection is
-contacted. A web application, a connection or a mapping that cannot be read is reported as a warning in the
-run log and marks the report partial: the `ProfilePropertyMappingInventoryPartial` alert,
-`Summary.ProfileInventoryComplete` in the manifest and a note in the HTML report say that mappings may be
-missing.
+contacted. A web application, a connection or a mapping that cannot be read, and the list of the properties
+that SharePoint ships when it cannot be read, are reported as warnings in the run log and mark the report
+partial: the `ProfilePropertyMappingInventoryPartial` alert, `Summary.ProfileInventoryComplete` in the
+manifest and a note in the HTML report say that mappings may be missing or called custom by mistake.
 
 **Run the inventory as an administrator of the User Profile service application** (the farm account is one):
 without the permission the connections cannot be read, and the report is partial.

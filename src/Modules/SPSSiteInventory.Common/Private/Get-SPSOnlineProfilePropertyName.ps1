@@ -26,8 +26,9 @@
         A mapping of the farm whose profile property is one of those has an equivalent in the target; any
         other mapping does not (the Phonetic Search properties, for example, which the SMAT report lists too).
         The page gives the properties by their display names, so the list holds the internal name of each
-        property of the User Profile service and its display name; the comparison, which
-        Get-SPSProfilePropertyMapping does, ignores the case and whatever is not a letter or a digit.
+        property of the User Profile service. A property is identified by its internal name, which
+        Get-SPSProfilePropertyMapping compares without regard to the case: a display name is a label that
+        anybody can give to a property of their own, so it is not in the list.
 
         The function is pure: it reads no farm. Private because it is an implementation detail of
         Get-SPSProfilePropertyMapping.
@@ -43,26 +44,26 @@
     param ()
 
     return [string[]]@(
-        # UserPrincipalName
-        'AccountName', 'UserName', 'SPS-UserPrincipalName', 'UPN'
-        # DisplayName
-        'PreferredName', 'Name'
+        # UserPrincipalName: Account Name, User Name, User Principal Name
+        'AccountName', 'UserName', 'SPS-UserPrincipalName'
+        # DisplayName: Name
+        'PreferredName'
         # GivenName, sn
         'FirstName', 'LastName'
-        # telephoneNumber
-        'WorkPhone', 'Work phone'
-        # proxyAddresses
-        'WorkEmail', 'Work Email', 'SPS-SipAddress', 'SIP Address'
+        # telephoneNumber: Work phone
+        'WorkPhone'
+        # proxyAddresses: Work Email, SIP Address
+        'WorkEmail', 'SPS-SipAddress'
         # PhysicalDeliveryOfficeName
         'Office'
-        # Title
-        'Title', 'SPS-JobTitle', 'Job Title'
+        # Title: Title, Job Title
+        'Title', 'SPS-JobTitle'
         # Department
         'Department', 'SPS-Department'
-        # WWWHomePage
-        'PublicSiteRedirect', 'Public site redirect'
-        # PreferredLanguage
-        'SPS-MUILanguages', 'Language Preferences'
+        # WWWHomePage: Public site redirect
+        'PublicSiteRedirect'
+        # PreferredLanguage: Language Preferences
+        'SPS-MUILanguages'
         # msExchHideFromAddressList
         'SPS-HideFromAddressLists'
         # Manager

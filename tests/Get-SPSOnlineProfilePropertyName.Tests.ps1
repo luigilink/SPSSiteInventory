@@ -8,7 +8,7 @@ BeforeAll {
 
 Describe 'Get-SPSOnlineProfilePropertyName' {
     It 'returns strings, each once' {
-        $script:Name.Count | Should -BeGreaterThan 20
+        $script:Name.Count | Should -Be 18
         foreach ($name in $script:Name) {
             $name | Should -BeOfType ([string])
             [string]::IsNullOrWhiteSpace($name) | Should -BeFalse
@@ -16,7 +16,7 @@ Describe 'Get-SPSOnlineProfilePropertyName' {
         @($script:Name | Sort-Object -Unique).Count | Should -Be $script:Name.Count
     }
 
-    It 'has the internal name or the display name of the property of every row of the table that Microsoft documents' -ForEach @(
+    It 'has the internal name of the property of every row of the table that Microsoft documents' -ForEach @(
         @{ Attribute = 'UserPrincipalName'; Expected = @('AccountName', 'UserName', 'SPS-UserPrincipalName') }
         @{ Attribute = 'DisplayName'; Expected = @('PreferredName') }
         @{ Attribute = 'GivenName'; Expected = @('FirstName') }
@@ -36,9 +36,9 @@ Describe 'Get-SPSOnlineProfilePropertyName' {
         }
     }
 
-    It 'has the display names that the page of Microsoft uses' {
-        foreach ($name in @('Work phone', 'Work Email', 'SIP Address', 'Public site redirect', 'Language Preferences', 'Job Title')) {
-            $script:Name | Should -Contain $name
+    It 'does not have the display names that the page of Microsoft uses: a display name is a label that anybody can give to a property, not an identity' {
+        foreach ($name in @('Work phone', 'Work Email', 'SIP Address', 'Public site redirect', 'Language Preferences', 'Job Title', 'Name', 'UPN', 'User Principal Name', 'Account Name', 'User Name')) {
+            $script:Name | Should -Not -Contain $name
         }
     }
 

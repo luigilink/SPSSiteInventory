@@ -353,8 +353,8 @@
         }
         ProfilePropertyMappingInventoryPartial = @{
             Severity    = 'Medium'
-            Message     = 'The profile property mapping inventory is partial: some web applications, connections or mappings could not be read, so mappings may be missing.'
-            Remediation = 'Fix the web application or connection named in the run warnings (the account that runs the inventory has to administer the User Profile service application) and run the inventory again before relying on the profile property mappings report.'
+            Message     = 'The profile property mapping inventory is partial: some web applications, connections, mappings or property lists could not be read, so mappings may be missing or reported as custom by mistake.'
+            Remediation = 'Fix what the run warnings name (the account that runs the inventory has to administer the User Profile service application) and run the inventory again before relying on the profile property mappings report.'
             Reference   = ''
         }
     }

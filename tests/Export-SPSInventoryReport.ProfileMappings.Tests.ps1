@@ -104,6 +104,41 @@ Describe 'Export-SPSInventoryReport profile property mappings' {
         $html | Should -Not -Match 'Partial collection'
     }
 
+    It 'lists every mapping once, whatever its kind, and the ones that need a decision first' {
+        $rows = @(
+            (New-Row -Property 'FirstName' -Attribute 'attrSynchronized' -Synchronized $true -BuiltIn $true)
+            (New-Row -Property 'CostCenter' -Attribute 'attrCustom')
+            (New-Row -Property 'PhoneticFirstName' -Attribute 'attrShipped' -BuiltIn $true)
+            (New-Row -Property 'Unknown' -Attribute 'attrUnknown' -BuiltIn $null)
+            (New-Row -Property 'Region' -Attribute 'attrSecondCustom')
+        )
+
+        $html = Get-Content -Path (Export-SPSInventoryReport -InputObject @() -ProfilePropertyMappings $rows -OutputFolder $TestDrive -BaseName 'Once').HtmlPath -Raw
+
+        foreach ($attribute in @('attrSynchronized', 'attrCustom', 'attrShipped', 'attrUnknown', 'attrSecondCustom')) {
+            ([regex]::Matches($html, [regex]::Escape('<td>' + $attribute + '</td>'))).Count | Should -Be 1 -Because "$attribute is one mapping, shown once"
+        }
+        $html.IndexOf('attrSecondCustom') | Should -BeLessThan $html.IndexOf('attrSynchronized')
+        $html.IndexOf('attrUnknown') | Should -BeLessThan $html.IndexOf('attrSynchronized')
+        $html.IndexOf('attrCustom') | Should -BeLessThan $html.IndexOf('attrShipped')
+    }
+
+    It 'does not say that the properties are not shipped by SharePoint when the list of the shipped ones could not be read' {
+        $rows = @((New-Row -Property 'CostCenter' -Attribute 'attrCustom' -BuiltIn $null), (New-Row -Property 'Region' -Attribute 'attrSecondCustom' -BuiltIn $null))
+
+        $html = Get-Content -Path (Export-SPSInventoryReport -InputObject @() -ProfilePropertyMappings $rows -ProfileInventoryComplete $false -OutputFolder $TestDrive -BaseName 'UnknownWording').HtmlPath -Raw
+
+        $html | Should -Match '<strong>2</strong> of them for a property that SharePoint Online does not fill and that is not known to be one that SharePoint ships \(the list of those could not be read\)'
+        $html | Should -Not -Match 'and that SharePoint does not ship'
+    }
+
+    It 'says that the properties are not shipped by SharePoint when the list of the shipped ones was read' {
+        $html = Get-Content -Path (Export-SPSInventoryReport -InputObject @() -ProfilePropertyMappings @((New-Row)) -OutputFolder $TestDrive -BaseName 'KnownWording').HtmlPath -Raw
+
+        $html | Should -Match '<strong>1</strong> of them for a property that SharePoint Online does not fill and that SharePoint does not ship'
+        $html | Should -Not -Match 'is not known to be one that SharePoint ships'
+    }
+
     It 'writes the empty cell of an unknown shipped status, not No' {
         $html = Get-Content -Path (Export-SPSInventoryReport -InputObject @() -ProfilePropertyMappings @((New-Row -BuiltIn $null)) -OutputFolder $TestDrive -BaseName 'Unknown').HtmlPath -Raw
 
@@ -126,7 +161,7 @@ Describe 'Export-SPSInventoryReport profile property mappings' {
         $alerts | Should -HaveCount 1
         $alerts[0].Severity | Should -Be 'Medium'
         (Get-Content $output.ManifestJsonPath -Raw | ConvertFrom-Json).Summary.ProfileInventoryComplete | Should -BeFalse
-        (Get-Content $output.HtmlPath -Raw) | Should -Match 'Partial collection:</strong> some web applications, connections or mappings could not be read'
+        (Get-Content $output.HtmlPath -Raw) | Should -Match 'Partial collection:</strong> some web applications, connections, mappings or property lists could not be read, so mappings may be missing or called custom by mistake'
     }
 
     It 'ignores the completeness flag when no rows were supplied' {

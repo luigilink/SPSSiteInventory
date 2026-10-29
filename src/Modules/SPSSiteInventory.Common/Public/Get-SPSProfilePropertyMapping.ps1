@@ -15,19 +15,28 @@
 
         Every mapping is listed, and the row says whether SharePoint Online fills the property
         (SynchronizedInSharePointOnline, from the fixed list that Microsoft documents) and whether it is one
-        of the properties that SharePoint ships (BuiltInProperty, from PropertyConstants; empty when that
-        list could not be read). The mappings of the default properties that SharePoint Online does not fill
+        of the properties that SharePoint ships (BuiltInProperty, from PropertyConstants). A property is
+        identified by its internal name, in any case, and never by its display name, which anybody can give to
+        a property of their own. The mappings of the default properties that SharePoint Online does not fill
         are in the report, as in SMAT (the Phonetic Search properties, for example): they need nothing unless
-        something relies on them. A mapping of a property that SharePoint does not ship is a custom one.
+        something relies on them. A mapping of a property that SharePoint does not ship is a custom one. When
+        the list of the properties that SharePoint ships cannot be read, BuiltInProperty is empty, the result
+        is incomplete, and a warning says that every mapping of a property that SharePoint Online does not
+        fill is reported as a possible custom one.
 
         The User Profile service application of each web application is found through the service
         application proxy group of the web application, and read with the configuration manager of the
         service through the service context of that group, for the default (non-tenant) partition. No site
         collection is needed. Web applications that share a User Profile proxy are read once and reported
         once, with every web application that sees it. A service context binds the default User Profile
-        proxy of its group, so a group that holds more than one marks the result incomplete: the others
-        cannot be read. A web application, proxy or connection that cannot be read adds a warning and marks
-        the result incomplete, so a failure is never reported as an empty service.
+        proxy of its group, so that proxy identifies the service: a group that holds several is read through
+        its default one (SPServiceContext.GetDefaultProxy), and groups that hold the same proxies with other
+        defaults are read once each. A proxy that is the default of no group that was read cannot be read:
+        it marks the result incomplete, and so does a default that cannot be told. A web application, proxy
+        or connection that cannot be read adds a warning and marks the result incomplete, so a failure is
+        never reported as an empty service. When no web application has a User Profile proxy at all, the
+        result stays complete and a warning says so: a farm without the User Profile service has none, and a
+        proxy type that is not recognized would look the same.
 
         The account that runs the inventory has to administer the User Profile service application (the farm
         account does): without the permission the connections cannot be read, and the result is incomplete.
@@ -66,38 +75,60 @@
     $warnings = [System.Collections.Generic.List[string]]::new()
     $complete = $true
 
-    # Names are compared by their letters and digits, in lower case: 'Work Email' is WorkEmail, and SPS-SipAddress is SPSSipAddress.
-    $toKey = { param ([System.String] $Name) ([System.Text.RegularExpressions.Regex]::Replace($Name, '[^A-Za-z0-9]', '')).ToLowerInvariant() }
-    $onlineKeys = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+    # A property is identified by its internal name, which SharePoint compares without regard to the case. A display name is a label that
+    # anybody can give to a property of their own, so it never makes a property one that SharePoint Online fills.
+    $onlineNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     foreach ($onlineName in (Get-SPSOnlineProfilePropertyName)) {
-        $null = $onlineKeys.Add((& $toKey $onlineName))
+        $null = $onlineNames.Add($onlineName)
     }
-    $builtInNames = Get-SPSBuiltInProfilePropertyName
-    $builtInKeys = $null
-    if ($null -ne $builtInNames) {
-        $builtInKeys = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
-        foreach ($builtInName in $builtInNames) {
-            $null = $builtInKeys.Add((& $toKey $builtInName))
+    $builtInList = Get-SPSBuiltInProfilePropertyName
+    $builtInNames = $null
+    if ($null -ne $builtInList) {
+        $builtInNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+        foreach ($builtInName in $builtInList) {
+            $null = $builtInNames.Add($builtInName)
+        }
+    }
+    else {
+        # Without that list a mapping of a property that SharePoint Online does not fill can be a default one or a custom one: it is not
+        # told, so the result is incomplete and the rows have no BuiltInProperty.
+        $complete = $false
+        $warnings.Add('The list of the profile properties that SharePoint ships (PropertyConstants) could not be read, so BuiltInProperty is empty and every mapping of a property that SharePoint Online does not fill is reported as a possible custom one.')
+    }
+
+    # A web application that cannot be found is a warning, not the end of the report of the others.
+    $webApplications = [System.Collections.Generic.List[object]]::new()
+    if ($WebApplicationUrl.Count -gt 0) {
+        foreach ($url in $WebApplicationUrl) {
+            try {
+                foreach ($resolved in @(Get-SPWebApplication -Identity $url -ErrorAction Stop)) {
+                    $webApplications.Add($resolved)
+                }
+            }
+            catch {
+                $complete = $false
+                $warnings.Add("The web application '$url' could not be read: $($_.Exception.Message)")
+            }
+        }
+    }
+    else {
+        foreach ($resolved in @(Get-SPWebApplication -ErrorAction Stop)) {
+            $webApplications.Add($resolved)
         }
     }
 
-    $webApplications = if ($WebApplicationUrl.Count -gt 0) {
-        $WebApplicationUrl | ForEach-Object { Get-SPWebApplication -Identity $_ -ErrorAction Stop }
-    }
-    else {
-        Get-SPWebApplication -ErrorAction Stop
-    }
-
     $stores = [System.Collections.Generic.Dictionary[string, object]]::new()
-    foreach ($webApplication in @($webApplications)) {
+    # Every User Profile proxy of the groups that were read, and the ones that were read or that a warning accounts for.
+    $seenProxies = [ordered]@{}
+    $accountedProxyIds = [System.Collections.Generic.HashSet[string]]::new()
+    $checkedWebApplicationCount = 0
+    foreach ($webApplication in $webApplications) {
         $webApplicationText = [string]$webApplication.Url
         $isReadable = -not [string]::IsNullOrWhiteSpace($webApplicationText)
         $label = if ($isReadable) { $webApplicationText } else { '(unknown web application)' }
 
         $proxyGroup = $null
-        $profileProxies = @()
-        $storeId = ''
-        $storeName = ''
+        $candidates = @()
         try {
             if (-not $isReadable) {
                 throw 'The web application URL could not be read.'
@@ -110,19 +141,20 @@
             if ($null -eq $proxies) {
                 throw 'The service application proxies could not be read.'
             }
-            $profileProxies = @($proxies | Where-Object { $null -ne $_ -and ($_.PSObject.TypeNames -contains $proxyTypeName -or [string]$_.TypeName -eq $proxyDisplayName) })
-            $ids = [System.Collections.Generic.List[string]]::new()
-            $names = [System.Collections.Generic.List[string]]::new()
-            foreach ($profileProxy in $profileProxies) {
+            $found = [System.Collections.Generic.List[object]]::new()
+            foreach ($profileProxy in @($proxies | Where-Object { $null -ne $_ -and ($_.PSObject.TypeNames -contains $proxyTypeName -or [string]$_.TypeName -eq $proxyDisplayName) })) {
                 $proxyId = Get-SPSPropertyValue -InputObject $profileProxy -Name 'Id'
                 if ($null -eq $proxyId -or [guid]$proxyId -eq [guid]::Empty) {
                     throw 'The ID of a User Profile proxy could not be read.'
                 }
-                $ids.Add(([guid]$proxyId).ToString())
-                $names.Add([string](Get-SPSPropertyValue -InputObject $profileProxy -Name 'Name'))
+                $found.Add([PSCustomObject]@{
+                        Id    = ([guid]$proxyId).ToString()
+                        Name  = [string](Get-SPSPropertyValue -InputObject $profileProxy -Name 'Name')
+                        Proxy = $profileProxy
+                    })
             }
-            $storeId = (@($ids | Sort-Object) -join '; ')
-            $storeName = (@($names | Sort-Object) -join '; ')
+            # The IDs and the names are listed in the same order, so that a name is the one of the ID beside it.
+            $candidates = @($found | Sort-Object -Property Id)
         }
         catch {
             $complete = $false
@@ -130,9 +162,57 @@
             continue
         }
 
-        if ($profileProxies.Count -eq 0) {
+        $checkedWebApplicationCount++
+        if ($candidates.Count -eq 0) {
             continue
         }
+        foreach ($candidate in $candidates) {
+            $seenProxies[$candidate.Id] = $candidate.Name
+        }
+
+        # A service context binds the default proxy of its group: it is the one that is read, and the one that identifies the service.
+        $context = $null
+        $contextFailed = $false
+        $contextFailure = ''
+        $bound = $null
+        $unresolvedReason = ''
+        if ($candidates.Count -eq 1) {
+            $bound = $candidates[0]
+        }
+        else {
+            try {
+                $context = Get-SPSProxyGroupServiceContext -ProxyGroup $proxyGroup
+            }
+            catch {
+                $contextFailed = $true
+                $contextFailure = $_.Exception.Message
+            }
+            if ($null -ne $context) {
+                try {
+                    $bound = Resolve-SPSContextProxy -Candidate $candidates -ServiceContext $context
+                    if ($null -eq $bound) {
+                        $unresolvedReason = 'the service context has no default User Profile proxy among them'
+                    }
+                }
+                catch {
+                    $unresolvedReason = $_.Exception.Message
+                }
+            }
+        }
+
+        if ($null -ne $bound) {
+            $storeId = $bound.Id
+            $storeName = $bound.Name
+            $null = $accountedProxyIds.Add($bound.Id)
+        }
+        else {
+            $storeId = (@($candidates | ForEach-Object { $_.Id }) -join '; ')
+            $storeName = (@($candidates | ForEach-Object { $_.Name }) -join '; ')
+            foreach ($candidate in $candidates) {
+                $null = $accountedProxyIds.Add($candidate.Id)
+            }
+        }
+
         if ($stores.ContainsKey($storeId)) {
             if (-not $stores[$storeId].WebApplications.Contains($label)) {
                 $stores[$storeId].WebApplications.Add($label)
@@ -151,11 +231,16 @@
         $stores[$storeId] = $store
 
         try {
-            if ($profileProxies.Count -gt 1) {
-                $complete = $false
-                $warnings.Add("Web application '$label' has $($profileProxies.Count) User Profile proxies in its service application proxy group: only the connections of the default one are read.")
+            if ($contextFailed) {
+                throw $contextFailure
             }
-            $context = Get-SPSProxyGroupServiceContext -ProxyGroup $proxyGroup
+            if ($null -eq $bound) {
+                $complete = $false
+                $warnings.Add("Web application '$label' has $($candidates.Count) User Profile proxies in its service application proxy group and its default one could not be determined ($unresolvedReason): only the connections of the default one are read.")
+            }
+            if ($null -eq $context) {
+                $context = Get-SPSProxyGroupServiceContext -ProxyGroup $proxyGroup
+            }
             $manager = Get-SPSUserProfileConfigManager -ServiceContext $context
             # A collection is read directly: a function would enumerate it, and null means that the permission is missing.
             $connections = $manager.ConnectionManager
@@ -219,12 +304,10 @@
                     }
                 }
 
-                $nameKey = & $toKey $propertyName
-                $displayKey = & $toKey $displayName
-                $synchronized = $onlineKeys.Contains($nameKey) -or ($displayKey.Length -gt 0 -and $onlineKeys.Contains($displayKey))
+                $synchronized = $onlineNames.Contains($propertyName)
                 $builtIn = $null
-                if ($null -ne $builtInKeys) {
-                    $builtIn = $builtInKeys.Contains($nameKey)
+                if ($null -ne $builtInNames) {
+                    $builtIn = $builtInNames.Contains($propertyName)
                 }
 
                 $store.Rows.Add([PSCustomObject]@{
@@ -241,6 +324,17 @@
                     })
             }
         }
+    }
+
+    foreach ($seenId in @($seenProxies.Keys)) {
+        if (-not $accountedProxyIds.Contains($seenId)) {
+            $complete = $false
+            $warnings.Add("The User Profile proxy '$($seenProxies[$seenId])' ($seenId) is not the default User Profile proxy of the service application proxy group of any web application that was read, so its connections are not read.")
+        }
+    }
+    # A farm without the User Profile service has no proxy, and so has a farm whose proxy type is not recognized: the run log tells which one to check.
+    if ($checkedWebApplicationCount -gt 0 -and $seenProxies.Count -eq 0) {
+        $warnings.Add("No User Profile service application proxy was found in the service application proxy group of the $checkedWebApplicationCount web application(s) that were read, so no profile property mapping is reported. A farm without the User Profile service has none: otherwise check the service application proxies of the web applications.")
     }
 
     $mappings = [System.Collections.Generic.List[object]]::new()

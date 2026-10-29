@@ -69,8 +69,8 @@ BeforeAll {
 
     # What the mocks give for a proxy group: its manager, and how often it was read.
     function New-Group {
-        param ([object[]]$Proxies = @(), $Manager = $null, [string]$ContextError = '', [string]$ManagerError = '')
-        [PSCustomObject]@{ Proxies = $Proxies; Manager = $Manager; ContextError = $ContextError; ManagerError = $ManagerError; ContextCalls = 0 }
+        param ([object[]]$Proxies = @(), $Manager = $null, [string]$ContextError = '', [string]$ManagerError = '', $Default = $null, [string]$DefaultError = '')
+        [PSCustomObject]@{ Proxies = $Proxies; Manager = $Manager; ContextError = $ContextError; ManagerError = $ManagerError; Default = $Default; DefaultError = $DefaultError; ContextCalls = 0 }
     }
 
     function New-WebApplication {
@@ -85,14 +85,25 @@ BeforeAll {
         $global:SPSTestProfileWebApplications = $WebApplications
         $global:SPSTestBuiltInNames = $BuiltIn
         Mock Get-SPWebApplication -ModuleName SPSSiteInventory.Common -MockWith {
-            if ($Identity) { return @($global:SPSTestProfileWebApplications | Where-Object { $_.Url -eq $Identity }) }
+            if ($Identity) {
+                $found = @($global:SPSTestProfileWebApplications | Where-Object { $_.Url -eq $Identity })
+                if ($found.Count -eq 0) { throw "Cannot find the web application '$Identity'." }
+                return $found
+            }
             $global:SPSTestProfileWebApplications
         }
         Mock Get-SPSBuiltInProfilePropertyName -ModuleName SPSSiteInventory.Common -MockWith { $global:SPSTestBuiltInNames }
         Mock Get-SPSProxyGroupServiceContext -ModuleName SPSSiteInventory.Common -MockWith {
             $ProxyGroup.ContextCalls++
             if ($ProxyGroup.ContextError) { throw $ProxyGroup.ContextError }
-            [PSCustomObject]@{ Group = $ProxyGroup }
+            $context = [PSCustomObject]@{ Group = $ProxyGroup }
+            # What a service context answers when it is asked for its default proxy of a type.
+            $context | Add-Member -MemberType ScriptMethod -Name GetDefaultProxy -Value {
+                param ($Type)
+                if ($this.Group.DefaultError) { throw $this.Group.DefaultError }
+                $this.Group.Default
+            }
+            $context
         }
         Mock Get-SPSUserProfileConfigManager -ModuleName SPSSiteInventory.Common -MockWith {
             if ($ServiceContext.Group.ManagerError) { throw $ServiceContext.Group.ManagerError }
@@ -161,23 +172,54 @@ Describe 'Get-SPSProfilePropertyMapping' {
         $byName['CostCenter'].BuiltInProperty | Should -BeFalse
 
         Set-TestFarm -WebApplications @((New-WebApplication -Url 'https://intranet' -Group (New-Group -Proxies @((New-Proxy -Id $script:IdA)) -Manager (Get-StandardManager)))) -BuiltIn $null
-        $unknown = @((Get-SPSProfilePropertyMapping).Mappings)
+        $unknownResult = Get-SPSProfilePropertyMapping
+        $unknown = @($unknownResult.Mappings)
+        $unknown | Should -HaveCount 4
         foreach ($row in $unknown) { $row.BuiltInProperty | Should -BeNullOrEmpty }
+        @($unknown | Where-Object { $_.PropertyName -eq 'FirstName' })[0].SynchronizedInSharePointOnline | Should -BeTrue
     }
 
-    It 'compares the names by their letters and digits, in any case, and also by the display name of the property' {
-        $manager = New-Manager -Connection @((New-Connection -Map @((New-Map 'sps-sipaddress' 'msRTCSIP'), (New-Map 'Custom1' 'attr1'), (New-Map 'Custom2' 'attr2')))) `
-            -Core @((New-Core 'sps-sipaddress' 'sip address'), (New-Core 'Custom1' 'Work Email'), (New-Core 'Custom2' 'Cost Center'))
-        Set-TestFarm -WebApplications @((New-WebApplication -Url 'https://intranet' -Group (New-Group -Proxies @((New-Proxy -Id $script:IdA)) -Manager $manager))) -BuiltIn @('SPS-SipAddress')
+    It 'marks the result incomplete, and says what follows from it, when the list of the properties that SharePoint ships cannot be read' {
+        Set-TestFarm -WebApplications @((New-WebApplication -Url 'https://intranet' -Group (New-Group -Proxies @((New-Proxy -Id $script:IdA)) -Manager (Get-StandardManager)))) -BuiltIn $null
 
-        $rows = @((Get-SPSProfilePropertyMapping).Mappings | Sort-Object PropertyName)
+        $result = Get-SPSProfilePropertyMapping
 
-        $rows[0].PropertyName | Should -Be 'Custom1'
-        $rows[0].SynchronizedInSharePointOnline | Should -BeTrue -Because 'its display name is the one of Work Email'
-        $rows[0].BuiltInProperty | Should -BeFalse
-        $rows[1].SynchronizedInSharePointOnline | Should -BeFalse
-        $rows[2].SynchronizedInSharePointOnline | Should -BeTrue
-        $rows[2].BuiltInProperty | Should -BeTrue
+        $result.Complete | Should -BeFalse
+        $result.Mappings | Should -HaveCount 4
+        $result.Warnings | Should -HaveCount 1
+        $result.Warnings[0] | Should -Match 'The list of the profile properties that SharePoint ships \(PropertyConstants\) could not be read, so BuiltInProperty is empty and every mapping of a property that SharePoint Online does not fill is reported as a possible custom one'
+    }
+
+    It 'stays complete, with no warning, when the list of the properties that SharePoint ships is read' {
+        Set-TestFarm -WebApplications @((New-WebApplication -Url 'https://intranet' -Group (New-Group -Proxies @((New-Proxy -Id $script:IdA)) -Manager (Get-StandardManager))))
+
+        $result = Get-SPSProfilePropertyMapping
+
+        $result.Complete | Should -BeTrue
+        $result.Warnings | Should -HaveCount 0
+    }
+
+    It 'identifies a property by its internal name, in any case, without stripping its punctuation, and never by its display name' {
+        $manager = New-Manager -Connection @((New-Connection -Map @(
+                    (New-Map 'sps-sipaddress' 'msRTCSIP'), (New-Map 'Custom1' 'attr1'), (New-Map 'Custom2' 'attr2'), (New-Map 'SPSSipAddress' 'attr3'), (New-Map 'workemail' 'mail'), (New-Map 'Custom3' 'attr4')))) `
+            -Core @((New-Core 'sps-sipaddress' 'sip address'), (New-Core 'Custom1' 'Work Email'), (New-Core 'Custom2' 'Cost Center'), (New-Core 'SPSSipAddress' 'SIP Address'), (New-Core 'workemail' 'Mail'), (New-Core 'Custom3' 'WorkEmail'))
+        Set-TestFarm -WebApplications @((New-WebApplication -Url 'https://intranet' -Group (New-Group -Proxies @((New-Proxy -Id $script:IdA)) -Manager $manager))) -BuiltIn @('SPS-SipAddress', 'WorkEmail')
+
+        $rows = @((Get-SPSProfilePropertyMapping).Mappings)
+
+        $byName = @{}
+        foreach ($row in $rows) { $byName[$row.PropertyName] = $row }
+        $byName['sps-sipaddress'].SynchronizedInSharePointOnline | Should -BeTrue -Because 'the internal name is SPS-SipAddress, in another case'
+        $byName['sps-sipaddress'].BuiltInProperty | Should -BeTrue
+        $byName['workemail'].SynchronizedInSharePointOnline | Should -BeTrue
+        $byName['workemail'].BuiltInProperty | Should -BeTrue
+        $byName['Custom1'].SynchronizedInSharePointOnline | Should -BeFalse -Because 'its display name is the one of Work Email, and a display name is not an identity'
+        $byName['Custom1'].BuiltInProperty | Should -BeFalse
+        $byName['Custom2'].SynchronizedInSharePointOnline | Should -BeFalse
+        $byName['Custom3'].SynchronizedInSharePointOnline | Should -BeFalse -Because 'its display name is the internal name of a property that SharePoint Online fills, which does not make it that property'
+        $byName['Custom3'].BuiltInProperty | Should -BeFalse
+        $byName['SPSSipAddress'].SynchronizedInSharePointOnline | Should -BeFalse -Because 'the hyphen of SPS-SipAddress is part of its name'
+        $byName['SPSSipAddress'].BuiltInProperty | Should -BeFalse
     }
 
     It 'asks for the number of profiles once for each property, and leaves it empty, without making the result incomplete, when it cannot be read' {
@@ -226,7 +268,20 @@ Describe 'Get-SPSProfilePropertyMapping' {
         $result.Mappings[1].UserProfileProxyName | Should -Be 'Text proxy'
     }
 
-    It 'reports nothing, without a warning and without reading anything, for a web application whose proxy group has no User Profile proxy' {
+    It 'reports nothing, complete and without reading anything, for a web application whose proxy group has no User Profile proxy, as long as another one has a proxy' {
+        $none = New-Group -Proxies @((New-OtherProxy))
+        $has = New-Group -Proxies @((New-Proxy -Id $script:IdA)) -Manager (New-Manager -Connection @((New-Connection -Map @((New-Map 'FirstName' 'givenName')))))
+        Set-TestFarm -WebApplications @((New-WebApplication -Url 'https://a' -Group $none), (New-WebApplication -Url 'https://b' -Group (New-Group)), (New-WebApplication -Url 'https://c' -Group $has))
+
+        $result = Get-SPSProfilePropertyMapping
+
+        $result.Mappings | Should -HaveCount 1
+        $result.Complete | Should -BeTrue
+        $result.Warnings | Should -HaveCount 0
+        $none.ContextCalls | Should -Be 0
+    }
+
+    It 'says once in the run log, and stays complete, when no web application has a User Profile proxy at all: a farm without the service, or a proxy type that is not recognized' {
         $group = New-Group -Proxies @((New-OtherProxy))
         Set-TestFarm -WebApplications @((New-WebApplication -Url 'https://a' -Group $group), (New-WebApplication -Url 'https://b' -Group (New-Group)))
 
@@ -234,8 +289,19 @@ Describe 'Get-SPSProfilePropertyMapping' {
 
         $result.Mappings | Should -HaveCount 0
         $result.Complete | Should -BeTrue
-        $result.Warnings | Should -HaveCount 0
+        $result.Warnings | Should -HaveCount 1
+        $result.Warnings[0] | Should -Match 'No User Profile service application proxy was found in the service application proxy group of the 2 web application\(s\) that were read'
         $group.ContextCalls | Should -Be 0
+    }
+
+    It 'does not add that note when no web application could be read at all: the other warnings say why' {
+        Set-TestFarm -WebApplications @((New-WebApplication -Url 'https://nogroup' -NoProxyGroup))
+
+        $result = Get-SPSProfilePropertyMapping
+
+        $result.Complete | Should -BeFalse
+        $result.Warnings | Should -HaveCount 1
+        $result.Warnings[0] | Should -Match 'service application proxy group could not be read'
     }
 
     It 'reads only the requested web applications' {
@@ -263,6 +329,7 @@ Describe 'Get-SPSProfilePropertyMapping' {
         $result.Mappings | Should -HaveCount 1
         $result.Mappings[0].WebApplicationUrls | Should -Be 'https://a; https://b'
         $first.ContextCalls + $second.ContextCalls | Should -Be 1
+        $second.ContextCalls | Should -Be 0 -Because 'a group with a single proxy has nothing to resolve: its context is built only for the read'
     }
 
     It 'keeps distinct User Profile proxies separate' {
@@ -277,8 +344,64 @@ Describe 'Get-SPSProfilePropertyMapping' {
         $result.Mappings[1].UserProfileProxyId | Should -Be $script:IdB
     }
 
-    It 'marks the result incomplete when a proxy group holds several User Profile proxies: a service context binds the default one only' {
-        $group = New-Group -Proxies @((New-Proxy -Id $script:IdA -Name 'First'), (New-Proxy -Id $script:IdB -Name 'Second')) -Manager (New-Manager -Connection @((New-Connection -Map @((New-Map 'FirstName' 'givenName')))))
+    It 'identifies the service by the default proxy that the service context binds, when the group holds several, and says that the others are not read' {
+        $first = New-Proxy -Id $script:IdA -Name 'First'
+        $second = New-Proxy -Id $script:IdB -Name 'Second'
+        $group = New-Group -Proxies @($first, $second) -Manager (New-Manager -Connection @((New-Connection -Map @((New-Map 'FirstName' 'givenName'))))) -Default $second
+        Set-TestFarm -WebApplications @((New-WebApplication -Url 'https://a' -Group $group))
+
+        $result = Get-SPSProfilePropertyMapping
+
+        $result.Mappings | Should -HaveCount 1
+        $result.Mappings[0].UserProfileProxyId | Should -Be $script:IdB
+        $result.Mappings[0].UserProfileProxyName | Should -Be 'Second'
+        $result.Complete | Should -BeFalse
+        $result.Warnings | Should -HaveCount 1
+        $result.Warnings[0] | Should -Match ("The User Profile proxy 'First' \({0}\) is not the default User Profile proxy of the service application proxy group of any web application" -f $script:IdA)
+        $group.ContextCalls | Should -Be 1
+    }
+
+    It 'reads each default proxy once when groups that hold the same proxies have different defaults, and stays complete' {
+        $first = New-Proxy -Id $script:IdA -Name 'First'
+        $second = New-Proxy -Id $script:IdB -Name 'Second'
+        $groupA = New-Group -Proxies @($first, $second) -Manager (New-Manager -Connection @((New-Connection -Name 'a' -Map @((New-Map 'FirstName' 'givenName'))))) -Default $first
+        $groupB = New-Group -Proxies @($first, $second) -Manager (New-Manager -Connection @((New-Connection -Name 'b' -Map @((New-Map 'LastName' 'sn'))))) -Default $second
+        Set-TestFarm -WebApplications @((New-WebApplication -Url 'https://a' -Group $groupA), (New-WebApplication -Url 'https://b' -Group $groupB))
+
+        $result = Get-SPSProfilePropertyMapping
+
+        $result.Complete | Should -BeTrue
+        $result.Warnings | Should -HaveCount 0
+        $result.Mappings | Should -HaveCount 2
+        $result.Mappings[0].ConnectionName | Should -Be 'a'
+        $result.Mappings[0].WebApplicationUrls | Should -Be 'https://a'
+        $result.Mappings[0].UserProfileProxyId | Should -Be $script:IdA
+        $result.Mappings[1].ConnectionName | Should -Be 'b'
+        $result.Mappings[1].WebApplicationUrls | Should -Be 'https://b'
+        $result.Mappings[1].UserProfileProxyId | Should -Be $script:IdB
+    }
+
+    It 'reports a proxy once when a group that holds only it and a group that holds it and another one, with it as the default, see it' {
+        $first = New-Proxy -Id $script:IdA -Name 'First'
+        $second = New-Proxy -Id $script:IdB -Name 'Second'
+        $manager = New-Manager -Connection @((New-Connection -Map @((New-Map 'FirstName' 'givenName'))))
+        $only = New-Group -Proxies @($first) -Manager $manager
+        $both = New-Group -Proxies @($first, $second) -Manager $manager -Default $first
+        Set-TestFarm -WebApplications @((New-WebApplication -Url 'https://a' -Group $only), (New-WebApplication -Url 'https://b' -Group $both))
+
+        $result = Get-SPSProfilePropertyMapping
+
+        $result.Mappings | Should -HaveCount 1
+        $result.Mappings[0].WebApplicationUrls | Should -Be 'https://a; https://b'
+        $result.Mappings[0].UserProfileProxyId | Should -Be $script:IdA
+        $result.Complete | Should -BeFalse
+        ($result.Warnings -join ';') | Should -Match "'Second' \($($script:IdB)\) is not the default"
+    }
+
+    It 'marks the result incomplete when the default proxy of a group that holds several cannot be told: the IDs and the names are listed in the same order' {
+        $zeta = New-Proxy -Id $script:IdA -Name 'Zeta'
+        $alpha = New-Proxy -Id $script:IdB -Name 'Alpha'
+        $group = New-Group -Proxies @($alpha, $zeta) -Manager (New-Manager -Connection @((New-Connection -Map @((New-Map 'FirstName' 'givenName')))))
         Set-TestFarm -WebApplications @((New-WebApplication -Url 'https://a' -Group $group))
 
         $result = Get-SPSProfilePropertyMapping
@@ -286,8 +409,58 @@ Describe 'Get-SPSProfilePropertyMapping' {
         $result.Complete | Should -BeFalse
         $result.Mappings | Should -HaveCount 1
         $result.Mappings[0].UserProfileProxyId | Should -Be ('{0}; {1}' -f $script:IdA, $script:IdB)
-        $result.Mappings[0].UserProfileProxyName | Should -Be 'First; Second'
-        ($result.Warnings -join ';') | Should -Match "Web application 'https://a' has 2 User Profile proxies"
+        $result.Mappings[0].UserProfileProxyName | Should -Be 'Zeta; Alpha'
+        $result.Warnings | Should -HaveCount 1
+        $result.Warnings[0] | Should -Match "Web application 'https://a' has 2 User Profile proxies .* default one could not be determined \(the service context has no default User Profile proxy among them\)"
+    }
+
+    It 'gives the reason when the service context cannot answer for its default proxy, and still reads the service once' {
+        $group = New-Group -Proxies @((New-Proxy -Id $script:IdA -Name 'First'), (New-Proxy -Id $script:IdB -Name 'Second')) -Manager (New-Manager -Connection @((New-Connection -Map @((New-Map 'FirstName' 'givenName'))))) -DefaultError 'The default proxy is unavailable'
+        Set-TestFarm -WebApplications @((New-WebApplication -Url 'https://a' -Group $group))
+
+        $result = Get-SPSProfilePropertyMapping
+
+        $result.Complete | Should -BeFalse
+        $result.Mappings | Should -HaveCount 1
+        $result.Warnings | Should -HaveCount 1
+        $result.Warnings[0] | Should -Match 'default one could not be determined \(.*The default proxy is unavailable.*\)'
+        $group.ContextCalls | Should -Be 1
+    }
+
+    It 'does not read a group that holds several proxies when its service context cannot be built, and says it once' {
+        $group = New-Group -Proxies @((New-Proxy -Id $script:IdA), (New-Proxy -Id $script:IdB)) -Manager (New-Manager -Connection @((New-Connection -Map @((New-Map 'FirstName' 'givenName'))))) -ContextError 'The service context is unavailable'
+        Set-TestFarm -WebApplications @((New-WebApplication -Url 'https://a' -Group $group))
+
+        $result = Get-SPSProfilePropertyMapping
+
+        $result.Complete | Should -BeFalse
+        $result.Mappings | Should -HaveCount 0
+        $result.Warnings | Should -HaveCount 1
+        $result.Warnings[0] | Should -Match "The profile synchronization connections could not be read for web application 'https://a': The service context is unavailable"
+    }
+
+    It 'warns about a web application that cannot be found and still reads the others' {
+        $good = New-Group -Proxies @((New-Proxy -Id $script:IdA)) -Manager (New-Manager -Connection @((New-Connection -Name 'good' -Map @((New-Map 'FirstName' 'givenName')))))
+        Set-TestFarm -WebApplications @((New-WebApplication -Url 'https://good' -Group $good))
+
+        $result = Get-SPSProfilePropertyMapping -WebApplicationUrl @('https://stale', 'https://good')
+
+        $result.Complete | Should -BeFalse
+        $result.Mappings | Should -HaveCount 1
+        $result.Mappings[0].WebApplicationUrls | Should -Be 'https://good'
+        $result.Warnings | Should -HaveCount 1
+        $result.Warnings[0] | Should -Match "The web application 'https://stale' could not be read: Cannot find the web application 'https://stale'"
+    }
+
+    It 'warns about every web application that cannot be found, and does not add the note about a missing User Profile service' {
+        Set-TestFarm -WebApplications @()
+
+        $result = Get-SPSProfilePropertyMapping -WebApplicationUrl @('https://stale', 'https://gone')
+
+        $result.Complete | Should -BeFalse
+        $result.Mappings | Should -HaveCount 0
+        $result.Warnings | Should -HaveCount 2
+        ($result.Warnings -join ';') | Should -Not -Match 'No User Profile service application proxy'
     }
 
     It 'returns an empty complete result when the service has no connection, or when the farm has no web application' {
