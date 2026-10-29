@@ -742,6 +742,68 @@ Describe 'Invoke-SPSiteAssessment' {
         }
     }
 
+    It 'carries the modern-readiness signals of the collector into the record, and leaves them empty for a site that failed' {
+        InModuleScope SPSSiteInventory.Common {
+            Mock Get-SPSite {
+                if ($Identity -match '/denied$') { throw 'Access denied' }
+                $site = [PSCustomObject]@{ Url = $Identity }
+                $site | Add-Member -MemberType ScriptMethod -Name Dispose -Value { }
+                $site
+            }
+            Mock Get-SPSSiteCustomization {
+                @{
+                    ContentTypeInventoryComplete = $true
+                    CustomizationInventoryComplete = $true
+                    ContentTypes = @()
+                    AlternateCssUrlCount = 2
+                    AlternateCssUrlExamples = 'https://intranet/sites/a (/Style Library/brand.css)'
+                    XsltListViewCount = 3
+                    XsltListViewExamples = 'Tasks/Late'
+                    ScriptWebPartCount = 4
+                    ScriptWebPartExamples = '/sites/a/SitePages/Home.aspx (Script Editor)'
+                    ClassicExperienceOptOutCount = 5
+                    ClassicExperienceOptOutExamples = 'https://intranet/sites/a (site collection)'
+                    ClassicExperienceListCount = 6
+                    ClassicExperienceListExamples = 'Contracts (/sites/a/Lists/Contracts)'
+                    ModernBlockerCount = 5
+                    ModernBlockers = 'Alternate CSS URL (2 webs); XSLT list views (3)'
+                }
+            }
+            Mock Add-SPSInventoryEvent { }
+            Mock Write-Progress { }
+
+            $inventory = @(
+                [PSCustomObject]@{ Url = 'https://intranet/sites/a'; Title = 'A'; SiteInventoryComplete = $true; SiteInventoryWarnings = '' }
+                [PSCustomObject]@{ Url = 'https://intranet/sites/denied'; Title = 'Denied'; SiteInventoryComplete = $true; SiteInventoryWarnings = '' }
+            )
+            $scoring = @{ Weights = @{ XsltListViewCount = 1.0 }; Thresholds = @{}; BlockingSignals = @() }
+
+            $result = Invoke-SPSiteAssessment -Inventory $inventory -Scoring $scoring
+            $assessed = $result.Inventory[0]
+            $failed = $result.Inventory[1]
+
+            $assessed.AlternateCssUrlCount | Should -Be 2
+            $assessed.AlternateCssUrlExamples | Should -Be 'https://intranet/sites/a (/Style Library/brand.css)'
+            $assessed.XsltListViewCount | Should -Be 3
+            $assessed.XsltListViewExamples | Should -Be 'Tasks/Late'
+            $assessed.ScriptWebPartCount | Should -Be 4
+            $assessed.ScriptWebPartExamples | Should -Be '/sites/a/SitePages/Home.aspx (Script Editor)'
+            $assessed.ClassicExperienceOptOutCount | Should -Be 5
+            $assessed.ClassicExperienceOptOutExamples | Should -Be 'https://intranet/sites/a (site collection)'
+            $assessed.ClassicExperienceListCount | Should -Be 6
+            $assessed.ClassicExperienceListExamples | Should -Be 'Contracts (/sites/a/Lists/Contracts)'
+            $assessed.ModernBlockerCount | Should -Be 5
+            $assessed.ModernBlockers | Should -Be 'Alternate CSS URL (2 webs); XSLT list views (3)'
+            $assessed.Score | Should -Be 3
+
+            $failed.AssessmentStatus | Should -Be 'Failed'
+            foreach ($field in 'AlternateCssUrlCount', 'AlternateCssUrlExamples', 'XsltListViewCount', 'XsltListViewExamples', 'ScriptWebPartCount', 'ScriptWebPartExamples', 'ClassicExperienceOptOutCount', 'ClassicExperienceOptOutExamples', 'ClassicExperienceListCount', 'ClassicExperienceListExamples', 'ModernBlockerCount', 'ModernBlockers') {
+                $failed.PSObject.Properties.Name | Should -Contain $field
+                $failed.$field | Should -BeNullOrEmpty -Because $field
+            }
+        }
+    }
+
     It 'rejects invalid SharePoint alert settings before it reads any site' {
         InModuleScope SPSSiteInventory.Common {
             Mock Get-SPSite { throw 'No site should be read.' }

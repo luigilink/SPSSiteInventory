@@ -117,6 +117,11 @@
     & $count 'SandboxSolutions' 'Sandbox solutions' ''
     & $count 'EventReceivers' 'Custom event receivers' ''
     & $flag 'CustomMasterPage' 'Custom master page' ''
+    & $count 'AlternateCssUrlCount' 'Alternate CSS URL (webs)' 'AlternateCssUrlExamples'
+    & $count 'XsltListViewCount' 'XSLT list views' 'XsltListViewExamples'
+    & $count 'ScriptWebPartCount' 'Script web parts' 'ScriptWebPartExamples'
+    & $count 'ClassicExperienceOptOutCount' 'Opted out of modern lists' 'ClassicExperienceOptOutExamples'
+    & $count 'ClassicExperienceListCount' 'Lists forced to classic' 'ClassicExperienceListExamples'
     & $count 'CustomizedPageCount' 'Customized pages' 'CustomizedPageExamples'
     & $count 'AppInstanceCount' 'App instances' 'AppInstanceExamples'
     & $count 'AppWebCount' 'App webs' ''
@@ -180,6 +185,7 @@
     & $count 'LargeListViewCount' 'Large-list views' 'LargeListViewExamples'
     & $count 'CheckedOutFileCount' 'Checked-out files' 'CheckedOutFileExamples'
     & $count 'FileVersionCount' 'High-version files' 'FileVersionExamples'
+    & $count 'LargeExcelFileCount' 'Large Excel files' 'LargeExcelFileExamples'
 
     # Completeness of the inventory: a figure above is a lower bound when one of these is False.
     foreach ($check in @(

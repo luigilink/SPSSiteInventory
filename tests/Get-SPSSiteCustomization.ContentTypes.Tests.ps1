@@ -123,6 +123,8 @@ public sealed class SPSSiteInventoryBrokenAlertCollection : IEnumerable
             HasUniqueRoleDefinitions = $true
             RoleDefinitions = @()
             Alerts = @()
+            AlternateCssUrl = ''
+            RootFolder = [PSCustomObject]@{ WelcomePage = '' }
         }
         $web | Add-Member -MemberType ScriptMethod -Name Dispose -Value { }
         return $web
@@ -193,9 +195,15 @@ public sealed class SPSSiteInventoryBrokenAlertCollection : IEnumerable
             Batches = $Batches
             BatchIndex = 0
             Queries = [System.Collections.Generic.List[object]]::new()
+            WebPartQueries = [System.Collections.Generic.List[object]]::new()
         }
         $list | Add-Member -MemberType ScriptMethod -Name GetItems -Value {
             param ($Query)
+            # The scan of the pages for script lists the .aspx files; the batches are those of the layout scan.
+            if ($Query.PSObject.Properties['Query'] -and [string]$Query.Query -match 'File_x0020_Type') {
+                $this.WebPartQueries.Add($Query)
+                return [PSCustomObject]@{ Items = @(); ListItemCollectionPosition = $null }
+            }
             $this.Queries.Add($Query)
             $batch = $this.Batches[$this.BatchIndex]
             $this.BatchIndex++
@@ -242,8 +250,8 @@ public sealed class SPSSiteInventoryBrokenAlertCollection : IEnumerable
         $library | Add-Member -MemberType NoteProperty -Name HtmlQueries -Value ([System.Collections.Generic.List[object]]::new())
         $library | Add-Member -MemberType ScriptMethod -Name GetItems -Value {
             param ($Query)
-            # Checkout and version scans share GetItems; only the HTML query returns files.
-            if ($Query.PSObject.Properties['Query'] -and [string]$Query.Query -match 'File_x0020_Type') {
+            # Checkout, version and workbook scans share GetItems; only the HTML query returns files.
+            if ($Query.PSObject.Properties['Query'] -and [string]$Query.Query -match 'File_x0020_Type' -and [string]$Query.Query -notmatch '>xlsx<') {
                 $this.HtmlQueries.Add($Query)
                 $batch = $this.HtmlBatches[$this.HtmlBatchIndex]
                 $this.HtmlBatchIndex++
@@ -603,7 +611,14 @@ Describe 'Get-SPSSiteCustomization content types' {
 
     It 'reports no publishing signals and skips Pages libraries on webs without the publishing feature' {
         $pages = Get-TestPagesList -ItemCount 99
-        $pages | Add-Member -MemberType ScriptMethod -Name GetItems -Value { throw 'Pages must not be read without the publishing feature.' } -Force
+        # The pages are read for script wherever a Pages library is, but the page layouts only with the publishing feature.
+        $pages | Add-Member -MemberType ScriptMethod -Name GetItems -Value {
+            param ($Query)
+            if ($Query.PSObject.Properties['Query'] -and [string]$Query.Query -match 'File_x0020_Type') {
+                return [PSCustomObject]@{ Items = @(); ListItemCollectionPosition = $null }
+            }
+            throw 'The page layouts must not be read without the publishing feature.'
+        } -Force
         $web = Get-TestWeb -Definitions @() -Bindings @()
         $web.Features = @((Get-TestFeature -Id '00000000-0000-0000-0000-000000000001'))
         $web.Lists = @($web.Lists[0], $pages)

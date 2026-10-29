@@ -45,8 +45,8 @@ report pack, plus a dedicated farm-solution report, to the output folder:
 | `*-permissions-*.json` | Permissions and policy dataset (`CustomPermissionLevelCount`/`Examples`, `EmailEnabledListCount`/`Examples`, `HtmlFileCount`/`Examples`, plus the web application values `BrowserFileHandling`, `WebAppPolicyCount`/`Examples` repeated per site collection, status, category). Web application failure rows (`InventoryScope` = `WebApplication`) are included so the policy values read for an application whose site collections could not be enumerated are kept. |
 | `*-publishing-*.json` | Publishing and customized-page dataset (`PublishingInfrastructureEnabled`, `PublishingWebCount`, `PublishingPageCount`, `PublishingPageLayoutCount`/`PublishingPageLayoutExamples`, `CustomizedPageCount`/`CustomizedPageExamples`, status, category). |
 | `*-irm-locks-*.json` | Security/lock dataset (`IrmEnabledListCount`, `SiteLockState`, `IsLockedSite`, `HasNoAccessLock`). |
-| `*-large-content-*.json` | Large-content risk dataset (`IsLargeSite`, large lists/views, checked-out files, high file-version counts, plus examples). |
-| `*-alerts-*.csv` / `*-alerts-*.json` | Normalized risk alerts extracted from the site signals, each with its severity, an explanation and a remediation hint (and the Microsoft Learn page behind it). One alert per site collection and signal; web application and BCS alerts are written once per web application and per LOB system. The CSV is for Excel, the JSON for automation. The alert types and their advice are listed in [Alerts and remediation](Alerts). |
+| `*-large-content-*.json` | Large-content risk dataset (`IsLargeSite`, large lists/views, checked-out files, high file-version counts, large Excel files, plus examples). |
+| `*-alerts-*.csv` / `*-alerts-*.json` | Normalized risk alerts extracted from the site signals, each with its severity, an explanation and a remediation hint (and the Microsoft Learn page behind it). The `SharePointOnPrem` mode has its own severity and words for them. One alert per site collection and signal; web application and BCS alerts are written once per web application and per LOB system. The CSV is for Excel, the JSON for automation. The alert types and their advice are listed in [Alerts and remediation](Alerts). |
 | `*-solutions-*.csv` | Farm-solution (WSP) inventory for Excel; one row per solution, with the feature scopes/ids flattened. |
 | `*-solutions-*.json` | Farm-solution (WSP) inventory for automation, with the feature scopes/ids kept as arrays. |
 | `*-contenttypes-*.csv` / `*-contenttypes-*.json` | Content-type definitions and list bindings, including standard types. One row per web definition or list binding, not per item. |
@@ -164,11 +164,18 @@ CSV/JSON rows describe site collections and any web-application enumeration fail
 | `LargeListViewCount` / `LargeListViewExamples` | Number of large-list views and up to five list/view examples with row limits |
 | `CheckedOutFileCount` / `CheckedOutFileExamples` | Number of checked-out files and up to five impacted libraries |
 | `FileVersionCount` / `FileVersionExamples` | Number of files above the configured file-version threshold and up to five examples |
+| `LargeExcelFileCount` / `LargeExcelFileExamples` | Excel workbooks (`.xlsx`) in document libraries of at least `LargeContentThresholds.LargeExcelFileSizeMB` (10 MB by default) and up to five of them with their size. SharePoint Online does not open a workbook above 10 MB in the browser: it asks the user to open it in Excel. The workbooks are migrated, so the signal says whom to warn. System catalogs are skipped, and at most `MaxItemsForExcelFileScanPerLibrary` workbooks are checked in each library (2000 by default) |
 | `SiteLockState` / `IsLockedSite` / `HasNoAccessLock` | Site collection lock state (`Unlock`, `ReadOnly`, `NoAdditions`, `NoAccess`, `Unknown`), whether the site has any lock, and whether the lock is `NoAccess`, the only one that makes the site unreadable (and blocking in the example configuration). SharePoint refuses to read a `NoAccess` site collection at all, even its lock flags, so the lock is recognized from that error and the site collection stays `Partial`. `Unknown` means that the flags could not be read for another reason, and comes with a warning |
 | `UsesFullTrustCode` | Site activates a feature from a custom full-trust WSP (GAC assembly) |
 | `UsesCustomFarmFeature` | Site activates a feature from a custom farm solution (WSP), as identified by the farm-solution map |
 | `SandboxSolutions` | Sandbox (user) solutions in the solution gallery of the site collection, activated or not |
 | `CustomMasterPage` | At least one web of the site collection uses a master page other than the ones that SharePoint provisions in the master page gallery (`seattle.master`, `oslo.master`, `v4.master` and, for the My Site templates, `mysite15.master`) |
+| `AlternateCssUrlCount` / `AlternateCssUrlExamples` | Webs that set an alternate CSS URL, and up to five as `web URL (CSS URL)`. Modern pages do not use it: the branding is redone, with a site theme for example |
+| `XsltListViewCount` / `XsltListViewExamples` | List views that render with XSLT (an `XslLink` other than the default `main.xsl`, or an `Xsl` of their own; personal views and the views of hidden lists are not counted) and up to five as `list/view`. The modern list ignores XSLT, so SharePoint shows such a list in the classic experience |
+| `ScriptWebPartCount` / `ScriptWebPartExamples` | Script Editor web parts, and Content Editor web parts that embed a `<script>` tag or link to a file, on the home page of each web and on the pages of its Site Pages and Pages libraries, and up to five as `page URL (Script Editor)` or `page URL (Content Editor)`. They do not exist on a modern page. At most `MaxItemsForWebPartScanPerLibrary` pages of a library are read (200 by default); the web parts of list view and form pages are not read |
+| `ClassicExperienceOptOutCount` / `ClassicExperienceOptOutExamples` | The site collection and the webs that opted out of the modern list and library experience (the feature `E3540C7D-6BEA-403C-A224-1A12EAFEE4C4` of the site collection and the feature `52E14B6F-B1BB-4969-B89B-C4FAA56745EF` of a web, one each), and up to five as `URL (site collection)` or `URL (web)` |
+| `ClassicExperienceListCount` / `ClassicExperienceListExamples` | Lists, hidden ones left out, whose "List experience" setting is classic (`ListExperienceOptions`), and up to five as `title (list URL)`. It is 0 on a SharePoint that has no such setting, such as SharePoint Server 2016 |
+| `ModernBlockerCount` / `ModernBlockers` | The kinds of blocker of the modern experience that the site collection has, out of seven (custom master page, alternate CSS URL, publishing features, XSLT list views, script web parts, opt-out of the modern list experience, lists forced to classic), and one text that says how many webs, views, web parts or lists are behind each. Not weighed in the example configurations: each blocker weighs through its own signal |
 | `EventReceivers` | Event receivers registered on lists from a custom (non-Microsoft) assembly; out-of-the-box receivers are not counted |
 | `UniquePermissionsCount` | Role assignments on the webs that do not inherit their permissions. The root web always has its own, so the value is never 0: it is not a count of webs with unique permissions |
 | `ContentTypeCount` | Distinct content-type IDs seen in web definition collections, deduplicated within this site collection |
@@ -227,6 +234,15 @@ folder can be moved, zipped and sent. The manifest lists the pages in `Files.Inv
     again, or the button that appears next to the filters, to remove the filter.
   - The **alerts** are lines with their severity, name and number of affected site collections.
     Open one to read what it means, what to do about it and the Microsoft Learn page.
+  - The **modern experience readiness** section is in the report of the
+    [`SharePointOnPrem` mode](Configuration#targetmode-section) only, after the alerts. It says how
+    many assessed site collections have a blocker of the modern experience (a custom master page,
+    an alternate CSS URL, publishing features, XSLT list views, script web parts, an opt-out of the
+    modern list experience, lists forced to classic), how many site collections have each kind and how
+    many items are behind it, and lists the site collections that have a blocker, the most kinds
+    first, then the highest score, at most 100 of them. A site collection whose assessment is
+    partial is marked, because its counts are lower bounds. The `ModernBlockerCount` and
+    `ModernBlockers` columns of the CSV and JSON files hold the same for all of them.
   - The **migration wave plan** gives, for each wave, the number of site collections, their
     content and how many of them are partial. The `Needs review` wave holds the Simple site
     collections whose assessment is partial, and the summary says how many wait there.

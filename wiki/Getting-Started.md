@@ -20,6 +20,7 @@ The extracted layout is:
 Invoke-SPSSiteInventory.ps1
 Test-SPSSiteInventoryReadiness.ps1
 config/inventory-settings.example.psd1
+config/inventory-settings.onprem.example.psd1
 Modules/SPSSiteInventory.Common/
 ```
 
@@ -36,6 +37,12 @@ See the [Configuration](Configuration) page for every setting. At minimum, set `
 
 When reusing an older settings file, add `HasFbaZone` to `Scoring.BlockingSignals`
 if FBA must block migration to SharePoint Online. The current example includes it.
+
+To plan the modernization of the farm (the classic experience to the modern one, where the
+site collections run) instead of a migration to SharePoint Online, copy
+`config\inventory-settings.onprem.example.psd1` instead: it sets `TargetMode = 'SharePointOnPrem'`
+and ships the scoring and the waves that fit that question (see
+[TargetMode](Configuration#targetmode-section)).
 
 ## 4. Check readiness
 
@@ -81,7 +88,7 @@ The check is read-only: it changes nothing on the farm and writes no file. It pr
 It checks:
 
 - **PowerShell**: Windows PowerShell 5.1 (PowerShell 7 cannot load the SharePoint snap-in) and an elevated session.
-- **Settings**: the settings file exists and loads, with its `Scoring` section and a valid `SharePointAlerts` section and a valid `Scope` section; `OutputFolder` is set and usable (a folder that does not exist yet is fine, the scan creates it); and the blocking signals and weights of `config\inventory-settings.example.psd1` that your file does not have yet. That last comparison is a warning that helps when you reuse the settings file of an older release: those signals are collected but do not influence the score. When the example file is not found (for example because it was renamed instead of copied), the comparison cannot run: a `[SKIP]` line `Comparison with the example` gives the path that was looked up, and the verdict and the exit code do not change.
+- **Settings**: the settings file exists and loads, with its `Scoring` section and a valid `SharePointAlerts` section and a valid `Scope` section; `OutputFolder` is set and usable (a folder that does not exist yet is fine, the scan creates it); and the blocking signals and weights of the example of your mode (`config\inventory-settings.example.psd1`, or `config\inventory-settings.onprem.example.psd1` when the file has `TargetMode = 'SharePointOnPrem'`) that your file does not have yet. That last comparison is a warning that helps when you reuse the settings file of an older release: those signals are collected but do not influence the score. When the example file is not found (for example because it was renamed instead of copied), the comparison cannot run: a `[SKIP]` line `Comparison with the example` gives the path that was looked up, and the verdict and the exit code do not change.
 - **SharePoint**: SharePoint is installed (and its build), the SharePoint commands load, the farm can be reached, the account is a farm administrator (a warning if not: read access to every site collection is enough, but the farm account is recommended), and the web applications to scan exist: each `WebApplicationUrl` of the settings, or at least one content web application when the setting is empty.
 
 The script exits with code 1 when there is an error, or when the checks themselves could not run, and with 0 otherwise, so that it can gate an automated run. `-ConfigPath` points to another settings file, `-SkipSharePoint` checks the host and the settings file on a machine that is not a farm server, and `-PassThru` also returns a summary object (counts, `IsReady` and the checks).

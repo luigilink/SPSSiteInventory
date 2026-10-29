@@ -47,6 +47,75 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   never loaded, and the XML is read with the DTD switched off. See the wiki page "Inspecting WSP
   packages (offline)". (#21)
 
+- A target mode, `TargetMode`, so that the same inventory can plan the modernization of a farm
+  (the classic experience to the modern one, where the site collections run) and not only a
+  migration to SharePoint Online. `SharePointOnline` is the default, also when the setting is
+  missing, and nothing changes for a settings file of an earlier version: its reports are the same
+  as before. `SharePointOnPrem` names the four categories *Modern-ready*, *Light remediation*,
+  *Rebuild (SPFx)* and *Blocked* (their numbers, 1 to 4, and the scores do not change), names the
+  pages of a split HTML report and the default waves after them, words the HTML report as a
+  modernization report (header, wave plan, the meaning of the high-severity signals), and does not
+  raise the log warnings that are about the blockers of a migration. The mode is recorded in the
+  manifest (`Summary.TargetMode`). The mode is validated when the settings are loaded: a value that
+  is not one of the two names stops the run with the name of the file. A new example file,
+  `inventory-settings.onprem.example.psd1`, ships the scoring of that question: full-trust code and
+  custom farm features, which still run on the farm, weigh as code to rebuild with SPFx and no
+  longer block, `InfoPathFormCount` stays the one blocker, and what belongs to a migration (FBA,
+  unsupported templates, NoAccess locks, IRM, external lists, the term store, the subsite
+  structure) weighs nothing, while it is still collected and reported. The readiness check
+  compares the settings with the example of their mode. See the wiki page "Configuration". (#25)
+- The inventory collects what keeps a site collection in the classic experience, in both target
+  modes; with the custom master page, which it already collected, and the publishing signals they
+  say why a site collection is not in the modern experience. `AlternateCssUrlCount` counts the webs
+  that set an alternate CSS URL, `XsltListViewCount` the list views that render with a customized
+  XSLT (a `XslLink` other than `main.xsl`, or an `Xsl`), `ScriptWebPartCount` the Script Editor web
+  parts and the Content Editor web parts that embed a script or link to a file, on the home page
+  of each web and on the pages of its Site Pages and Pages libraries (at most
+  `LargeContentThresholds.MaxItemsForWebPartScanPerLibrary` pages per library, 200 by default),
+  `ClassicExperienceOptOutCount` the site collection and the webs that opted out of the modern list
+  and library experience, and `ClassicExperienceListCount` the lists whose experience is set to
+  classic, each with its examples. `ModernBlockerCount` and `ModernBlockers` bring them together:
+  the number of kinds of blocker, out of seven, and one text for the reports. They are columns of
+  the CSV and JSON reports. A setting that cannot be read marks the site collection partial, with
+  a warning, and is never taken for a site without the signal; a SharePoint that has no modern
+  list experience, such as SharePoint Server 2016, has no list experience setting, and the count
+  stays 0 without marking the site collection partial. The two example configurations weigh the
+  signals: lightly for a migration to SharePoint Online, and as the work of modernizing a farm for
+  `SharePointOnPrem`. The aggregate itself weighs nothing, or each blocker would count twice. The
+  lab has five scenarios for them, and the wiki pages "Usage" and "Configuration" document them. (#25)
+- The report of the `SharePointOnPrem` mode speaks of the modernization of the farm, not of a
+  migration. The alert catalog has five new alert types for the signals of the modern experience
+  (`AlternateCssUrl`, `XsltListViews`, `ScriptWebParts`, `ModernExperienceOptOut` and
+  `ClassicExperienceLists`), raised in both modes, and the mode has a catalog of its own, with the same
+  types in the same order. The alerts that are only about a migration to SharePoint Online (external
+  lists and BCS, incoming e-mail, forms-based authentication, IRM, unsupported templates, SharePoint
+  alerts, permission levels, large sites, checked-out files and file versions, the web application
+  policies and the like) are `Low` and start by saying so, with the original text after it. The
+  InfoPath forms and the SharePoint 2010 workflows stay `High`, with the date from which Microsoft no
+  longer supports them in SharePoint Server Subscription Edition (14 July 2026) and a link to the page
+  that says so; the full-trust code, which is rebuilt with the SharePoint Framework and runs until
+  then, and the SharePoint 2013 workflows, whose engine SharePoint Workflow Manager replaces, are
+  `Medium`; the classic pages, the add-ins, the large lists and the subsites have the words of the
+  modernization. The risk indicators of the HTML report are ranked with the severities of the mode, the
+  report has a *Modern experience readiness* section (how many site collections have a blocker, how
+  many have each kind of blocker, and the 100 that have the most kinds), and the details of a site
+  collection list its signals of the modern experience, in both modes. The wiki page "Alerts" documents
+  the new alerts and the catalog of the mode. (#25)
+
+- The inventory counts the Excel workbooks that SharePoint Online does not open in the browser, as the
+  SMAT scan "Large Excel Files" does. `LargeExcelFileCount` counts the `.xlsx` files of the document
+  libraries (the system catalogs are skipped) that are at least `LargeContentThresholds.LargeExcelFileSizeMB`
+  large, 10 MB by default, and `LargeExcelFileExamples` lists up to five of them with their size. At most
+  `LargeContentThresholds.MaxItemsForExcelFileScanPerLibrary` workbooks (2000 by default) are checked in each
+  library; a library above it, or a size that cannot be read, marks the site collection partial. The new
+  `LargeExcelFiles` alert (`Low`: the workbooks are migrated, the users are told) is raised in both modes,
+  and in the `SharePointOnPrem` mode it is one of the alerts that are only about a migration. The signal weighs
+  nothing in either example configuration, it is a column of the `*-large-content-*` dataset and of the CSV
+  and JSON files, a risk indicator of the HTML report and a line of the details of a site collection, and the
+  lab has a scenario for it. The SMAT scan "Long OneDrive URLs" is not covered, by decision: it needs the file
+  paths of every personal site and the user principal name of each owner in the target, which belong to the
+  OneDrive migration tooling (see the `Scope` section of the wiki page "Configuration"). (#48)
+
 ### Changed
 
 - The risk indicators of the HTML report are a ranked list instead of a grid of 33 cards, 16 of

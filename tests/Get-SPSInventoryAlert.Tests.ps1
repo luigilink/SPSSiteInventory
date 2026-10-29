@@ -14,6 +14,11 @@ BeforeDiscovery {
         @{ Type = 'PublishingSite'; Severity = 'Medium'; Signals = @{ PublishingInfrastructureEnabled = $false; PublishingWebCount = 2 }; Value = 2 }
         @{ Type = 'PublishingPages'; Severity = 'Medium'; Signals = @{ PublishingPageCount = 40 }; Value = 40 }
         @{ Type = 'CustomizedPages'; Severity = 'Medium'; Signals = @{ CustomizedPageCount = 7 }; Value = 7 }
+        @{ Type = 'AlternateCssUrl'; Severity = 'Medium'; Signals = @{ AlternateCssUrlCount = 2 }; Value = 2 }
+        @{ Type = 'XsltListViews'; Severity = 'Medium'; Signals = @{ XsltListViewCount = 3 }; Value = 3 }
+        @{ Type = 'ScriptWebParts'; Severity = 'Medium'; Signals = @{ ScriptWebPartCount = 4 }; Value = 4 }
+        @{ Type = 'ModernExperienceOptOut'; Severity = 'Low'; Signals = @{ ClassicExperienceOptOutCount = 1 }; Value = 1 }
+        @{ Type = 'ClassicExperienceLists'; Severity = 'Low'; Signals = @{ ClassicExperienceListCount = 5 }; Value = 5 }
         @{ Type = 'CustomPermissionLevels'; Severity = 'Medium'; Signals = @{ CustomPermissionLevelCount = 2 }; Value = 2 }
         @{ Type = 'EmailEnabledLists'; Severity = 'Medium'; Signals = @{ EmailEnabledListCount = 1 }; Value = 1 }
         @{ Type = 'HtmlFiles'; Severity = 'Medium'; Signals = @{ HtmlFileCount = 8 }; Value = 8 }
@@ -34,6 +39,7 @@ BeforeDiscovery {
         @{ Type = 'LargeListViews'; Severity = 'Medium'; Signals = @{ LargeListViewCount = 2 }; Value = 2 }
         @{ Type = 'CheckedOutFiles'; Severity = 'Medium'; Signals = @{ CheckedOutFileCount = 9 }; Value = 9 }
         @{ Type = 'FileVersions'; Severity = 'Medium'; Signals = @{ FileVersionCount = 3 }; Value = 3 }
+        @{ Type = 'LargeExcelFiles'; Severity = 'Low'; Signals = @{ LargeExcelFileCount = 2 }; Value = 2 }
         @{ Type = 'Subsites'; Severity = 'Low'; Signals = @{ SubsiteCount = 4 }; Value = 4 }
     )
 }
@@ -46,6 +52,7 @@ BeforeAll {
     # Get-SPSInventoryAlert is private; reach it inside the module scope.
     $script:Module = Get-Module -Name SPSSiteInventory.Common
     $script:Catalog = & $script:Module { Get-SPSAlertCatalog }
+    $script:OnPremCatalog = & $script:Module { Get-SPSAlertCatalog -TargetMode 'SharePointOnPrem' }
 
     function Get-Alert {
         param ([object[]]$Record, [hashtable]$Parameters = @{})
@@ -74,6 +81,81 @@ Describe 'Get-SPSInventoryAlert' {
         $alerts[0].Value | Should -Be $Value
         $alerts[0].Remediation | Should -Be $script:Catalog[$Type].Remediation
         $alerts[0].Reference | Should -Be $script:Catalog[$Type].Reference
+    }
+
+    It 'raises <Type> with the catalog of the SharePointOnPrem mode when the mode is given' -ForEach $script:SiteCases {
+        $alerts = Get-Alert -Record @((New-Site -Signals $Signals)) -Parameters @{ TargetMode = 'SharePointOnPrem' }
+
+        $alerts | Should -HaveCount 1
+        $alerts[0].AlertType | Should -Be $Type
+        $alerts[0].Severity | Should -Be $script:OnPremCatalog[$Type].Severity
+        $alerts[0].Remediation | Should -Be $script:OnPremCatalog[$Type].Remediation
+        $alerts[0].Reference | Should -Be $script:OnPremCatalog[$Type].Reference
+        $alerts[0].Value | Should -Be $Value
+    }
+
+    It 'frames the reason of each template alert as migration-only in the on-premises mode, and leaves it as it is in the default mode' {
+        $record = New-Site -Signals @{
+            IsUnsupportedSiteTemplate = $true; Template = 'APP#0'; TemplateCompatibilityReason = 'App webs are not migration targets.'
+        }
+        $review = New-Site -Signals @{ TemplateCompatibility = 'Review'; Template = 'CUSTOM#1'; TemplateCompatibilityReason = 'Template is not mapped.' }
+        $language = New-Site -Signals @{ TemplateLanguageReviewRequired = $true; TemplateLanguageLcid = 999999; TemplateLanguageReason = 'LCID is not recognized.' }
+        $parameters = @{ TargetMode = 'SharePointOnPrem' }
+
+        (Get-Alert -Record @($record) -Parameters $parameters)[0].Message | Should -Be 'Migration to SharePoint Online only. App webs are not migration targets.'
+        (Get-Alert -Record @($review) -Parameters $parameters)[0].Message | Should -Be 'Migration to SharePoint Online only. Template is not mapped.'
+        (Get-Alert -Record @($language) -Parameters $parameters)[0].Message | Should -Be 'Migration to SharePoint Online only. LCID is not recognized.'
+        (Get-Alert -Record @($record))[0].Message | Should -Be 'App webs are not migration targets.'
+    }
+
+    It 'raises the same alerts in the default mode with or without the mode, and the same types in both modes' {
+        $record = New-Site -Signals @{ ExternalListCount = 2; InfoPathFormCount = 1; ScriptWebPartCount = 3; UsesFullTrustCode = $true }
+
+        $default = Get-Alert -Record @($record)
+        $explicit = Get-Alert -Record @($record) -Parameters @{ TargetMode = 'SharePointOnline' }
+        $onPrem = Get-Alert -Record @($record) -Parameters @{ TargetMode = 'SharePointOnPrem' }
+
+        ($explicit | ConvertTo-Json -Depth 4) | Should -Be ($default | ConvertTo-Json -Depth 4)
+        (@($onPrem.AlertType) -join ',') | Should -Be (@($default.AlertType) -join ',')
+        ($default | Where-Object AlertType -eq 'ExternalLists').Severity | Should -Be 'High'
+        ($onPrem | Where-Object AlertType -eq 'ExternalLists').Severity | Should -Be 'Low'
+        ($onPrem | Where-Object AlertType -eq 'FullTrustCode').Severity | Should -Be 'Medium'
+        ($onPrem | Where-Object AlertType -eq 'InfoPath').Severity | Should -Be 'High'
+    }
+
+    It 'rejects a target mode that is not one of the two, also when there is nothing to alert on' {
+        { Get-Alert -Record @() -Parameters @{ TargetMode = 'Online' } } | Should -Throw "*TargetMode must be 'SharePointOnline' or 'SharePointOnPrem'*"
+        { Get-Alert -Record @((New-Site)) -Parameters @{ TargetMode = '' } } | Should -Throw "*TargetMode must be*"
+    }
+
+    It 'raises no alert of the modern experience for a failed row, whose signals are empty' {
+        $row = New-Site -Signals @{
+            AssessmentStatus = 'Failed'; AssessmentWarnings = 'Access denied'
+            AlternateCssUrlCount = $null; XsltListViewCount = $null; ScriptWebPartCount = $null; ClassicExperienceOptOutCount = $null; ClassicExperienceListCount = $null
+        }
+
+        @((Get-Alert -Record @($row)).AlertType) | Should -Be @('AssessmentFailed')
+    }
+
+    It 'raises the LargeExcelFiles alert for a single workbook, and none for 0' {
+        @((Get-Alert -Record @((New-Site -Signals @{ LargeExcelFileCount = 1 }))).AlertType) | Should -Be @('LargeExcelFiles')
+        Get-Alert -Record @((New-Site -Signals @{ LargeExcelFileCount = 0 })) | Should -HaveCount 0
+        Get-Alert -Record @((New-Site -Signals @{ LargeExcelFileCount = $null })) | Should -HaveCount 0
+    }
+
+    It 'raises the alert of each signal of the modern experience for a single item, and for none when the count is 0' -ForEach @(
+        @{ Field = 'AlternateCssUrlCount'; Type = 'AlternateCssUrl' }
+        @{ Field = 'XsltListViewCount'; Type = 'XsltListViews' }
+        @{ Field = 'ScriptWebPartCount'; Type = 'ScriptWebParts' }
+        @{ Field = 'ClassicExperienceOptOutCount'; Type = 'ModernExperienceOptOut' }
+        @{ Field = 'ClassicExperienceListCount'; Type = 'ClassicExperienceLists' }
+    ) {
+        $one = Get-Alert -Record @((New-Site -Signals @{ $Field = 1 }))
+        $none = Get-Alert -Record @((New-Site -Signals @{ $Field = 0 }))
+
+        @($one.AlertType) | Should -Be @($Type)
+        $one[0].Value | Should -Be 1
+        $none | Should -HaveCount 0
     }
 
     It 'raises nothing for a site collection without any signal' {

@@ -11,7 +11,12 @@
         validated too: it must be a hashtable and IncludeUserLogin must be $true or $false.
         So is the optional Scope section: IncludePersonalSites and IncludeSiteMasters must
         be $true or $false. And the optional Report section: HtmlSplitThreshold must be a
-        whole number from 0 to 10000000 and HtmlRowsPerPage one from 50 to 5000.
+        whole number from 0 to 10000000 and HtmlRowsPerPage one from 50 to 5000. And the optional
+        top-level TargetMode, which must be 'SharePointOnline' (the default, also when the setting
+        is missing) or 'SharePointOnPrem': the setting says whether the inventory prepares a
+        migration to SharePoint Online or the modernization of the farm where it runs. A misspelled
+        value is refused, because it would otherwise run as the default without anybody having
+        chosen it.
 
         .PARAMETER Path
         Full path to the settings .psd1 file.
@@ -36,6 +41,15 @@
 
     if (-not $settings.ContainsKey('Scoring')) {
         throw "Inventory settings file '$Path' is missing the mandatory 'Scoring' section."
+    }
+
+    if ($settings.ContainsKey('TargetMode')) {
+        try {
+            $null = Get-SPSTargetProfile -TargetMode $settings['TargetMode']
+        }
+        catch {
+            throw "Inventory settings file '$Path': $($_.Exception.Message)"
+        }
     }
 
     if ($settings.ContainsKey('SharePointAlerts')) {

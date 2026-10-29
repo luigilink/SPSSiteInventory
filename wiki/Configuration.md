@@ -9,6 +9,7 @@ and adjust it. No client-specific value ships in the repository.
 | Setting | Type | Description |
 | --- | --- | --- |
 | `EnvName` | string | Free-form environment identifier (e.g. `PROD`), used in output file names and the banner. |
+| `TargetMode` | string | Optional. What the inventory prepares: `SharePointOnline` (the default, also when the setting is missing) for a migration to SharePoint Online, or `SharePointOnPrem` for the modernization of the farm where it runs. It names the categories and the waves and frames the report; the `Scoring` section decides what counts as a blocker (see [TargetMode](#targetmode-section)). |
 | `WebApplicationUrl` | string[] | Web application URLs to scan. Leave empty to scan every content web application. |
 | `CustomSolutionPrefix` | string[] | **Optional override.** Case-insensitive name prefixes that force a farm solution (WSP) to be treated as custom. Custom solutions are auto-detected by default (see below), so this is usually left empty. |
 | `AutoDetectCustomSolutions` | bool | Optional (default `$true`). When true, a solution is custom unless its name matches a known Microsoft / out-of-the-box marker. Set `$false` to rely only on `CustomSolutionPrefix`. |
@@ -22,7 +23,104 @@ and adjust it. No client-specific value ships in the repository.
 | `Report` | hashtable | Options of the HTML report: `HtmlSplitThreshold` (default 3000) and `HtmlRowsPerPage` (default 500). Optional. |
 | `SharePointAlerts` | hashtable | Options of the SharePoint alerts report (`IncludeUserLogin`, default `$true`). Optional. |
 | `Scoring` | hashtable | The scoring engine configuration (see below). **Mandatory.** |
-| `MigrationWaves` | hashtable[] | The category-to-wave mapping (see below). Optional; a one-wave-per-category default applies when omitted. |
+| `MigrationWaves` | hashtable[] | The category-to-wave mapping (see below). Optional; a one-wave-per-category default applies when omitted, with the names of the target mode. |
+
+## TargetMode section
+
+The same inventory answers two questions. `TargetMode` says which one is asked:
+
+| `TargetMode` | The question | Example file |
+| --- | --- | --- |
+| `SharePointOnline` (default) | Can each site collection move to SharePoint Online, and what does it take? | `inventory-settings.example.psd1` |
+| `SharePointOnPrem` | Is each site collection ready for the modern experience on the farm where it runs, and what does it take to modernize it? | `inventory-settings.onprem.example.psd1` |
+
+The setting is optional: a settings file without it, such as every file of an earlier version, is
+`SharePointOnline`, and its reports do not change. A value that is not one of the two names is
+refused when the settings are loaded, with the name of the file, because a misspelled mode would
+otherwise run as the default without anybody having chosen it. The case does not matter. The
+log says which mode runs, and the manifest records it (`Summary.TargetMode`).
+
+### What the mode changes
+
+The score and the category **number** (1 to 4) are the same in both modes: a script, a filter or a
+wave mapping that reads `Category` does not change. The mode changes the words:
+
+| Category | `SharePointOnline` | `SharePointOnPrem` |
+| --- | --- | --- |
+| 1 | Simple | Modern-ready |
+| 2 | Moderate | Light remediation |
+| 3 | Complex | Rebuild (SPFx) |
+| 4 | Blocking | Blocked |
+
+- `CategoryName` of every record, in the CSV, the JSON and the HTML report.
+- The pages of a split HTML report, which are named after the category
+  (`...-sites-blocking-1.html`, or `...-sites-rebuild-spfx-1.html`).
+- The default waves, when the settings have no `MigrationWaves`: *Quick wins*, *Light
+  remediation*, *Rebuild* and *Projects / blockers* for a migration; *Ready*, *Light
+  remediation*, *Rebuild (SPFx)* and *Blocked* for the modernization.
+- The HTML report: the header says `Target SharePoint on-premises modernization`, the wave plan
+  is the *Modernization wave plan*, and the summary of the sites that wait in *Needs review* is
+  named after the first category of the mode.
+- The alerts: the catalog of the mode has the same alert types, but what is only about a
+  migration to SharePoint Online is `Low` and says so, and the alerts that matter for the
+  modernization are worded for it, with another severity where the weight of the signal says so
+  (the full-trust code that has to be rebuilt with SPFx is `Medium`, InfoPath and the SharePoint
+  2010 workflows, which SharePoint Server Subscription Edition no longer supports, stay `High`).
+  See [Alerts in the SharePointOnPrem mode](Alerts#alerts-in-the-sharepointonprem-mode). The
+  ranking of the risk indicators of the HTML report follows these severities.
+- The HTML report has a *Modern experience readiness* section, after the alerts: how many site
+  collections have a blocker of the modern experience, how many have each kind, and the site
+  collections that have the most. The report of the default mode does not have it.
+- The log: the warnings that tell you to add a signal to `Scoring.BlockingSignals` because a
+  migration to SharePoint Online would be blocked by it (FBA, unsupported templates, NoAccess
+  locks, IRM lists, external lists) are not raised in the modernization mode.
+- `Test-SPSSiteInventoryReadiness.ps1` compares your settings with the example of the mode of
+  your file (`inventory-settings.onprem.example.psd1` for `SharePointOnPrem`), not with the
+  migration example.
+
+The mode does **not** change what counts as a blocker or what a signal weighs: that is the
+`Scoring` section, and it is yours. Each example file ships the scoring that fits its question,
+so start from the file of your mode, copy it to `inventory-settings.psd1` and adjust it. Setting
+`TargetMode = 'SharePointOnPrem'` in a file that keeps the migration scoring gives the new names
+to a migration scoring, which is rarely what you want.
+
+### The on-premises preset
+
+On the farm where the site collections run, full-trust code and custom farm features still work:
+they are code to rebuild with the SharePoint Framework (SPFx) to reach the modern experience, so
+the preset **weighs** them (`UsesFullTrustCode = 4.0`, `UsesCustomFarmFeature = 2.0`,
+`CustomMasterPage = 3.0`, `SandboxSolutions = 3.0`) and does **not** block on them. It blocks on
+`InfoPathFormCount` only: InfoPath Forms Services is deprecated in SharePoint Server
+Subscription Edition and its support ended on 14 July 2026, and a form has no modern editor.
+The SharePoint 2010 workflows (their support ended on 14 July 2026 too) weigh heavily, which
+makes a site collection that has them *Rebuild (SPFx)*, not *Blocked*, because they still run.
+
+What belongs to a migration and not to the modernization of a farm weighs nothing in the
+preset: forms-based authentication, unsupported site templates, `NoAccess` locks, IRM-enabled
+lists, external lists (BCS is not retired in SharePoint Server Subscription Edition), the term
+store, incoming e-mail, `.htm` files, template-language review and the subsite structure. The
+signals are still collected, and they still raise their alerts and appear in the reports, so
+nothing disappears from the inventory: they just do not move a site collection to a worse
+category. Subsites, in particular, are not penalised: a site collection with 100 subsites is
+*Modern-ready* in the preset, and the restructuring that modern SharePoint favors (one site
+collection per unit of work; hub sites, which connect them, exist in SharePoint Online but not in
+SharePoint Server) is a topic of the report, not of the score.
+
+The preset weighs the signals that only matter for the modern experience, which the toolkit
+collects in both modes (see [Modern-readiness signals](#modern-readiness-signals)): an alternate
+CSS URL (`AlternateCssUrlCount = 1.5` a web), a list view that renders with XSLT
+(`XsltListViewCount = 1.0`), a Script Editor or Content Editor web part that holds script
+(`ScriptWebPartCount = 1.5`), an opt-out of the modern list experience
+(`ClassicExperienceOptOutCount = 1.0`) and a list forced to the classic experience
+(`ClassicExperienceListCount = 0.5`), next to the custom master page and the publishing
+features that it already weighs. They are columns of the CSV and JSON reports, they raise their
+own [alerts](Alerts), and the *Modern experience readiness* section of the HTML report lists, for
+each site collection, what keeps it in the classic experience.
+
+A signal that the preset does not weigh still raises its alert, so that nothing disappears from
+the inventory, but the alert is `Low` and says that it is only about a migration to SharePoint
+Online. The report of this mode is therefore short on what does not matter for the modernization,
+and long on what does.
 
 ## Custom solution detection
 
@@ -166,6 +264,15 @@ Large-content parity signals are threshold-driven:
 - `CheckedOutFileCount` — checked-out files detected in document libraries.
 - `FileVersionCount` — files whose version count is at or above
   `LargeContentThresholds.FileVersionCount`.
+- `LargeExcelFileCount` — Excel workbooks (`.xlsx`) in document libraries (the system catalogs
+  under `/_catalogs/` are skipped) that are at least `LargeContentThresholds.LargeExcelFileSizeMB`
+  large, 10 MB by default. SharePoint Online does not open a workbook above that size in the
+  browser: it asks the user to open it in the Excel client. The workbooks are migrated, so the
+  signal is reported (`LargeExcelFileExamples` lists up to five of them with their size, and the
+  `LargeExcelFiles` alert says whom to warn) and weighs nothing in either example configuration. The
+  source farm can open larger workbooks in the browser, which is why the size is a setting.
+  At most `LargeContentThresholds.MaxItemsForExcelFileScanPerLibrary` workbooks are checked in each
+  library; when it is reached, the count is a lower bound and the assessment is marked partial.
 
 Publishing and customized-page signals describe classic publishing dependencies:
 
@@ -298,6 +405,64 @@ own name, so that you can filter and sort on them:
 - `UniquePermissionsCount` — the role assignments on the webs that do not inherit their
   permissions. The root web always has its own, so the value is never 0, and a subsite with
   unique permissions adds its own: it is not a count of webs.
+
+### Modern-readiness signals
+
+These signals say what makes a page, a list or a web fall back to the classic experience, and what
+has to be rebuilt to leave it. They are collected in both target modes, and they are columns of
+the CSV, JSON and `*-sites-*` reports under their own name. With `CustomMasterPage` (above) and
+the publishing signals, they answer the question of the `SharePointOnPrem` mode: why is this site
+collection not in the modern experience, and what does it take?
+
+- `AlternateCssUrlCount` — the webs that set an alternate CSS URL (`SPWeb.AlternateCssUrl`).
+  Modern pages do not use it, so the branding it carries is redone, with a site theme for
+  example. `AlternateCssUrlExamples` lists up to five webs with their CSS file.
+- `XsltListViewCount` — the list views that render with XSLT: a view whose `XslLink` is not the
+  default `main.xsl`, or that keeps an `Xsl` of its own. Personal views and the views of hidden
+  lists are not counted. The modern list view ignores XSLT, and SharePoint shows a list with a
+  customized view in the classic experience (see
+  [when SharePoint falls back to classic](https://learn.microsoft.com/en-us/sharepoint/dev/solution-guidance/modern-experience-customizations-customize-lists-and-libraries)).
+  `XsltListViewExamples` lists up to five views as `list/view`.
+- `ScriptWebPartCount` — the Script Editor web parts, and the Content Editor web parts that
+  embed a `<script>` tag or link to a file (`ContentLink`, which is usually a script or an HTML
+  page), on the home page of each web and on the pages of its Site Pages and Pages libraries.
+  A Content Editor web part that holds only formatted text is not counted: a Text web part
+  replaces it. Neither web part exists on a modern page, so the script is rebuilt, with the
+  SharePoint Framework (SPFx). `ScriptWebPartExamples` lists up to five of them as
+  `page URL (Script Editor)` or `page URL (Content Editor)`. At most
+  `LargeContentThresholds.MaxItemsForWebPartScanPerLibrary` pages are read in each library (200
+  by default); a library with more makes the site collection partial, with a warning that names
+  the setting. The web parts of the list view and form pages are not read.
+- `ClassicExperienceOptOutCount` — the site collection and the webs that opted out of the modern
+  list and library experience: the site collection feature
+  `E3540C7D-6BEA-403C-A224-1A12EAFEE4C4` and the web feature
+  `52E14B6F-B1BB-4969-B89B-C4FAA56745EF` (see
+  [Opting out of the modern list and library experience](https://learn.microsoft.com/en-us/sharepoint/dev/transform/modernize-userinterface-lists-and-libraries-optout)).
+  Each active feature counts for 1, and `ClassicExperienceOptOutExamples` lists up to five as
+  `URL (site collection)` or `URL (web)`.
+- `ClassicExperienceListCount` — the lists whose "List experience" setting is *Classic
+  experience* (`ListExperienceOptions`). That setting overrides the opt-outs above, and a list
+  that is hidden is not counted. A SharePoint that has no modern list experience, such as
+  SharePoint Server 2016, has no such setting: the count is 0 there and the site collection is
+  not marked partial. `ClassicExperienceListExamples` lists up to five lists as `title (URL)`.
+- `ModernBlockerCount` and `ModernBlockers` — the kinds of blocker that the site collection has,
+  out of seven: a custom master page, an alternate CSS URL, publishing features, XSLT list views,
+  script web parts, an opt-out of the modern list experience and lists forced to classic.
+  `ModernBlockerCount` is the number of kinds (0 to 7), not the number of items behind them, and
+  `ModernBlockers` is one text for the reports, such as `Custom master page; XSLT list views (3);
+  Script web parts (1)`. It brings the other signals together and is not weighed in either example
+  configuration: each blocker already weighs through its own signal, and weighing the aggregate
+  would count it twice.
+
+A signal that cannot be read is not taken for a site without it: the site collection is marked
+partial, with a warning that names the web, the list or the page. The example for the default
+mode weighs the first three lightly (`AlternateCssUrlCount = 0.5`, `XsltListViewCount = 0.25`,
+`ScriptWebPartCount = 0.5`), because a migration redoes them, and the other two not at all; the
+`SharePointOnPrem` example weighs them as the work of modernizing the farm (see
+[the on-premises preset](#the-on-premises-preset)).
+
+What is not collected yet: the `JSLink` of the views and of the fields (the client-side rendering
+that the modern list also ignores), and the web parts of the list view and form pages.
 
 ### Thresholds
 
@@ -466,6 +631,17 @@ the scan then reports as many site collections as 1.x did. A settings file from 
 Each option must be `$true` or `$false`. Anything else, such as the string `'false'`, is
 rejected when the settings file is loaded, before any site collection is read.
 
+### Long OneDrive URLs
+
+The SMAT scan "Long OneDrive URLs" is **not covered**, by decision. It measures the path of every
+file of every personal site against the limit of 400 characters, once the URL of the OneDrive uses the
+user principal name (`personal/user_contoso_com`) instead of `personal/domain_user`. That needs what
+this inventory does not do: read the files of every personal site, which `IncludePersonalSites` leaves
+out by default because those sites belong to the OneDrive migration, and know the user principal name
+that each owner will have in the target. The OneDrive migration tooling knows both. With
+`IncludePersonalSites` set to `$true` the personal sites are inventoried like any site collection, with
+the same signals, but the length of their file paths is not measured.
+
 ## Report section
 
 ```powershell
@@ -533,6 +709,9 @@ LargeContentThresholds = @{
     MaxItemsForVersionScanPerLibrary = 2000
     MaxItemsForPublishingPageScanPerLibrary = 2000
     MaxItemsForHtmlFileScanPerLibrary = 2000
+    MaxItemsForWebPartScanPerLibrary = 200
+    LargeExcelFileSizeMB = 10
+    MaxItemsForExcelFileScanPerLibrary = 2000
     MaxAlertRowsPerSite = 5000
 }
 ```
@@ -553,6 +732,19 @@ LargeContentThresholds = @{
   lower bound and the assessment is marked partial with a warning. The query filters on
   the file type column, which is not indexed, so it asks SharePoint to override the list
   view threshold; run the scan as the farm account.
+- `MaxItemsForWebPartScanPerLibrary` — cap for the pages whose web parts are read, in each Site
+  Pages and Pages library, to count `ScriptWebPartCount` (the home page of each web is always
+  read). Reading the web parts of a page is the costliest of the scans, so the default is 200
+  pages. When a library has more, the count is a lower bound and the assessment is marked
+  partial with a warning. The query filters on the file type column, which is not indexed, so it
+  asks SharePoint to override the list view threshold; run the scan as the farm account.
+- `LargeExcelFileSizeMB` — minimum size, in MB, of a workbook for `LargeExcelFileCount`. The default,
+  10, is the size above which SharePoint Online asks the user to open a workbook in Excel instead of
+  the browser. A value that is not a number above 0 is replaced by the default.
+- `MaxItemsForExcelFileScanPerLibrary` — cap for the workbooks (`.xlsx`) checked in each document
+  library, whatever their size. When it is reached, the count is a lower bound and the assessment is
+  marked partial with a warning. The query filters on the file type column, which is not indexed, so it
+  asks SharePoint to override the list view threshold; run the scan as the farm account.
 - `MaxAlertRowsPerSite` — cap for the SharePoint alert rows exported per site
   collection. `SharePointAlertCount` stays exact; when the cap is reached the rows are cut,
   the assessment is marked partial and a warning names the setting.
@@ -586,7 +778,9 @@ MigrationWaves = @(
 
 A site whose category is not listed in any wave lands in an **Unassigned** bucket (wave 0),
 surfaced in the report rather than silently dropped. When `MigrationWaves` is omitted from
-the settings, the one-wave-per-category default is applied.
+the settings, the one-wave-per-category default of the [target mode](#targetmode-section) is
+applied. The on-premises example ships its own waves (*Ready*, *Light remediation*, *Rebuild
+(SPFx)*, *Blocked*), which are also that default.
 
 Two other buckets of wave 0 do not come from the mapping:
 

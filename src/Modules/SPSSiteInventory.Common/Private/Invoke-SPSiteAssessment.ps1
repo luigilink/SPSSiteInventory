@@ -38,11 +38,16 @@
 
         [Parameter()]
         [System.Collections.IDictionary]
-        $SharePointAlertSettings = @{}
+        $SharePointAlertSettings = @{},
+
+        [Parameter()]
+        [System.String]
+        $TargetMode = 'SharePointOnline'
     )
 
-    # Fail before any site is read when the alert settings are invalid.
+    # Fail before any site is read when the alert settings or the target mode are invalid.
     $null = Get-SPSSharePointAlertOption -Settings $SharePointAlertSettings
+    $null = Get-SPSTargetProfile -TargetMode $TargetMode
 
     $contentTypes = [System.Collections.Generic.List[object]]::new()
     $managedMetadataLists = [System.Collections.Generic.List[object]]::new()
@@ -120,7 +125,7 @@
                     $sharePointAlerts.Add($sharePointAlert)
                 }
 
-                $result = Measure-SPSSiteComplexity -Signals $signals -Scoring $Scoring
+                $result = Measure-SPSSiteComplexity -Signals $signals -Scoring $Scoring -TargetMode $TargetMode
                 $customizationComplete = $true
                 if ($null -ne $signals['CustomizationInventoryComplete']) {
                     $customizationComplete = [bool]$signals['CustomizationInventoryComplete']
@@ -211,6 +216,8 @@
                     CheckedOutFileExamples = $signals['CheckedOutFileExamples']
                     FileVersionCount = $signals['FileVersionCount']
                     FileVersionExamples = $signals['FileVersionExamples']
+                    LargeExcelFileCount = $signals['LargeExcelFileCount']
+                    LargeExcelFileExamples = $signals['LargeExcelFileExamples']
                     IsLockedSite = $signals['IsLockedSite']
                     HasNoAccessLock = $signals['HasNoAccessLock']
                     SiteLockState = $signals['SiteLockState']
@@ -218,6 +225,18 @@
                     UsesCustomFarmFeature = $signals['UsesCustomFarmFeature']
                     SandboxSolutions = $signals['SandboxSolutions']
                     CustomMasterPage = $signals['CustomMasterPage']
+                    AlternateCssUrlCount = $signals['AlternateCssUrlCount']
+                    AlternateCssUrlExamples = $signals['AlternateCssUrlExamples']
+                    XsltListViewCount = $signals['XsltListViewCount']
+                    XsltListViewExamples = $signals['XsltListViewExamples']
+                    ScriptWebPartCount = $signals['ScriptWebPartCount']
+                    ScriptWebPartExamples = $signals['ScriptWebPartExamples']
+                    ClassicExperienceOptOutCount = $signals['ClassicExperienceOptOutCount']
+                    ClassicExperienceOptOutExamples = $signals['ClassicExperienceOptOutExamples']
+                    ClassicExperienceListCount = $signals['ClassicExperienceListCount']
+                    ClassicExperienceListExamples = $signals['ClassicExperienceListExamples']
+                    ModernBlockerCount = $signals['ModernBlockerCount']
+                    ModernBlockers = $signals['ModernBlockers']
                     EventReceivers = $signals['EventReceivers']
                     UniquePermissionsCount = $signals['UniquePermissionsCount']
                     ContentTypeCount = $signals['ContentTypeCount']
@@ -308,6 +327,8 @@
                     CheckedOutFileExamples = $null
                     FileVersionCount = $null
                     FileVersionExamples = $null
+                    LargeExcelFileCount = $null
+                    LargeExcelFileExamples = $null
                     IsLockedSite = $null
                     HasNoAccessLock = $null
                     SiteLockState = $null
@@ -315,6 +336,18 @@
                     UsesCustomFarmFeature = $null
                     SandboxSolutions = $null
                     CustomMasterPage = $null
+                    AlternateCssUrlCount = $null
+                    AlternateCssUrlExamples = $null
+                    XsltListViewCount = $null
+                    XsltListViewExamples = $null
+                    ScriptWebPartCount = $null
+                    ScriptWebPartExamples = $null
+                    ClassicExperienceOptOutCount = $null
+                    ClassicExperienceOptOutExamples = $null
+                    ClassicExperienceListCount = $null
+                    ClassicExperienceListExamples = $null
+                    ModernBlockerCount = $null
+                    ModernBlockers = $null
                     EventReceivers = $null
                     UniquePermissionsCount = $null
                     ContentTypeCount = $null

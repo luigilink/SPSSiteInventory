@@ -40,6 +40,8 @@ function Get-SPSLabThreshold {
         LargeListViewRowLimit = 100
         CheckedOutFileCount   = 1
         FileVersionCount      = 5
+        # A workbook of 20 KB is large for the lab, which a real workbook never is.
+        LargeExcelFileSizeMB  = 0.01
         # The alerts scenario has two alerts, which the cap lets through; partial-simple has three.
         MaxAlertRowsPerSite   = 2
     }
@@ -370,6 +372,12 @@ function Get-SPSLabScenario {
                 (Get-SPSLabExpectation Workflow2010Count eq 0)
                 (Get-SPSLabExpectation SharePointAlertCount eq 0)
                 (Get-SPSLabExpectation UsesFullTrustCode eq $false)
+                (Get-SPSLabExpectation AlternateCssUrlCount eq 0)
+                (Get-SPSLabExpectation XsltListViewCount eq 0)
+                (Get-SPSLabExpectation ScriptWebPartCount eq 0)
+                (Get-SPSLabExpectation ClassicExperienceOptOutCount eq 0)
+                (Get-SPSLabExpectation ClassicExperienceListCount eq 0)
+                (Get-SPSLabExpectation ModernBlockerCount eq 0)
                 (Get-SPSLabExpectation Category eq 1)
             )
         })
@@ -480,6 +488,24 @@ function Get-SPSLabScenario {
                 (Get-SPSLabExpectation -Alert 'LargeListViews')
                 (Get-SPSLabExpectation -Alert 'CheckedOutFiles')
                 (Get-SPSLabExpectation -Alert 'FileVersions')
+            )
+        })
+
+    $scenario.Add([PSCustomObject]@{
+            Name        = 'large-excel'
+            Description = 'A workbook above the large-workbook threshold and a small one in a library: only the large one must be reported.'
+            Template    = 'STS#0'
+            Provision   = {
+                param ($Context)
+                $library = Add-SPSLabList -Web $Context.Web -Title 'LabWorkbooks' -Template 'DocumentLibrary'
+                $largeSize = [System.Int32]([System.Double]$Context.Threshold.LargeExcelFileSizeMB * 1MB) + 10000
+                $null = $library.RootFolder.Files.Add('lab-large.xlsx', (New-Object -TypeName System.Byte[] -ArgumentList $largeSize), $true)
+                $null = $library.RootFolder.Files.Add('lab-small.xlsx', (New-Object -TypeName System.Byte[] -ArgumentList 100), $true)
+            }
+            Expect      = @(
+                (Get-SPSLabExpectation LargeExcelFileCount eq 1)
+                (Get-SPSLabExpectation LargeExcelFileExamples like '*lab-large.xlsx*')
+                (Get-SPSLabExpectation -Alert 'LargeExcelFiles')
             )
         })
 
@@ -669,6 +695,144 @@ function Get-SPSLabScenario {
             Expect      = @(
                 (Get-SPSLabExpectation CustomizedPageCount ge 1 -Info)
                 (Get-SPSLabExpectation -Alert 'CustomizedPages' -Info)
+            )
+        })
+
+    $scenario.Add([PSCustomObject]@{
+            Name        = 'alternate-css'
+            Description = 'An alternate CSS URL on the root web: a style sheet in a library, set as the alternate CSS of the site.'
+            Template    = 'STS#0'
+            Provision   = {
+                param ($Context)
+                $web = $Context.Web
+                $library = Add-SPSLabList -Web $web -Title 'LabStyles' -Template 'DocumentLibrary'
+                $file = $library.RootFolder.Files.Add('lab.css', [System.Text.Encoding]::UTF8.GetBytes('body { }'), $true)
+                $web.AlternateCssUrl = $file.ServerRelativeUrl
+                $web.Update()
+            }
+            Expect      = @(
+                (Get-SPSLabExpectation AlternateCssUrlCount ge 1)
+                (Get-SPSLabExpectation AlternateCssUrlExamples like '*lab.css*')
+                (Get-SPSLabExpectation ModernBlockerCount ge 1)
+                (Get-SPSLabExpectation -Alert 'AlternateCssUrl')
+            )
+        })
+
+    $scenario.Add([PSCustomObject]@{
+            Name        = 'xslt-view'
+            Description = 'A list view that renders with a style sheet of its own (its XslLink).'
+            Template    = 'STS#0'
+            Provision   = {
+                param ($Context)
+                $web = $Context.Web
+                $library = Add-SPSLabList -Web $web -Title 'LabXsl' -Template 'DocumentLibrary'
+                $style = '<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform"><xsl:template match="/" /></xsl:stylesheet>'
+                $file = $library.RootFolder.Files.Add('lab.xsl', [System.Text.Encoding]::UTF8.GetBytes($style), $true)
+                $list = Add-SPSLabList -Web $web -Title 'LabXslList'
+                $field = New-Object -TypeName System.Collections.Specialized.StringCollection
+                $null = $field.Add('Title')
+                $view = $list.Views.Add('LabXslView', $field, '', [System.UInt32]30, $true, $false)
+                if ($null -eq $view.PSObject.Properties['XslLink']) {
+                    throw 'SKIP: the views of this SharePoint have no XslLink property.'
+                }
+                $view.XslLink = $file.ServerRelativeUrl
+                $view.Update()
+            }
+            Expect      = @(
+                (Get-SPSLabExpectation XsltListViewCount ge 1)
+                (Get-SPSLabExpectation XsltListViewExamples like '*LabXslView*')
+                (Get-SPSLabExpectation ModernBlockerCount ge 1)
+                (Get-SPSLabExpectation -Alert 'XsltListViews')
+            )
+        })
+
+    $scenario.Add([PSCustomObject]@{
+            Name        = 'script-web-part'
+            Description = 'A Script Editor web part and a Content Editor web part with a script, on the home page of the root web.'
+            Template    = 'STS#0'
+            Provision   = {
+                param ($Context)
+                $web = $Context.Web
+                $page = $web.GetFile($web.RootFolder.WelcomePage)
+                if (-not $page.Exists) {
+                    throw 'SKIP: the root web has no home page.'
+                }
+                $scriptType = 'Microsoft.SharePoint.WebPartPages.ScriptEditorWebPart' -as [System.Type]
+                $contentType = 'Microsoft.SharePoint.WebPartPages.ContentEditorWebPart' -as [System.Type]
+                if ($null -eq $scriptType -or $null -eq $contentType) {
+                    throw 'SKIP: the Script Editor and Content Editor web parts are not available on this SharePoint.'
+                }
+
+                $scriptPart = New-Object -TypeName Microsoft.SharePoint.WebPartPages.ScriptEditorWebPart
+                $scriptPart.Content = '<script type="text/javascript">/* SPSSiteInventory lab */</script>'
+                $document = New-Object -TypeName System.Xml.XmlDocument
+                $content = $document.CreateElement('Content', 'http://schemas.microsoft.com/WebPart/v2/ContentEditor')
+                $null = $content.AppendChild($document.CreateCDataSection('<script type="text/javascript">/* SPSSiteInventory lab */</script>'))
+                $contentPart = New-Object -TypeName Microsoft.SharePoint.WebPartPages.ContentEditorWebPart
+                $contentPart.Content = $content
+
+                # A wiki page keeps its web parts in a pseudo zone, 'wpz'; the web part manager lists them whatever the zone.
+                $manager = $page.GetLimitedWebPartManager('Shared')
+                try {
+                    $manager.AddWebPart($scriptPart, 'wpz', 0)
+                    $manager.AddWebPart($contentPart, 'wpz', 1)
+                }
+                finally {
+                    $manager.Web.Dispose()
+                    $manager.Dispose()
+                }
+            }
+            Expect      = @(
+                (Get-SPSLabExpectation ScriptWebPartCount ge 2)
+                (Get-SPSLabExpectation ScriptWebPartExamples like '*Script Editor*')
+                (Get-SPSLabExpectation ScriptWebPartExamples like '*Content Editor*')
+                (Get-SPSLabExpectation ModernBlockerCount ge 1)
+                (Get-SPSLabExpectation -Alert 'ScriptWebParts')
+            )
+        })
+
+    $scenario.Add([PSCustomObject]@{
+            Name        = 'modern-opt-out'
+            Description = 'The site collection and the root web opted out of the modern list and library experience, with the two features that do it. SharePoint 2016 does not have them: the scenario is skipped there.'
+            Template    = 'STS#0'
+            Provision   = {
+                param ($Context)
+                # Only a feature that is not installed is a skip: an error of the activation of an installed one must fail the scenario.
+                foreach ($featureId in @('E3540C7D-6BEA-403C-A224-1A12EAFEE4C4', '52E14B6F-B1BB-4969-B89B-C4FAA56745EF')) {
+                    if ($null -eq (Get-SPFeature -Identity $featureId -ErrorAction SilentlyContinue)) {
+                        throw "SKIP: the feature $featureId, which opts out of the modern list experience, is not installed on this SharePoint."
+                    }
+                }
+                $null = $Context.Site.Features.Add([System.Guid]'E3540C7D-6BEA-403C-A224-1A12EAFEE4C4', $true)
+                $null = $Context.Web.Features.Add([System.Guid]'52E14B6F-B1BB-4969-B89B-C4FAA56745EF', $true)
+            }
+            Expect      = @(
+                (Get-SPSLabExpectation ClassicExperienceOptOutCount ge 2)
+                (Get-SPSLabExpectation ClassicExperienceOptOutExamples like '*(site collection)*')
+                (Get-SPSLabExpectation ClassicExperienceOptOutExamples like '*(web)*')
+                (Get-SPSLabExpectation ModernBlockerCount ge 1)
+                (Get-SPSLabExpectation -Alert 'ModernExperienceOptOut')
+            )
+        })
+
+    $scenario.Add([PSCustomObject]@{
+            Name        = 'forced-classic'
+            Description = 'A list whose "List experience" setting is the classic experience. SharePoint 2016 has no such setting: the scenario is skipped there.'
+            Template    = 'STS#0'
+            Provision   = {
+                param ($Context)
+                $list = Add-SPSLabList -Web $Context.Web -Title 'LabClassic'
+                if ($null -eq $list.PSObject.Properties['ListExperienceOptions']) {
+                    throw 'SKIP: the lists of this SharePoint have no list experience setting.'
+                }
+                $list.ListExperienceOptions = 'ClassicExperience'
+                $list.Update()
+            }
+            Expect      = @(
+                (Get-SPSLabExpectation ClassicExperienceListCount ge 1)
+                (Get-SPSLabExpectation ClassicExperienceListExamples like '*LabClassic*')
+                (Get-SPSLabExpectation ModernBlockerCount ge 1)
+                (Get-SPSLabExpectation -Alert 'ClassicExperienceLists')
             )
         })
 

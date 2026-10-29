@@ -964,7 +964,7 @@ Describe 'ConvertTo-SPSInventoryHtml' {
         $line | Should -Match '^full-trust code, custom farm features, sandbox solutions, a custom master page'
         $line | Should -Match 'a size above the large-size threshold'
         $line | Should -Not -Match 'large lists'
-        ([regex]::Matches($html, '<span class="risk-label">')).Count + ($line -split ', ').Count | Should -Be 33
+        ([regex]::Matches($html, '<span class="risk-label">')).Count + ($line -split ', ').Count | Should -Be 39
     }
 
     It 'draws each bar with the share of the site collections that raise the signal' {

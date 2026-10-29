@@ -98,6 +98,8 @@ $web = [PSCustomObject]@{
     HasUniqueRoleDefinitions = $true
     RoleDefinitions = @()
     Alerts = @()
+    AlternateCssUrl = ''
+    RootFolder = [PSCustomObject]@{ WelcomePage = '' }
 }
 $web | Add-Member -MemberType ScriptMethod -Name Dispose -Value { }
 $site = [PSCustomObject]@{ Url = 'https://intranet.contoso.com/sites/team'; Features = @(); Solutions = @(); AllWebs = @($web) }

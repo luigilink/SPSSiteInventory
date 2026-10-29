@@ -11,7 +11,9 @@
     4. enumerates site collections (identity + volumetry);
     5. collects the customization signals of each site and reads the Business Connectivity
        Services (BCS) definitions of the farm;
-    6. scores each site from 1 (Simple) to 4 (Blocking) and assigns a migration wave;
+    6. scores each site from 1 (Simple) to 4 (Blocking) and assigns a migration wave; with
+       TargetMode = 'SharePointOnPrem' in the settings, the same four categories read as
+       Modern-ready, Light remediation, Rebuild (SPFx) and Blocked;
     7. exports the scored inventory to CSV, JSON and a self-contained HTML report, and the
        farm-solution map to its own CSV and JSON.
 
@@ -47,6 +49,12 @@ try {
     Add-SPSInventoryEvent -Message "SPSSiteInventory $($context.Version) started by $($context.CurrentUser) on $($context.ServerTarget)." -Level Information
     Add-SPSInventoryEvent -Message "Loading settings from '$ConfigPath'." -Level Information
     $settings = Get-SPSInventorySetting -Path $ConfigPath
+    $targetProfile = & $commonModule {
+        param ($TargetMode)
+        Get-SPSTargetProfile -TargetMode $TargetMode
+    } $(if ($settings.ContainsKey('TargetMode')) { $settings.TargetMode } else { 'SharePointOnline' })
+    $targetMode = $targetProfile.TargetMode
+    Add-SPSInventoryEvent -Message ("Target mode: {0} ({1})." -f $targetMode, $targetProfile.DisplayName) -Level Information
 
     Import-SPSSharePointCommand
 
@@ -104,11 +112,13 @@ try {
         }
         Add-SPSInventoryEvent -Message ('Left out {0}: they are not sites to migrate. Set {1} to $true in the settings to include them.' -f ($leftOut -join ' and '), ($includeSetting -join ' and ')) -Level Information
     }
-    if (@($inventory | Where-Object { $_.HasFbaZone }).Count -gt 0 -and
+    if ($targetMode -eq 'SharePointOnline' -and
+        @($inventory | Where-Object { $_.HasFbaZone }).Count -gt 0 -and
         @($settings.Scoring.BlockingSignals) -notcontains 'HasFbaZone') {
         Add-SPSInventoryEvent -Message 'FBA is configured, but HasFbaZone is not in Scoring.BlockingSignals. Add it to your settings to classify FBA as a SharePoint Online migration blocker.' -Level Warning
     }
-    if (@($inventory | Where-Object { $_.InventoryScope -ne 'WebApplication' -and $_.IsUnsupportedSiteTemplate }).Count -gt 0 -and
+    if ($targetMode -eq 'SharePointOnline' -and
+        @($inventory | Where-Object { $_.InventoryScope -ne 'WebApplication' -and $_.IsUnsupportedSiteTemplate }).Count -gt 0 -and
         @($settings.Scoring.BlockingSignals) -notcontains 'IsUnsupportedSiteTemplate') {
         Add-SPSInventoryEvent -Message 'Unsupported site templates were detected, but IsUnsupportedSiteTemplate is not in Scoring.BlockingSignals. Add it to classify unsupported templates as migration blockers.' -Level Warning
     }
@@ -133,24 +143,27 @@ try {
         @{}
     }
     $assessment = & $commonModule {
-        param ($Inventory, $CustomFeatureId, $FullTrustFeatureId, $Scoring, $LargeContentThresholds, $PermissionLevels, $SharePointAlertSettings)
-        Invoke-SPSiteAssessment -Inventory $Inventory -CustomFeatureId $CustomFeatureId -FullTrustFeatureId $FullTrustFeatureId -Scoring $Scoring -LargeContentThresholds $LargeContentThresholds -PermissionLevels $PermissionLevels -SharePointAlertSettings $SharePointAlertSettings
-    } $inventory $customFeatureId $fullTrustFeatureId $settings.Scoring $largeContentThresholds $permissionLevels $sharePointAlertSettings
+        param ($Inventory, $CustomFeatureId, $FullTrustFeatureId, $Scoring, $LargeContentThresholds, $PermissionLevels, $SharePointAlertSettings, $TargetMode)
+        Invoke-SPSiteAssessment -Inventory $Inventory -CustomFeatureId $CustomFeatureId -FullTrustFeatureId $FullTrustFeatureId -Scoring $Scoring -LargeContentThresholds $LargeContentThresholds -PermissionLevels $PermissionLevels -SharePointAlertSettings $SharePointAlertSettings -TargetMode $TargetMode
+    } $inventory $customFeatureId $fullTrustFeatureId $settings.Scoring $largeContentThresholds $permissionLevels $sharePointAlertSettings $targetMode
     $scored = @($assessment.Inventory)
     $contentTypes = @($assessment.ContentTypes)
     $managedMetadataLists = @($assessment.ManagedMetadataLists)
     $externalLists = @($assessment.ExternalLists)
     $sharePointAlerts = @($assessment.SharePointAlerts)
-    if (@($scored | Where-Object { $_.HasNoAccessLock }).Count -gt 0 -and
+    if ($targetMode -eq 'SharePointOnline' -and
+        @($scored | Where-Object { $_.HasNoAccessLock }).Count -gt 0 -and
         @($settings.Scoring.BlockingSignals) -notcontains 'HasNoAccessLock' -and
         @($settings.Scoring.BlockingSignals) -notcontains 'IsLockedSite') {
         Add-SPSInventoryEvent -Message 'Site collections locked with NoAccess were detected, but HasNoAccessLock is not in Scoring.BlockingSignals. Add it to classify them as migration blockers: the migration tools cannot read them.' -Level Warning
     }
-    if (@($scored | Where-Object { [int]$_.IrmEnabledListCount -gt 0 }).Count -gt 0 -and
+    if ($targetMode -eq 'SharePointOnline' -and
+        @($scored | Where-Object { [int]$_.IrmEnabledListCount -gt 0 }).Count -gt 0 -and
         @($settings.Scoring.BlockingSignals) -notcontains 'IrmEnabledListCount') {
         Add-SPSInventoryEvent -Message 'IRM-enabled lists were detected, but IrmEnabledListCount is not in Scoring.BlockingSignals. Add it to classify IRM-protected lists as migration blockers.' -Level Warning
     }
-    if (@($scored | Where-Object { [int]$_.ExternalListCount -gt 0 }).Count -gt 0 -and
+    if ($targetMode -eq 'SharePointOnline' -and
+        @($scored | Where-Object { [int]$_.ExternalListCount -gt 0 }).Count -gt 0 -and
         @($settings.Scoring.BlockingSignals) -notcontains 'ExternalListCount') {
         Add-SPSInventoryEvent -Message 'External lists were detected, but ExternalListCount is not in Scoring.BlockingSignals. Add it to classify external lists, which cannot be recreated in SharePoint Online because BCS is retired there, as migration blockers.' -Level Warning
     }
@@ -167,12 +180,7 @@ try {
         @($settings.MigrationWaves)
     }
     else {
-        @(
-            @{ Wave = 1; Name = 'Quick wins'; Categories = @(1) }
-            @{ Wave = 2; Name = 'Light remediation'; Categories = @(2) }
-            @{ Wave = 3; Name = 'Rebuild'; Categories = @(3) }
-            @{ Wave = 4; Name = 'Projects / blockers'; Categories = @(4) }
-        )
+        @($targetProfile.MigrationWave)
     }
     $scored = @(Group-SPSMigrationWave -InputObject $scored -MigrationWaves $waves)
 
@@ -194,7 +202,7 @@ try {
     }
 
     $solutionOutput = Export-SPSSolutionReport -InputObject @($solutionMap) -OutputFolder $settings.OutputFolder -BaseName ('SPSSiteInventory-' + $settings.EnvName)
-    $output = Export-SPSInventoryReport -InputObject @($scored) -OutputFolder $settings.OutputFolder -BaseName ('SPSSiteInventory-' + $settings.EnvName) -EnvName $settings.EnvName -SolutionMap @($solutionMap) -ContentTypes $contentTypes -ManagedMetadataLists $managedMetadataLists -ExternalLists $externalLists -SharePointAlerts $sharePointAlerts -BcsApplications @($bcs.Applications) -BcsInventoryComplete ([bool]$bcs.Complete) -SolutionJsonPath $solutionOutput.JsonPath -ExcludedPersonalSiteCount ([int]$exclusion.PersonalSites) -ExcludedSiteMasterCount ([int]$exclusion.SiteMasters) -HtmlSplitThreshold $reportOption.HtmlSplitThreshold -HtmlRowsPerPage $reportOption.HtmlRowsPerPage
+    $output = Export-SPSInventoryReport -InputObject @($scored) -OutputFolder $settings.OutputFolder -BaseName ('SPSSiteInventory-' + $settings.EnvName) -EnvName $settings.EnvName -SolutionMap @($solutionMap) -ContentTypes $contentTypes -ManagedMetadataLists $managedMetadataLists -ExternalLists $externalLists -SharePointAlerts $sharePointAlerts -BcsApplications @($bcs.Applications) -BcsInventoryComplete ([bool]$bcs.Complete) -SolutionJsonPath $solutionOutput.JsonPath -ExcludedPersonalSiteCount ([int]$exclusion.PersonalSites) -ExcludedSiteMasterCount ([int]$exclusion.SiteMasters) -HtmlSplitThreshold $reportOption.HtmlSplitThreshold -HtmlRowsPerPage $reportOption.HtmlRowsPerPage -TargetMode $targetMode
 
     Add-SPSInventoryEvent -Message "Inventory complete. CSV: $($output.CsvPath) | JSON: $($output.JsonPath) | HTML: $($output.HtmlPath)" -Level Information
     if (@($output.HtmlPagePaths).Count -gt 0) {

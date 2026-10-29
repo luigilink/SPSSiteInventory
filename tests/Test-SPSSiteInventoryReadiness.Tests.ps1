@@ -73,7 +73,7 @@ Describe 'Test-SPSSiteInventoryReadiness.ps1' {
         Copy-Item -LiteralPath $script:ScriptPath -Destination $folder
         Set-Content -Path (Join-Path $module 'SPSSiteInventory.Common.psd1') -Value "@{ RootModule = 'SPSSiteInventory.Common.psm1'; ModuleVersion = '1.0.0'; FunctionsToExport = @('Get-SPSReadinessCheck', 'Write-SPSReadinessReport') }"
         Set-Content -Path (Join-Path $module 'SPSSiteInventory.Common.psm1') -Value @'
-function Get-SPSReadinessCheck { [CmdletBinding()] param ($ConfigPath, $ExampleConfigPath, [switch] $SkipSharePoint) Write-Error 'The checks failed.' }
+function Get-SPSReadinessCheck { [CmdletBinding()] param ($ConfigPath, $ExampleConfigPath, $OnPremExampleConfigPath, [switch] $SkipSharePoint) Write-Host 'STUB CHECK RAN'; Write-Error 'The checks failed.' }
 function Write-SPSReadinessReport { param ($Check) Write-Output 'REPORT RENDERED'; [PSCustomObject]@{ IsReady = $true } }
 '@
 
@@ -81,6 +81,25 @@ function Write-SPSReadinessReport { param ($Check) Write-Output 'REPORT RENDERED
 
         $LASTEXITCODE | Should -Be 1
         $output | Should -Not -Match 'REPORT RENDERED'
+        # The stub has to run: a stub whose parameters do not match the call fails before, for another reason.
+        $output | Should -Match 'STUB CHECK RAN'
+    }
+
+    It 'gives the check the example of each target mode, from the config folder next to the script' {
+        $folder = Join-Path -Path $TestDrive -ChildPath 'paths'
+        $module = Join-Path -Path $folder -ChildPath 'Modules\SPSSiteInventory.Common'
+        $null = New-Item -Path $module -ItemType Directory -Force
+        Copy-Item -LiteralPath $script:ScriptPath -Destination $folder
+        Set-Content -Path (Join-Path $module 'SPSSiteInventory.Common.psd1') -Value "@{ RootModule = 'SPSSiteInventory.Common.psm1'; ModuleVersion = '1.0.0'; FunctionsToExport = @('Get-SPSReadinessCheck', 'Write-SPSReadinessReport') }"
+        Set-Content -Path (Join-Path $module 'SPSSiteInventory.Common.psm1') -Value @'
+function Get-SPSReadinessCheck { [CmdletBinding()] param ($ConfigPath, $ExampleConfigPath, $OnPremExampleConfigPath, [switch] $SkipSharePoint) @($ExampleConfigPath, $OnPremExampleConfigPath) }
+function Write-SPSReadinessReport { param ($Check) Write-Host ('EXAMPLE=' + $Check[0]); Write-Host ('ONPREM=' + $Check[1]); [PSCustomObject]@{ IsReady = $true } }
+'@
+
+        $output = & $script:HostPath -NoProfile -NonInteractive -File (Join-Path $folder 'Test-SPSSiteInventoryReadiness.ps1') -ConfigPath 'x' | Out-String
+
+        $output | Should -Match ('EXAMPLE=' + [regex]::Escape((Join-Path $folder 'config\inventory-settings.example.psd1')))
+        $output | Should -Match ('ONPREM=' + [regex]::Escape((Join-Path $folder 'config\inventory-settings.onprem.example.psd1')))
     }
 
     It 'sets the exit code on the success path too, so that an earlier failure of the caller is not read as its own' {

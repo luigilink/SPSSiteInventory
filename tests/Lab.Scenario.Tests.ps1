@@ -254,6 +254,125 @@ Describe 'The lab scenarios' {
     }
 }
 
+Describe 'The large-excel scenario' {
+    It 'builds a workbook above the lab threshold and one below it, so that it triggers whatever the threshold is' {
+        $scenario = $script:Scenario | Where-Object { $_.Name -eq 'large-excel' }
+        $source = $scenario.Provision.ToString()
+
+        $source | Should -Match 'Threshold\.LargeExcelFileSizeMB'
+        $source | Should -Match 'lab-large\.xlsx'
+        $source | Should -Match 'lab-small\.xlsx'
+        (Get-SPSLabThreshold).LargeExcelFileSizeMB | Should -BeLessThan 1
+        @($scenario.Expect | Where-Object { $_.Info }).Count | Should -Be 0
+        $count = @($scenario.Expect | Where-Object { $_.Property -eq 'LargeExcelFileCount' })
+        $count | Should -HaveCount 1
+        $count[0].Operator | Should -Be 'eq'
+        $count[0].Value | Should -Be 1
+        @($scenario.Expect | Where-Object { $_.Alert -eq 'LargeExcelFiles' }) | Should -HaveCount 1
+    }
+}
+
+Describe 'The scenarios of the modern-readiness signals' {
+    BeforeAll {
+        $script:ModernScenario = @('alternate-css', 'xslt-view', 'script-web-part', 'modern-opt-out', 'forced-classic')
+        $script:ModernAlert = @{
+            'alternate-css' = 'AlternateCssUrl'; 'xslt-view' = 'XsltListViews'; 'script-web-part' = 'ScriptWebParts'
+            'modern-opt-out' = 'ModernExperienceOptOut'; 'forced-classic' = 'ClassicExperienceLists'
+        }
+        $script:Passing = @{
+            'alternate-css'   = [PSCustomObject]@{ AlternateCssUrlCount = 1; AlternateCssUrlExamples = 'https://lab.contoso.local/sites/spslab-alternate-css (/sites/spslab-alternate-css/LabStyles/lab.css)'; ModernBlockerCount = 1 }
+            'xslt-view'       = [PSCustomObject]@{ XsltListViewCount = 1; XsltListViewExamples = 'LabXslList/LabXslView'; ModernBlockerCount = 1 }
+            'script-web-part' = [PSCustomObject]@{ ScriptWebPartCount = 2; ScriptWebPartExamples = '/sites/spslab-script-web-part/SitePages/Home.aspx (Script Editor); /sites/spslab-script-web-part/SitePages/Home.aspx (Content Editor)'; ModernBlockerCount = 1 }
+            'modern-opt-out'  = [PSCustomObject]@{ ClassicExperienceOptOutCount = 2; ClassicExperienceOptOutExamples = 'https://lab.contoso.local/sites/spslab-modern-opt-out (site collection); https://lab.contoso.local/sites/spslab-modern-opt-out (web)'; ModernBlockerCount = 1 }
+            'forced-classic'  = [PSCustomObject]@{ ClassicExperienceListCount = 1; ClassicExperienceListExamples = 'LabClassic (/sites/spslab-forced-classic/Lists/LabClassic)'; ModernBlockerCount = 1 }
+        }
+    }
+
+    It 'exist, and are all expected to be met, none only informational' {
+        foreach ($name in $script:ModernScenario) {
+            $scenario = $script:Scenario | Where-Object { $_.Name -eq $name }
+            $scenario | Should -Not -BeNullOrEmpty -Because $name
+            @($scenario.Expect | Where-Object { $_.Info }).Count | Should -Be 0 -Because $name
+        }
+    }
+
+    It 'are skipped, not failed, when the SharePoint of the farm lacks what they need' {
+        foreach ($name in @('xslt-view', 'script-web-part', 'modern-opt-out', 'forced-classic')) {
+            (& $script:SourceOf $name) | Should -Match 'SKIP:' -Because $name
+        }
+    }
+
+    It 'skip only for what the farm lacks: an error of an activation or of an addition fails the scenario' {
+        $optOut = & $script:SourceOf 'modern-opt-out'
+        $optOut | Should -Match 'Get-SPFeature -Identity \$featureId'
+        $optOut | Should -Match 'SKIP: the feature'
+        $optOut | Should -Not -Match 'catch'
+        (& $script:SourceOf 'script-web-part') | Should -Not -Match 'catch'
+    }
+
+    It 'build what their expectations need' {
+        (& $script:SourceOf 'alternate-css') | Should -Match 'AlternateCssUrl'
+        (& $script:SourceOf 'xslt-view') | Should -Match 'XslLink'
+        $script = & $script:SourceOf 'script-web-part'
+        $script | Should -Match 'ScriptEditorWebPart'
+        $script | Should -Match 'ContentEditorWebPart'
+        $script | Should -Match 'GetLimitedWebPartManager'
+        $optOut = & $script:SourceOf 'modern-opt-out'
+        $optOut | Should -Match 'E3540C7D-6BEA-403C-A224-1A12EAFEE4C4'
+        $optOut | Should -Match '52E14B6F-B1BB-4969-B89B-C4FAA56745EF'
+        (& $script:SourceOf 'forced-classic') | Should -Match 'ListExperienceOptions'
+    }
+
+    It 'dispose of the web part manager and of its web' {
+        $script = & $script:SourceOf 'script-web-part'
+        $script | Should -Match 'Web\.Dispose\(\)'
+        $script | Should -Match 'Manager\.Dispose\(\)|\$manager\.Dispose\(\)'
+    }
+
+    It 'expect none of those signals of the baseline site, so that a default of SharePoint taken for a customization fails there' {
+        $baseline = $script:Scenario | Where-Object { $_.Name -eq 'baseline' }
+        foreach ($property in @('AlternateCssUrlCount', 'XsltListViewCount', 'ScriptWebPartCount', 'ClassicExperienceOptOutCount', 'ClassicExperienceListCount', 'ModernBlockerCount')) {
+            $expectation = @($baseline.Expect | Where-Object { $_.Property -eq $property })
+            $expectation | Should -HaveCount 1 -Because $property
+            $expectation[0].Operator | Should -Be 'eq'
+            $expectation[0].Value | Should -Be 0
+            $expectation[0].Info | Should -BeFalse
+        }
+    }
+
+    It 'meet their expectations with the values that the inventory writes' {
+        foreach ($name in $script:ModernScenario) {
+            $scenario = $script:Scenario | Where-Object { $_.Name -eq $name }
+            foreach ($expectation in @($scenario.Expect)) {
+                (Test-SPSLabExpectation -Expectation $expectation -Record $script:Passing[$name] -Alert @($script:ModernAlert[$name])).Status | Should -Be 'PASS' -Because "$name expects $($expectation.Property)$($expectation.Alert)"
+            }
+        }
+    }
+
+    It 'expect the alert of the signal, which the inventory raises for it, and fail without it' {
+        foreach ($name in $script:ModernScenario) {
+            $scenario = $script:Scenario | Where-Object { $_.Name -eq $name }
+            $alert = @($scenario.Expect | Where-Object { $_.ContainsKey('Alert') -and -not $_.Absent })
+            $alert | Should -HaveCount 1 -Because $name
+            $alert[0].Alert | Should -Be $script:ModernAlert[$name]
+            (Test-SPSLabExpectation -Expectation $alert[0] -Record $script:Passing[$name] -Alert @()).Status | Should -Be 'FAIL' -Because $name
+        }
+    }
+
+    It 'fail when the inventory reports nothing, as it does when a collector is broken' {
+        $empty = [PSCustomObject]@{
+            AlternateCssUrlCount = 0; AlternateCssUrlExamples = ''; XsltListViewCount = 0; XsltListViewExamples = ''
+            ScriptWebPartCount = 0; ScriptWebPartExamples = ''; ClassicExperienceOptOutCount = 0; ClassicExperienceOptOutExamples = ''
+            ClassicExperienceListCount = 0; ClassicExperienceListExamples = ''; ModernBlockerCount = 0
+        }
+        foreach ($name in $script:ModernScenario) {
+            $scenario = $script:Scenario | Where-Object { $_.Name -eq $name }
+            $statuses = @($scenario.Expect | ForEach-Object { (Test-SPSLabExpectation -Expectation $_ -Record $empty -Alert @()).Status })
+            $statuses | Should -Not -Contain 'PASS' -Because $name
+        }
+    }
+}
+
 Describe 'The event-receiver scenario' {
     BeforeAll {
         # The receiver type of SharePoint, as a stand-in: the scenario only needs the enumeration to exist.

@@ -17,16 +17,40 @@
           Assessment Tool (SMAT) scan reports and the Microsoft documentation.
         - Reference: the Microsoft Learn page behind the advice, or an empty string.
 
-        The catalog is built once per session and the entries are returned in a stable order.
+        The catalog is written for the default mode, SharePointOnline: a migration to SharePoint
+        Online. With the SharePointOnPrem mode it is the catalog of the modernization of the farm,
+        which Get-SPSOnPremAlertCatalog derives from this one: the same alert types, in the same
+        order, with the severity and the words of what matters for that question. Each catalog is
+        built once per session and the entries are returned in a stable order.
 
         Private because it is an implementation detail of the alert helpers.
 
+        .PARAMETER TargetMode
+        SharePointOnline (the default) or SharePointOnPrem. Any other value is rejected.
+
         .EXAMPLE
         (Get-SPSAlertCatalog)['InfoPath'].Remediation
+
+        .EXAMPLE
+        (Get-SPSAlertCatalog -TargetMode 'SharePointOnPrem')['InfoPath'].Severity
     #>
     [CmdletBinding()]
     [OutputType([System.Collections.Specialized.OrderedDictionary])]
-    param ()
+    param
+    (
+        [Parameter()]
+        [AllowNull()]
+        [System.Object]
+        $TargetMode = 'SharePointOnline'
+    )
+
+    $mode = (Get-SPSTargetProfile -TargetMode $TargetMode).TargetMode
+    if ($mode -eq 'SharePointOnPrem') {
+        if ($null -eq $script:SPSAlertCatalogOnPrem) {
+            $script:SPSAlertCatalogOnPrem = Get-SPSOnPremAlertCatalog -Catalog (Get-SPSAlertCatalog)
+        }
+        return $script:SPSAlertCatalogOnPrem
+    }
 
     if ($null -ne $script:SPSAlertCatalog) {
         return $script:SPSAlertCatalog
@@ -104,6 +128,36 @@
             Message     = 'Customized pages are reverted to their default state during migration; owners must reapply customizations afterwards.'
             Remediation = 'Tell the site owners which pages are customized: they must reapply the customization after the migration, and should look for out-of-the-box behavior to replace it where possible.'
             Reference   = 'https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-customized-pages'
+        }
+        AlternateCssUrl = @{
+            Severity    = 'Medium'
+            Message     = 'Webs use an alternate CSS URL: modern pages do not apply it, so a page that relies on it looks different in the modern experience.'
+            Remediation = 'List the webs with the site owners (AlternateCssUrlExamples in the inventory shows where to start) and replace the style sheet with the branding that modern pages support: a site theme for the colors and the logo, and a SharePoint Framework extension where a theme is not enough. Then clear the alternate CSS URL of the web.'
+            Reference   = 'https://learn.microsoft.com/en-us/sharepoint/dev/solution-guidance/modern-experience-customizations-customize-pages'
+        }
+        XsltListViews = @{
+            Severity    = 'Medium'
+            Message     = 'List views render with XSLT: the modern list ignores it, so SharePoint shows these lists in the classic experience.'
+            Remediation = 'List the views with the site owners (XsltListViewExamples in the inventory shows where to start). Replace the customization with what the modern list supports, view formatting for the look of a view or a column and a SharePoint Framework field customizer for more, then clear the XslLink or the Xsl of the view so that the list opens in the modern experience.'
+            Reference   = 'https://learn.microsoft.com/en-us/sharepoint/dev/solution-guidance/modern-experience-customizations-customize-lists-and-libraries'
+        }
+        ScriptWebParts = @{
+            Severity    = 'Medium'
+            Message     = 'Script Editor or Content Editor web parts carry script: they do not exist on a modern page, so the pages that use them stay classic.'
+            Remediation = 'Find out with the site owners what each script does (ScriptWebPartExamples in the inventory shows where to start), rebuild it as a SharePoint Framework web part or extension and replace the page with a modern page that uses it. A web part that only formats text or embeds a page can usually be replaced by the Text or the Embed web part.'
+            Reference   = 'https://learn.microsoft.com/en-us/sharepoint/dev/solution-guidance/modern-experience-customizations-customize-pages'
+        }
+        ModernExperienceOptOut = @{
+            Severity    = 'Low'
+            Message     = 'A site collection or webs opted out of the modern list and library experience: their lists open in the classic experience unless a list says otherwise.'
+            Remediation = 'Ask the site owners why the site collection or the web opted out, and whether its lists still need the classic experience. When they do not, deactivate the feature of the site collection (E3540C7D-6BEA-403C-A224-1A12EAFEE4C4) or of the web (52E14B6F-B1BB-4969-B89B-C4FAA56745EF), then check the lists that SharePoint still shows in the classic experience.'
+            Reference   = 'https://learn.microsoft.com/en-us/sharepoint/dev/transform/modernize-userinterface-lists-and-libraries-optout'
+        }
+        ClassicExperienceLists = @{
+            Severity    = 'Low'
+            Message     = 'Lists are set to the classic experience: they open in it even where the modern list experience is available.'
+            Remediation = 'Check with the site owners why each list was set to the classic experience (ClassicExperienceListExamples in the inventory shows where to start): a customization that the modern list does not support, or a habit. Set the "List experience" of the list back to the default when nothing blocks it.'
+            Reference   = 'https://learn.microsoft.com/en-us/sharepoint/dev/transform/modernize-userinterface-lists-and-libraries-optout'
         }
         CustomPermissionLevels = @{
             Severity    = 'Medium'
@@ -224,6 +278,12 @@
             Message     = 'Files with high version counts were detected and may increase migration time.'
             Remediation = 'Decide whether all versions must be kept: the migration time grows with the number of versions.'
             Reference   = 'https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-file-versions'
+        }
+        LargeExcelFiles = @{
+            Severity    = 'Low'
+            Message     = 'Large Excel workbooks were detected: SharePoint Online does not open a workbook above its size limit in the browser, and asks the user to open it in Excel.'
+            Remediation = 'Tell the users which workbooks are concerned before the migration (LargeExcelFileExamples in the inventory shows where to start): the workbooks are migrated, but SharePoint Online asks them to open a workbook larger than 10 MB in the Excel client instead of the browser. Where a workbook is large for no good reason, reducing its size keeps it in the browser.'
+            Reference   = 'https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-large-excel-files'
         }
         Subsites = @{
             Severity    = 'Low'
