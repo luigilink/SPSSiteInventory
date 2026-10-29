@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- SMAT Secure Store parity: the new `Get-SPSSecureStoreApplication` reads the Secure Store target
+  applications of the farm once, through the service application proxy group of each web
+  application and the service context of that group, for the default partition, so a web
+  application without any site collection is read too. Web applications that share a Secure Store
+  proxy report its applications once. The row has the name (the target application ID), the display
+  name, the contact e-mail address, the type, the credential management URL and the ticket
+  time-out, like the SMAT report; the fields of the applications and the credentials are never read.
+  The report reaches a `-securestore-` CSV and JSON, the manifest (`Summary.SecureStoreInventoryComplete`,
+  `Files.SecureStoreCsv` and `Files.SecureStoreJson`) and a Secure Store section of the HTML report,
+  which leaves the contact e-mail address out because it is personal data. A web application, a
+  proxy or an application that cannot be read, or a proxy group with several Secure Store proxies
+  (a service context binds the default one), marks the report partial: the new
+  `SecureStoreInventoryPartial` alert, the manifest and a note in the HTML report say so. The new
+  `SecureStoreApplication` alert is Low, one per target application: the applications are not
+  migrated to SharePoint Online, the ones that are still needed have to be created again as Group
+  Restricted applications, and the credentials have to be entered again. In the `SharePointOnPrem`
+  mode it is one of the alerts that are only about a migration. The member names of the object that
+  `Get-SPSecureStoreApplication` returns are not documented: the first run on a farm confirms them,
+  and the warning of a row that cannot be read lists the members that the object has. (#49)
 - The HTML report is split in several pages for a very large farm. Up to `Report.HtmlSplitThreshold`
   site collections (default 3000, about 5 MB) it stays one file; above, the entry page, named like
   the single file, keeps the summary, the risk indicators, the alerts, the wave plan and the detail

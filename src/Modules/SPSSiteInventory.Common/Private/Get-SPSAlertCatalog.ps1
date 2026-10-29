@@ -315,6 +315,18 @@
             Remediation = 'Fix the web application or LOB system named in the run warnings and run the inventory again before relying on the BCS report.'
             Reference   = ''
         }
+        SecureStoreApplication = @{
+            Severity    = 'Low'
+            Message     = 'Secure Store target applications are not migrated to SharePoint Online: recreate the ones that are still needed in the target.'
+            Remediation = 'Ask the owners of the solutions that use this target application whether it is still needed. If it is, create it in the Secure Store of the SharePoint admin center during the migration tests: the target only supports the Group Restricted type, so an application of another type has to be reworked. The inventory does not read credentials, and they are not migrated: enter them again in the new application.'
+            Reference   = 'https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-secure-store'
+        }
+        SecureStoreInventoryPartial = @{
+            Severity    = 'Medium'
+            Message     = 'The Secure Store inventory is partial: some web applications or target applications could not be read, so Secure Store applications may be missing.'
+            Remediation = 'Fix the web application or Secure Store service application named in the run warnings and run the inventory again before relying on the Secure Store report.'
+            Reference   = ''
+        }
     }
 
     return $script:SPSAlertCatalog
