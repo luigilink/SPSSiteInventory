@@ -86,6 +86,25 @@ Describe 'Get-SPSScriptWebPartKind' {
         Get-Kind -WebPart $empty | Should -Be ''
     }
 
+    It 'does not report a Content Editor web part that only shows an example of script, as text, in CDATA or escaped' -ForEach @(
+        @{ Name = 'a string'; Content = '<pre>&lt;script&gt;example();&lt;/script&gt;</pre>' }
+        @{ Name = 'CDATA'; Content = '<Content xmlns="http://schemas.microsoft.com/WebPart/v2/ContentEditor"><![CDATA[<pre>&lt;script&gt;example();&lt;/script&gt;</pre>]]></Content>' }
+        @{ Name = 'a text node'; Content = '<Content xmlns="http://schemas.microsoft.com/WebPart/v2/ContentEditor">&lt;pre&gt;&amp;lt;script&amp;gt;example();&amp;lt;/script&amp;gt;&lt;/pre&gt;</Content>' }
+        @{ Name = 'a code element'; Content = '<Content xmlns="http://schemas.microsoft.com/WebPart/v2/ContentEditor"><code>&lt;script&gt;example();&lt;/script&gt;</code></Content>' }
+    ) {
+        $value = if ($Content.StartsWith('<Content')) { New-TestXmlContent -Xml $Content } else { $Content }
+        $webPart = New-TestWebPart -TypeName 'Microsoft.SharePoint.WebPartPages.ContentEditorWebPart' -Content $value
+
+        Get-Kind -WebPart $webPart | Should -Be '' -Because $Name
+    }
+
+    It 'still reports a script that is shown next to an example of script' {
+        $content = New-TestXmlContent -Xml '<Content xmlns="http://schemas.microsoft.com/WebPart/v2/ContentEditor"><![CDATA[<pre>&lt;script&gt;example();&lt;/script&gt;</pre><script>run();</script>]]></Content>'
+        $webPart = New-TestWebPart -TypeName 'Microsoft.SharePoint.WebPartPages.ContentEditorWebPart' -Content $content
+
+        Get-Kind -WebPart $webPart | Should -Be 'Content Editor'
+    }
+
     It 'does not take a word that merely contains script for a script tag' {
         $webPart = New-TestWebPart -TypeName 'Microsoft.SharePoint.WebPartPages.ContentEditorWebPart' -Content '<p>The postscript and the scripts of the play.</p>'
         Get-Kind -WebPart $webPart | Should -Be ''

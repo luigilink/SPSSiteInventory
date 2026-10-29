@@ -755,9 +755,6 @@ function Get-SPSLabScenario {
                     $manager.AddWebPart($scriptPart, 'wpz', 0)
                     $manager.AddWebPart($contentPart, 'wpz', 1)
                 }
-                catch {
-                    throw "SKIP: the web parts could not be added to the home page ($($_.Exception.Message))"
-                }
                 finally {
                     $manager.Web.Dispose()
                     $manager.Dispose()
@@ -777,13 +774,14 @@ function Get-SPSLabScenario {
             Template    = 'STS#0'
             Provision   = {
                 param ($Context)
-                try {
-                    $null = $Context.Site.Features.Add([System.Guid]'E3540C7D-6BEA-403C-A224-1A12EAFEE4C4', $true)
-                    $null = $Context.Web.Features.Add([System.Guid]'52E14B6F-B1BB-4969-B89B-C4FAA56745EF', $true)
+                # Only a feature that is not installed is a skip: an error of the activation of an installed one must fail the scenario.
+                foreach ($featureId in @('E3540C7D-6BEA-403C-A224-1A12EAFEE4C4', '52E14B6F-B1BB-4969-B89B-C4FAA56745EF')) {
+                    if ($null -eq (Get-SPFeature -Identity $featureId -ErrorAction SilentlyContinue)) {
+                        throw "SKIP: the feature $featureId, which opts out of the modern list experience, is not installed on this SharePoint."
+                    }
                 }
-                catch {
-                    throw "SKIP: the features that opt out of the modern list experience are not available on this SharePoint ($($_.Exception.Message))"
-                }
+                $null = $Context.Site.Features.Add([System.Guid]'E3540C7D-6BEA-403C-A224-1A12EAFEE4C4', $true)
+                $null = $Context.Web.Features.Add([System.Guid]'52E14B6F-B1BB-4969-B89B-C4FAA56745EF', $true)
             }
             Expect      = @(
                 (Get-SPSLabExpectation ClassicExperienceOptOutCount ge 2)

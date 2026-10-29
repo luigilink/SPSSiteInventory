@@ -611,7 +611,14 @@ Describe 'Get-SPSSiteCustomization content types' {
 
     It 'reports no publishing signals and skips Pages libraries on webs without the publishing feature' {
         $pages = Get-TestPagesList -ItemCount 99
-        $pages | Add-Member -MemberType ScriptMethod -Name GetItems -Value { throw 'Pages must not be read without the publishing feature.' } -Force
+        # The pages are read for script wherever a Pages library is, but the page layouts only with the publishing feature.
+        $pages | Add-Member -MemberType ScriptMethod -Name GetItems -Value {
+            param ($Query)
+            if ($Query.PSObject.Properties['Query'] -and [string]$Query.Query -match 'File_x0020_Type') {
+                return [PSCustomObject]@{ Items = @(); ListItemCollectionPosition = $null }
+            }
+            throw 'The page layouts must not be read without the publishing feature.'
+        } -Force
         $web = Get-TestWeb -Definitions @() -Bindings @()
         $web.Features = @((Get-TestFeature -Id '00000000-0000-0000-0000-000000000001'))
         $web.Lists = @($web.Lists[0], $pages)

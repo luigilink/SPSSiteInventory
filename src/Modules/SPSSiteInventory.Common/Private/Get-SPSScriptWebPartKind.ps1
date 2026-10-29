@@ -57,10 +57,17 @@
         return 'Content Editor'
     }
 
-    # The content is an XML element that holds the HTML as text or as CDATA; both forms are searched.
+    # The content is an XML element that holds the HTML as text or as CDATA, or as markup of its own. The text is read
+    # decoded (InnerText), as the user wrote the HTML; the markup is read as markup (InnerXml), where the text that a
+    # code element shows stays escaped. A script is the literal tag: the text &lt;script&gt; of a page that only shows
+    # an example of code is not one.
     $content = Get-SPSPropertyValue -InputObject $WebPart -Name 'Content'
-    $contentText = if ($content -is [System.Xml.XmlNode]) { '{0} {1}' -f $content.InnerText, $content.InnerXml } else { [string]$content }
-    if ($contentText -match '(?i)(<|&lt;)\s*script\b') {
+    $contentText = [string]$content
+    if ($content -is [System.Xml.XmlNode]) {
+        $hasMarkup = @($content.ChildNodes | Where-Object { $_ -is [System.Xml.XmlElement] }).Count -gt 0
+        $contentText = if ($hasMarkup) { $content.InnerXml } else { $content.InnerText }
+    }
+    if ($contentText -match '(?i)<\s*script\b') {
         return 'Content Editor'
     }
 

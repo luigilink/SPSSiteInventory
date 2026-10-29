@@ -280,6 +280,14 @@ Describe 'The scenarios of the modern-readiness signals' {
         }
     }
 
+    It 'skip only for what the farm lacks: an error of an activation or of an addition fails the scenario' {
+        $optOut = & $script:SourceOf 'modern-opt-out'
+        $optOut | Should -Match 'Get-SPFeature -Identity \$featureId'
+        $optOut | Should -Match 'SKIP: the feature'
+        $optOut | Should -Not -Match 'catch'
+        (& $script:SourceOf 'script-web-part') | Should -Not -Match 'catch'
+    }
+
     It 'build what their expectations need' {
         (& $script:SourceOf 'alternate-css') | Should -Match 'AlternateCssUrl'
         (& $script:SourceOf 'xslt-view') | Should -Match 'XslLink'

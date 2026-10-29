@@ -654,9 +654,10 @@
                     if (-not [string]::IsNullOrWhiteSpace($welcomePage)) {
                         $welcomeFile = $web.GetFile($welcomePage)
                         $welcomeUrl = [string](Get-SPSPropertyValue -InputObject $welcomeFile -Name 'ServerRelativeUrl')
+                        # Read strictly: a getter that fails must not leave the home page out of the scan unnoticed.
                         $welcomeExists = $true
                         if ($null -ne $welcomeFile.PSObject.Properties['Exists']) {
-                            $welcomeExists = [bool]$welcomeFile.Exists
+                            $welcomeExists = [bool](Get-SPSPropertyValue -InputObject $welcomeFile -Name 'Exists')
                         }
                         if ($welcomeExists -and -not [string]::IsNullOrWhiteSpace($welcomeUrl)) {
                             $webPartPages[$welcomeUrl] = $welcomeFile
@@ -1136,9 +1137,11 @@
                             }
                         }
 
-                        # The pages of the Site Pages and Pages libraries are read for script, up to the cap of each library.
+                        # The pages of the Site Pages and Pages libraries are read for script, up to the cap of each library. A
+                        # Pages library is told by its template, so that one that a web keeps after its publishing feature was
+                        # deactivated is read too.
                         $listTemplateText = [string]$list.BaseTemplate
-                        if ($isPagesLibrary -or $listTemplateText -eq [string]$sitePagesLibraryTemplateId -or $listTemplateText -eq 'WebPageLibrary') {
+                        if ($listTemplateText -eq [string]$pagesLibraryTemplateId -or $listTemplateText -eq [string]$sitePagesLibraryTemplateId -or $listTemplateText -eq 'WebPageLibrary') {
                             try {
                                 # Pages only (an .aspx file): the folders, images and other files of the library are no page.
                                 $webPartPageQuery = & $newPagedQuery -RowLimit 200 -QueryText '<Where><And><Eq><FieldRef Name="FSObjType" /><Value Type="Integer">0</Value></Eq><Eq><FieldRef Name="File_x0020_Type" /><Value Type="Text">aspx</Value></Eq></And></Where>'
@@ -1158,10 +1161,16 @@
                                             break
                                         }
                                         $webPartPageScanCount++
-                                        $webPartPageFile = $webPartPageItem.File
+                                        # A page that cannot be read is an error, not a page left out: the catch below marks the collection partial.
+                                        $webPartPageFile = Get-SPSPropertyValue -InputObject $webPartPageItem -Name 'File'
+                                        if ($null -eq $webPartPageFile) {
+                                            throw "The file of a page is unavailable on '$listTitle'."
+                                        }
                                         $webPartPageUrl = [string](& $getFileIdentity $webPartPageFile $webPartPageItem)
-                                        if ($null -ne $webPartPageFile -and -not [string]::IsNullOrWhiteSpace($webPartPageUrl) -and
-                                            -not $webPartPages.ContainsKey($webPartPageUrl)) {
+                                        if ([string]::IsNullOrWhiteSpace($webPartPageUrl)) {
+                                            throw "The address of a page could not be read on '$listTitle'."
+                                        }
+                                        if (-not $webPartPages.ContainsKey($webPartPageUrl)) {
                                             $webPartPages[$webPartPageUrl] = $webPartPageFile
                                         }
                                     }

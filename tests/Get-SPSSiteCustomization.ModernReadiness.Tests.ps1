@@ -31,6 +31,23 @@ public class SPSTestCssWeb
 '@
     }
 
+    # A file whose existence cannot be told, and an item whose file cannot be read, for the same reason.
+    if (-not ('SPSTestUnknownPage' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+public class SPSTestUnknownPage
+{
+    public string ServerRelativeUrl { get; set; }
+    public bool Exists { get { throw new InvalidOperationException("existence unavailable"); } }
+}
+
+public class SPSTestItemWithoutFile
+{
+    public object File { get { throw new InvalidOperationException("file unavailable"); } }
+}
+'@
+    }
+
     # A feature collection that gives its first feature and fails on the next one: a read that stops at the first
     # feature it looks for (the publishing one) succeeds, and one that goes on fails.
     if (-not ('SPSTestFeaturesThenFail' -as [type])) {
@@ -335,6 +352,52 @@ Describe 'Get-SPSSiteCustomization script web parts' {
         $result.Signals.ScriptWebPartCount | Should -Be 0
         $missing.Reads | Should -Be 0
         $result.Signals.CustomizationInventoryComplete | Should -BeTrue
+    }
+
+    It 'marks the collection partial, instead of leaving the home page out, when its existence cannot be told' {
+        $unknown = [SPSTestUnknownPage]::new()
+        $unknown.ServerRelativeUrl = '/sites/team/SitePages/Home.aspx'
+        $web = New-TestWeb -WelcomePage 'SitePages/Home.aspx' -Pages @($unknown)
+
+        $result = Get-Signal -Site (New-TestSite -Webs @($web))
+
+        $result.Signals.CustomizationInventoryComplete | Should -BeFalse
+        ($result.Warnings -join ';') | Should -Match "Could not read the home page of web 'https://intranet.contoso.com/sites/team': .*existence unavailable"
+    }
+
+    It 'reads the pages of a Pages library of a web whose publishing feature is not active' {
+        $page = New-TestPage -Url '/sites/team/Pages/Welcome.aspx' -WebParts @((New-TestScriptEditor))
+        $pages = New-TestLibrary -Title 'Pages' -BaseTemplate 850 -Batches @((New-TestPageBatch -Pages @($page)))
+        $web = New-TestWeb -Lists @($pages)
+
+        $result = Get-Signal -Site (New-TestSite -Webs @($web))
+
+        $pages.Queries | Should -HaveCount 1
+        $result.Signals.ScriptWebPartCount | Should -Be 1
+        $result.Signals.PublishingWebCount | Should -Be 0
+    }
+
+    It 'marks the collection partial, instead of leaving the page out, when the file of an item cannot be read' {
+        $library = New-TestLibrary -Batches @([PSCustomObject]@{ Items = @([SPSTestItemWithoutFile]::new()); Position = $null })
+        $web = New-TestWeb -Lists @($library)
+
+        $result = Get-Signal -Site (New-TestSite -Webs @($web))
+
+        $result.Signals.CustomizationInventoryComplete | Should -BeFalse
+        ($result.Warnings -join ';') | Should -Match "Could not list the pages of 'Site Pages' in web 'https://intranet.contoso.com/sites/team': .*file unavailable"
+    }
+
+    It 'marks the collection partial when an item has no file, or a file without an address' -ForEach @(
+        @{ Name = 'no file'; File = $null; Message = 'file of a page is unavailable' }
+        @{ Name = 'no address'; File = [PSCustomObject]@{ ServerRelativeUrl = ''; Name = '' }; Message = 'address of a page could not be read' }
+    ) {
+        $library = New-TestLibrary -Batches @([PSCustomObject]@{ Items = @([PSCustomObject]@{ File = $File }); Position = $null })
+        $web = New-TestWeb -Lists @($library)
+
+        $result = Get-Signal -Site (New-TestSite -Webs @($web))
+
+        $result.Signals.CustomizationInventoryComplete | Should -BeFalse -Because $Name
+        ($result.Warnings -join ';') | Should -Match $Message
     }
 
     It 'reads the pages of the Site Pages library and of a publishing Pages library' {
