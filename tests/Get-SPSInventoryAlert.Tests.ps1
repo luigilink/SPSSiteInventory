@@ -267,13 +267,49 @@ Describe 'Get-SPSInventoryAlert' {
         Get-Alert -Record @() -Parameters @{ BcsInventoryComplete = $false } | Should -HaveCount 0
     }
 
-    It 'keeps the order of the alerts: site collections first, then web applications, then BCS' {
+    It 'raises one Secure Store alert per target application with its first web application, and none without target applications' {
+        $applications = @(
+            [PSCustomObject]@{ WebApplicationUrls = 'https://intranet; https://extranet'; Name = 'SapTarget' }
+            [PSCustomObject]@{ WebApplicationUrls = 'https://intranet'; Name = 'CrmTarget' }
+        )
+
+        $alerts = Get-Alert -Record @() -Parameters @{ SecureStoreApplication = $applications }
+
+        $alerts | Should -HaveCount 2
+        $alerts[0].AlertType | Should -Be 'SecureStoreApplication'
+        $alerts[0].Severity | Should -Be 'Low'
+        $alerts[0].Url | Should -Be 'https://intranet'
+        $alerts[0].Value | Should -Be 'SapTarget'
+        $alerts[1].Value | Should -Be 'CrmTarget'
+        Get-Alert -Record @() -Parameters @{ SecureStoreApplication = @() } | Should -HaveCount 0
+    }
+
+    It 'raises the partial Secure Store inventory alert only when rows were supplied and the inventory is not complete' {
+        $alert = Get-Alert -Record @() -Parameters @{ SecureStoreApplication = @(); SecureStoreInventoryComplete = $false }
+
+        $alert.AlertType | Should -Be 'SecureStoreInventoryPartial'
+        $alert.Severity | Should -Be 'Medium'
+        Get-Alert -Record @() -Parameters @{ SecureStoreApplication = @(); SecureStoreInventoryComplete = $true } | Should -HaveCount 0
+        Get-Alert -Record @() -Parameters @{ SecureStoreInventoryComplete = $false } | Should -HaveCount 0
+    }
+
+    It 'words the Secure Store alert as a migration-only one in the on-premises mode' {
+        $applications = @([PSCustomObject]@{ WebApplicationUrls = 'https://intranet'; Name = 'SapTarget' })
+
+        $alert = Get-Alert -Record @() -Parameters @{ SecureStoreApplication = $applications; TargetMode = 'SharePointOnPrem' }
+
+        $alert.Severity | Should -Be 'Low'
+        $alert.Message | Should -Match '^Migration to SharePoint Online only\. '
+    }
+
+    It 'keeps the order of the alerts: site collections first, then web applications, then BCS, then Secure Store' {
         $site = New-Site -Signals @{ InfoPathFormCount = 1; WebAppPolicyCount = 1 }
         $applications = @([PSCustomObject]@{ WebApplicationUrls = 'https://intranet'; LobSystemName = 'CrmSystem' })
+        $targets = @([PSCustomObject]@{ WebApplicationUrls = 'https://intranet'; Name = 'SapTarget' })
 
-        $alerts = Get-Alert -Record @($site) -Parameters @{ BcsApplication = $applications; BcsInventoryComplete = $false }
+        $alerts = Get-Alert -Record @($site) -Parameters @{ BcsApplication = $applications; BcsInventoryComplete = $false; SecureStoreApplication = $targets; SecureStoreInventoryComplete = $false }
 
-        @($alerts.AlertType) | Should -Be @('InfoPath', 'WebApplicationPolicies', 'BcsApplication', 'BcsInventoryPartial')
+        @($alerts.AlertType) | Should -Be @('InfoPath', 'WebApplicationPolicies', 'BcsApplication', 'BcsInventoryPartial', 'SecureStoreApplication', 'SecureStoreInventoryPartial')
     }
 
     It 'raises exactly the alert types of the catalog and nothing that is not cataloged' -ForEach @(@{ Cases = $script:SiteCases }) {
@@ -281,8 +317,9 @@ Describe 'Get-SPSInventoryAlert' {
         $records += [PSCustomObject]@{ InventoryScope = 'WebApplication'; Url = 'https://other'; WebAppUrl = 'https://other'; AssessmentStatus = 'Failed'; SiteInventoryWarnings = 'Access denied' }
         $records += New-Site -Url 'https://intranet/sites/policy' -WebApp 'https://policy' -Signals @{ WebAppPolicyCount = 2; BrowserFileHandling = 'Permissive' }
         $applications = @([PSCustomObject]@{ WebApplicationUrls = 'https://intranet'; LobSystemName = 'CrmSystem' })
+        $targets = @([PSCustomObject]@{ WebApplicationUrls = 'https://intranet'; Name = 'SapTarget' })
 
-        $alerts = Get-Alert -Record $records -Parameters @{ BcsApplication = $applications; BcsInventoryComplete = $false }
+        $alerts = Get-Alert -Record $records -Parameters @{ BcsApplication = $applications; BcsInventoryComplete = $false; SecureStoreApplication = $targets; SecureStoreInventoryComplete = $false }
         $raised = @($alerts.AlertType | Sort-Object -Unique)
         $cataloged = @($script:Catalog.Keys | Sort-Object)
 

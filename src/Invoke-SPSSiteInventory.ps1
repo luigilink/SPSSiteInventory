@@ -10,7 +10,7 @@
     3. builds the farm-solution map (WSP -> full-trust code, features) to detect custom code;
     4. enumerates site collections (identity + volumetry);
     5. collects the customization signals of each site and reads the Business Connectivity
-       Services (BCS) definitions of the farm;
+       Services (BCS) definitions and the Secure Store target applications of the farm;
     6. scores each site from 1 (Simple) to 4 (Blocking) and assigns a migration wave; with
        TargetMode = 'SharePointOnPrem' in the settings, the same four categories read as
        Modern-ready, Light remediation, Rebuild (SPFx) and Blocked;
@@ -197,12 +197,25 @@ try {
         Add-SPSInventoryEvent -Message $bcsWarning -Level Warning
     }
 
+    # Secure Store target applications are farm-wide too; a failure here must not stop the site report either.
+    Add-SPSInventoryEvent -Message 'Reading Secure Store target applications.' -Level Information
+    $secureStore = [PSCustomObject]@{ Applications = @(); Complete = $false; Warnings = @() }
+    try {
+        $secureStore = Get-SPSSecureStoreApplication -WebApplicationUrl $settings.WebApplicationUrl
+    }
+    catch {
+        Add-SPSInventoryEvent -Message "The Secure Store inventory failed: $($_.Exception.Message)" -Level Warning
+    }
+    foreach ($secureStoreWarning in @($secureStore.Warnings)) {
+        Add-SPSInventoryEvent -Message $secureStoreWarning -Level Warning
+    }
+
     if (@($sharePointAlerts | Where-Object { -not [string]::IsNullOrEmpty([string]$_.UserLoginName) }).Count -gt 0) {
         Add-SPSInventoryEvent -Message 'The SharePoint alerts files contain the login names of the alert owners, which are personal data. Set SharePointAlerts.IncludeUserLogin to $false in the settings to leave them out.' -Level Information
     }
 
     $solutionOutput = Export-SPSSolutionReport -InputObject @($solutionMap) -OutputFolder $settings.OutputFolder -BaseName ('SPSSiteInventory-' + $settings.EnvName)
-    $output = Export-SPSInventoryReport -InputObject @($scored) -OutputFolder $settings.OutputFolder -BaseName ('SPSSiteInventory-' + $settings.EnvName) -EnvName $settings.EnvName -SolutionMap @($solutionMap) -ContentTypes $contentTypes -ManagedMetadataLists $managedMetadataLists -ExternalLists $externalLists -SharePointAlerts $sharePointAlerts -BcsApplications @($bcs.Applications) -BcsInventoryComplete ([bool]$bcs.Complete) -SolutionJsonPath $solutionOutput.JsonPath -ExcludedPersonalSiteCount ([int]$exclusion.PersonalSites) -ExcludedSiteMasterCount ([int]$exclusion.SiteMasters) -HtmlSplitThreshold $reportOption.HtmlSplitThreshold -HtmlRowsPerPage $reportOption.HtmlRowsPerPage -TargetMode $targetMode
+    $output = Export-SPSInventoryReport -InputObject @($scored) -OutputFolder $settings.OutputFolder -BaseName ('SPSSiteInventory-' + $settings.EnvName) -EnvName $settings.EnvName -SolutionMap @($solutionMap) -ContentTypes $contentTypes -ManagedMetadataLists $managedMetadataLists -ExternalLists $externalLists -SharePointAlerts $sharePointAlerts -BcsApplications @($bcs.Applications) -BcsInventoryComplete ([bool]$bcs.Complete) -SecureStoreApplications @($secureStore.Applications) -SecureStoreInventoryComplete ([bool]$secureStore.Complete) -SolutionJsonPath $solutionOutput.JsonPath -ExcludedPersonalSiteCount ([int]$exclusion.PersonalSites) -ExcludedSiteMasterCount ([int]$exclusion.SiteMasters) -HtmlSplitThreshold $reportOption.HtmlSplitThreshold -HtmlRowsPerPage $reportOption.HtmlRowsPerPage -TargetMode $targetMode
 
     Add-SPSInventoryEvent -Message "Inventory complete. CSV: $($output.CsvPath) | JSON: $($output.JsonPath) | HTML: $($output.HtmlPath)" -Level Information
     if (@($output.HtmlPagePaths).Count -gt 0) {
@@ -215,6 +228,7 @@ try {
     Add-SPSInventoryEvent -Message "External list report. CSV: $($output.ExternalListsCsvPath) | JSON: $($output.ExternalListsJsonPath)" -Level Information
     Add-SPSInventoryEvent -Message "SharePoint alerts report. CSV: $($output.SharePointAlertsCsvPath) | JSON: $($output.SharePointAlertsJsonPath)" -Level Information
     Add-SPSInventoryEvent -Message "BCS report. CSV: $($output.BcsCsvPath) | JSON: $($output.BcsJsonPath)" -Level Information
+    Add-SPSInventoryEvent -Message "Secure Store report. CSV: $($output.SecureStoreCsvPath) | JSON: $($output.SecureStoreJsonPath)" -Level Information
 }
 catch {
     Add-SPSInventoryEvent -Message "Inventory failed: $($_.Exception.Message)" -Level Error

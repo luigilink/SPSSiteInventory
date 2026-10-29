@@ -57,6 +57,18 @@ Describe 'Get-SPSAlertCatalog' {
         $script:Catalog['BcsApplication'].Remediation | Should -Match 'Power Apps'
     }
 
+    It 'tells the Secure Store alert that the target only supports the Group Restricted type, and that credentials are not migrated' {
+        $entry = $script:Catalog['SecureStoreApplication']
+
+        $entry.Severity | Should -Be 'Low'
+        $entry.Message | Should -Match 'not migrated to SharePoint Online'
+        $entry.Remediation | Should -Match 'Group Restricted'
+        $entry.Remediation | Should -Match 'credentials'
+        $entry.Reference | Should -Be 'https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-secure-store'
+        $script:Catalog['SecureStoreInventoryPartial'].Severity | Should -Be 'Medium'
+        $script:OnPrem['SecureStoreInventoryPartial'].Message | Should -Be $script:Catalog['SecureStoreInventoryPartial'].Message
+    }
+
     It 'does not tell users to restart workflows in SharePoint Online, where both workflow engines are retired' {
         foreach ($key in @('Workflow2010Running', 'Workflow2013Running')) {
             $entry = $script:Catalog[$key]
@@ -248,7 +260,7 @@ Describe 'Get-SPSAlertCatalog for the SharePointOnPrem mode' {
     }
 
     It 'makes the alerts that are only about a migration to SharePoint Online Low, and says so before the original text' {
-        $script:MigrationOnly.Count | Should -Be 18
+        $script:MigrationOnly.Count | Should -Be 19
         foreach ($key in $script:MigrationOnly) {
             $entry = $script:OnPrem[$key]
 
@@ -257,7 +269,7 @@ Describe 'Get-SPSAlertCatalog for the SharePointOnPrem mode' {
             $entry.Remediation | Should -Be ('Nothing to do to modernize this farm. If you migrate to SharePoint Online, this applies. ' + $script:Catalog[$key].Remediation) -Because $key
             $entry.Reference | Should -Be $script:Catalog[$key].Reference -Because $key
         }
-        foreach ($key in @('ExternalLists', 'FbaConfigured', 'IrmEnabledLists', 'BcsApplication', 'UnsupportedSiteTemplate', 'AlertSubscriptions', 'LargeExcelFiles')) {
+        foreach ($key in @('ExternalLists', 'FbaConfigured', 'IrmEnabledLists', 'BcsApplication', 'SecureStoreApplication', 'UnsupportedSiteTemplate', 'AlertSubscriptions', 'LargeExcelFiles')) {
             $script:MigrationOnly | Should -Contain $key
         }
     }
@@ -312,7 +324,7 @@ Describe 'Get-SPSAlertCatalog for the SharePointOnPrem mode' {
             PublishingSite = 'Medium'; PublishingPages = 'Medium'; CustomizedPages = 'Medium'; AppInstances = 'Medium'; AppWebs = 'Medium'
             LargeLists = 'Medium'; LargeListViews = 'Medium'; AssessmentPartial = 'Medium'
             LockedSite = 'Low'; ClassicExperienceLists = 'Low'; Subsites = 'Low'
-            AssessmentFailed = 'High'; WebApplicationEnumerationFailed = 'High'; BcsInventoryPartial = 'Medium'
+            AssessmentFailed = 'High'; WebApplicationEnumerationFailed = 'High'; BcsInventoryPartial = 'Medium'; SecureStoreInventoryPartial = 'Medium'
         }
         foreach ($key in $expected.Keys) {
             $script:OnPrem[$key].Severity | Should -Be $expected[$key] -Because $key

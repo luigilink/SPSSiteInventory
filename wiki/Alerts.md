@@ -81,6 +81,8 @@ documentation instead. It is a starting point: confirm it against your own targe
 | `PermissiveBrowserFileHandling` | Medium | A web application uses Permissive browser file handling. Raised once per web application. | Warn the owners of the sites in this web application: see the HTML file alerts for the sites concerned and check that their pages render after the migration. [Microsoft Learn](https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-browser-file-handling) |
 | `BcsApplication` | Medium | A BCS LOB system is defined in the farm. Raised once per LOB system. | Replace the scenarios that rely on this application, for example with Power Apps and its connectors. BCS is not retired in SharePoint Server Subscription Edition, so a target that stays on-premises can keep using it. [Microsoft Learn](https://learn.microsoft.com/en-us/sharepoint/business-connectivity-services-retirement) |
 | `BcsInventoryPartial` | Medium | The BCS inventory could not be read in full. | Fix the web application or LOB system named in the run warnings and run the inventory again before relying on the BCS report. |
+| `SecureStoreApplication` | Low | A Secure Store target application is defined in the farm. Raised once per target application. | Ask the owners of the solutions that use this target application whether it is still needed. If it is, create it in the Secure Store of the SharePoint admin center during the migration tests: the target only supports the Group Restricted type, so an application of another type has to be reworked. The inventory does not read credentials, and they are not migrated: enter them again in the new application. [Microsoft Learn](https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-secure-store) |
+| `SecureStoreInventoryPartial` | Medium | The Secure Store inventory could not be read in full. | Fix the web application or Secure Store service application named in the run warnings and run the inventory again before relying on the Secure Store report. |
 
 Alerts do not change the category or the score of a site: that is the job of the
 [scoring configuration](Configuration#scoring-section). An alert is raised even for a signal
@@ -96,13 +98,13 @@ the HTML report use the catalog of the mode of the run.
 **Alerts that are only about a migration to SharePoint Online are `Low`** in this mode, and say so:
 the message starts with "Migration to SharePoint Online only." and the remediation with "Nothing to
 do to modernize this farm. If you migrate to SharePoint Online, this applies.", followed by the text
-of the table above, so nothing is lost for whoever migrates later. They are `CustomPermissionLevels`, `EmailEnabledLists`, `HtmlFiles`, `ManagedMetadataColumns`, `ExternalLists`, `AlertSubscriptions`, `UnsupportedSiteTemplate`, `TemplateCompatibilityReview`, `TemplateLanguageReview`, `FbaConfigured`, `IrmEnabledLists`, `LargeSite`, `CheckedOutFiles`, `FileVersions`, `LargeExcelFiles`, `WebApplicationPolicies`, `PermissiveBrowserFileHandling`, `BcsApplication`.
+of the table above, so nothing is lost for whoever migrates later. They are `CustomPermissionLevels`, `EmailEnabledLists`, `HtmlFiles`, `ManagedMetadataColumns`, `ExternalLists`, `AlertSubscriptions`, `UnsupportedSiteTemplate`, `TemplateCompatibilityReview`, `TemplateLanguageReview`, `FbaConfigured`, `IrmEnabledLists`, `LargeSite`, `CheckedOutFiles`, `FileVersions`, `LargeExcelFiles`, `WebApplicationPolicies`, `PermissiveBrowserFileHandling`, `BcsApplication`, `SecureStoreApplication`.
 
 **`ModernExperienceOptOut`** is `Medium` instead of `Low`, with the same text: the opt-out is what
 keeps the lists of a site collection or a web in the classic experience. The other alerts about the
 modern experience (`AlternateCssUrl`, `XsltListViews`, `ScriptWebParts` and `ClassicExperienceLists`)
 and the alerts that say that the inventory itself is incomplete (`WebApplicationEnumerationFailed`,
-`AssessmentFailed`, `BcsInventoryPartial`) are the same in both modes.
+`AssessmentFailed`, `BcsInventoryPartial`, `SecureStoreInventoryPartial`) are the same in both modes.
 
 The alerts whose meaning or severity changes have their own words in this mode:
 

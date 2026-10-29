@@ -53,6 +53,7 @@ report pack, plus a dedicated farm-solution report, to the output folder:
 | `*-managedmetadata-*.csv` / `*-managedmetadata-*.json` | Managed metadata columns by list, following the SMAT Managed Metadata Columns report. One row per list or library with at least one visible managed metadata column. |
 | `*-externallists-*.csv` / `*-externallists-*.json` | External lists by list, following the SMAT External List report. One row per list backed by a Business Connectivity Services (BCS) external content type, with its BCS binding. |
 | `*-bcs-*.csv` / `*-bcs-*.json` | BCS LOB systems of the farm, following the SMAT BCS report. One row per LOB system, with its type, instances and entities. |
+| `*-securestore-*.csv` / `*-securestore-*.json` | Secure Store target applications of the farm, following the SMAT Secure Store report. One row per target application, with its name, display name, contact e-mail address, type, credential management URL and ticket time-out. The contact e-mail address is personal data, so it is not part of the HTML report. |
 | `*-sharepointalerts-*.csv` / `*-sharepointalerts-*.json` | SharePoint alerts ("Alert Me" subscriptions) by alert, following the SMAT Alerts report. One row per alert, with where it applies, what triggers it, how often it is sent and who owns it. Not the risk alerts of `*-alerts-*`. They contain the login names of the owners, unless `SharePointAlerts.IncludeUserLogin` is `$false`, so they are not part of the HTML report. |
 
 ### Site collections left out of the inventory
@@ -104,8 +105,8 @@ OWASP states that no CSV sanitization is safe for every spreadsheet. Two things 
 
 The HTML report also includes configured authentication by web application/zone,
 an alerts section that groups the alerts by type with what to do about each, a content-type
-summary, a managed metadata section, an external list section and a BCS application
-section. Authentication errors stop the scan rather than silently
+summary, a managed metadata section, an external list section, a BCS application section
+and a Secure Store section. Authentication errors stop the scan rather than silently
 producing Windows-only results. Unrecognized/federated providers are flagged for identity
 review; a missing provider identity leaves `HasFbaZone` unknown unless FBA was positively
 detected in another provider or zone.
@@ -257,9 +258,9 @@ folder can be moved, zipped and sent. The manifest lists the pages in `Files.Inv
   type in the search box to find a site collection by name, URL, template or signal; the count
   next to them says how many site collections are shown.
 - **Farm solutions, authentication, web application policies, content types, managed
-  metadata, external lists and BCS applications** follow. The managed metadata, external list,
-  BCS, farm solution and full-trust site tables show at most 200 rows and say how many are not
-  shown and which files hold all of them. The content types are not listed in the report,
+  metadata, external lists, BCS applications and Secure Store applications** follow. The
+  managed metadata, external list, BCS, Secure Store, farm solution and full-trust site tables
+  show at most 200 rows and say how many are not shown and which files hold all of them. The content types are not listed in the report,
   because there are thousands of them: it shows how many definitions and list bindings there
   are, and the `*-contenttypes-*` files hold every row.
 
@@ -351,6 +352,67 @@ In the example configuration a site with external lists is classed **Blocking** 
 4), like a site with InfoPath forms, because the scenario has to be rebuilt. The site
 collection itself can still be migrated without those lists. Remove `ExternalListCount`
 from `BlockingSignals` to treat it as remediation instead.
+
+### Secure Store applications
+
+The Secure Store Service stores credentials and maps them to the identity of a user or a group.
+A *target application* is one of these mappings, and the solutions refer to it by its ID: a BCS
+external list, an Excel Services data connection, a PerformancePoint data source and the like.
+Secure Store applications are not migrated to SharePoint Online, so the ones that are still
+needed have to be created again in the target. The `*-securestore-*` files hold one row per
+target application, like the SMAT Secure Store report:
+
+| Field | Description |
+| --- | --- |
+| `WebApplicationUrls` | The web applications that use the Secure Store, separated by `; ` |
+| `SecureStoreProxyName` / `SecureStoreProxyId` | The Secure Store proxy that those web applications use. A store is identified by its proxy, so web applications that share one report its applications once |
+| `Name` | The target application ID: the unique name that the solutions use to refer to it (SMAT calls it both `ApplicationID` and `Name`) |
+| `FriendlyName` | The display name |
+| `ContactEmail` | The contact e-mail address of the application. It is personal data: it is in these files only, never in the HTML report |
+| `ApplicationType` | `Individual`, `Group`, `IndividualWithTicketing`, `GroupWithTicketing`, `RestrictedIndividual` or `RestrictedGroup`. The target only supports the Group Restricted type, which is `RestrictedGroup` |
+| `CredentialManagementUrl` | The URL where the users manage their credentials, when the application has one |
+| `TicketTimeoutMinutes` | The ticket time-out in minutes: from 1 for a type with tickets, 0 for the others ([MS-SSWPS](https://learn.microsoft.com/en-us/openspecs/sharepoint_protocols/ms-sswps/bbd7588a-abb2-46ab-96f3-fe4d027b8c3d)) |
+
+The Secure Store service application of each web application is found through the service
+application proxy group of the web application, and read with `Get-SPSecureStoreApplication`
+through the service context of that group, for the default (non-tenant) partition. No site
+collection is needed, so a web application without any site collection is read too, and a web
+application whose proxy group has no Secure Store proxy simply has no Secure Store (when no web
+application has one at all, the run log says so: a farm without the Secure Store service has none,
+and a proxy type that is not recognized would look the same). Web applications that share a
+Secure Store proxy report its applications once, with every web application that sees it. A
+service context binds the default Secure Store proxy of its group, so that proxy identifies the
+store: a group that holds several is read through its default one, and groups that hold the same
+proxies with other defaults are read once each. A proxy that is the default of no group that was
+read cannot be read, and neither can the applications of a group whose default cannot be told:
+the report is partial. The fields of the applications and the credentials are never read, and no
+external system is contacted.
+
+A web application, proxy or application that cannot be read is reported as a warning in the run
+log and marks the Secure Store report partial: the `SecureStoreInventoryPartial` alert,
+`Summary.SecureStoreInventoryComplete` in the manifest and a note in the HTML report say that
+Secure Store applications may be missing.
+
+**Run the inventory as an administrator of the Secure Store service application.** The service
+lists the target applications that the caller administers, and all of them only for a caller with
+the permission of a service administrator, so an account that does not administer the Secure
+Store gets a shorter list, with no error that the inventory could see. Compare the number of rows
+with the Secure Store page of Central Administration.
+
+To plan the work:
+
+1. List the applications in `*-securestore-*`, and ask the owners of the solutions that use them
+   which ones are still needed. The `*-externallists-*` and `*-bcs-*` files tell which external
+   lists and LOB systems rely on one.
+2. Create the ones that are needed in the Secure Store of the target during the migration tests,
+   as Group Restricted applications, and enter their credentials again: the inventory does not
+   read credentials and they are not migrated.
+3. After the migration, check that the solutions that use them work as expected.
+
+The member names of the object that `Get-SPSecureStoreApplication` returns are not documented, so
+the inventory reads the ones of the contract of the service and of the parameters of
+`New-SPSecureStoreTargetApplication`. If a farm names them differently, the warning of the run
+lists the members that the object has.
 
 ### SharePoint alerts
 

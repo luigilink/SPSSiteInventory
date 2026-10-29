@@ -20,6 +20,7 @@
         'Get-SPSInstalledProductVersion'
         'Get-SPSInventorySetting'
         'Get-SPSReadinessCheck'
+        'Get-SPSSecureStoreApplication'
         'Get-SPSWebApplicationAuthentication'
         'Get-SPSWebApplicationPolicy'
         'Get-SPSSiteCustomization'

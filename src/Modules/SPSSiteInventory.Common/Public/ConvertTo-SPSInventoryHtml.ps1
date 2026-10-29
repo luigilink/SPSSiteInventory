@@ -97,6 +97,15 @@
         Whether the BCS inventory could be read in full. When false, the BCS section says
         that BCS applications may be missing.
 
+        .PARAMETER SecureStoreApplications
+        Optional Secure Store target application rows from Get-SPSSecureStoreApplication. When
+        supplied, renders a Secure Store section. The contact e-mail address of each target
+        application, which is personal data, is not shown: the CSV and JSON files hold it.
+
+        .PARAMETER SecureStoreInventoryComplete
+        Whether the Secure Store inventory could be read in full. When false, the Secure Store
+        section says that Secure Store applications may be missing.
+
         .PARAMETER ExcludedPersonalSiteCount
         Number of personal sites that the scan left out. When above 0, the summary box says so.
 
@@ -128,7 +137,8 @@
 
         .PARAMETER MaxDetailRow
         Maximum number of rows that each detail table shows (farm solutions, sites bound to
-        full-trust code, managed metadata lists, external lists and BCS applications). A table
+        full-trust code, managed metadata lists, external lists, BCS applications and Secure Store
+        applications). A table
         with more rows says how many are not shown and which files hold all of them. Defaults
         to 200. The content types are never listed in the report: it shows a summary, and the
         CSV and JSON files hold every row.
@@ -200,6 +210,15 @@
         [Parameter()]
         [System.Boolean]
         $BcsInventoryComplete = $true,
+
+        [Parameter()]
+        [AllowEmptyCollection()]
+        [System.Object[]]
+        $SecureStoreApplications = @(),
+
+        [Parameter()]
+        [System.Boolean]
+        $SecureStoreInventoryComplete = $true,
 
         [Parameter()]
         [System.Int32]
@@ -394,6 +413,7 @@
     $hasAlertSection = $PSBoundParameters.ContainsKey('Alert')
     $hasExternalListSection = $PSBoundParameters.ContainsKey('ExternalLists')
     $hasBcsSection = $PSBoundParameters.ContainsKey('BcsApplications')
+    $hasSecureStoreSection = $PSBoundParameters.ContainsKey('SecureStoreApplications')
     $hasReadinessSection = $isOnPrem -and $total -gt 0
     $readiness = if ($hasReadinessSection) { Get-SPSModernReadiness -InputObject $siteRecords } else { $null }
 
@@ -699,6 +719,9 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
     }
     if ($hasBcsSection) {
         [void]$navigation.AppendLine('<a href="#bcs-applications">BCS applications</a>')
+    }
+    if ($hasSecureStoreSection) {
+        [void]$navigation.AppendLine('<a href="#secure-store-applications">Secure Store</a>')
     }
 
     $sb = [System.Text.StringBuilder]::new()
@@ -1401,6 +1424,38 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
         }
         [void]$sb.AppendLine('</tbody></table></div>')
         [void]$sb.AppendLine((& $limitNote $BcsApplications.Count 'The BCS CSV and JSON files'))
+    }
+
+    if ($hasSecureStoreSection) {
+        [void]$sb.AppendLine('<h2 id="secure-store-applications">Secure Store applications</h2>')
+        [void]$sb.AppendLine(('<p><strong>{0}</strong> Secure Store target application(s). A target application maps the identity of a user or a group to the credentials of an external system, for example for a BCS external list or an Excel Services data connection. Secure Store applications are not migrated to SharePoint Online: decide with the owners of the solutions that use them which ones are still needed, and create those again in the target, where only the Group Restricted type is supported. Credentials are not read, and the contact e-mail address of each application, which is personal data, is in the CSV and JSON files only.</p>' -f $SecureStoreApplications.Count))
+        if (-not $SecureStoreInventoryComplete) {
+            [void]$sb.AppendLine('<p><strong>Partial collection:</strong> some web applications or target applications could not be read, so Secure Store applications may be missing. Consult the run warnings.</p>')
+        }
+        [void]$sb.AppendLine('<div class="table-scroll"><table class="securestoreapplications">')
+        $secureStoreColumns = @(
+            @{ Key = 'WebApplicationUrls'; Label = 'Web application' }
+            @{ Key = 'SecureStoreProxyName'; Label = 'Secure Store proxy' }
+            @{ Key = 'Name'; Label = 'Target application ID' }
+            @{ Key = 'FriendlyName'; Label = 'Display name' }
+            @{ Key = 'ApplicationType'; Label = 'Type' }
+            @{ Key = 'CredentialManagementUrl'; Label = 'Credential management URL' }
+            @{ Key = 'TicketTimeoutMinutes'; Label = 'Ticket time-out (minutes)' }
+        )
+        [void]$sb.AppendLine('<thead><tr>')
+        foreach ($column in $secureStoreColumns) {
+            [void]$sb.AppendLine(('<th>{0}</th>' -f $column.Label))
+        }
+        [void]$sb.AppendLine('</tr></thead><tbody>')
+        foreach ($secureStoreApplication in @($SecureStoreApplications | Select-Object -First $MaxDetailRow)) {
+            [void]$sb.AppendLine('<tr>')
+            foreach ($column in $secureStoreColumns) {
+                [void]$sb.AppendLine(('<td>{0}</td>' -f (ConvertTo-SPSHtmlText -Value $secureStoreApplication.($column.Key))))
+            }
+            [void]$sb.AppendLine('</tr>')
+        }
+        [void]$sb.AppendLine('</tbody></table></div>')
+        [void]$sb.AppendLine((& $limitNote $SecureStoreApplications.Count 'The Secure Store CSV and JSON files'))
     }
 
     $script = @'

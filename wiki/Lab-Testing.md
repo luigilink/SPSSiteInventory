@@ -111,6 +111,7 @@ Notes:
 The lab does not build these, because they need services, packages or farm-level changes that a script should not make. Build them by hand when you want to test them:
 
 - external lists and BCS applications (a Business Data Connectivity model and an external content type);
+- Secure Store applications (a target application in the Secure Store service application, for example `New-SPSecureStoreTargetApplication`): the report is read once for the farm, not per site collection, so check the `*-securestore-*` files after a run, as the account of the inventory, and compare them with the Secure Store page of Central Administration;
 - managed metadata columns (a term store and a term set);
 - SharePoint 2013 workflows (Workflow Manager), and running workflow instances;
 - SharePoint add-ins and app webs (an app catalog);

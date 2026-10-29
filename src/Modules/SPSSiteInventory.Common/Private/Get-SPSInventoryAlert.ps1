@@ -6,8 +6,9 @@
         .DESCRIPTION
         Turns the signals of each scored record into alerts: one per site collection and
         signal, one per web application for the policy and browser file handling signals, and
-        one per BCS LOB system. A failed or partial assessment and a failed web application
-        enumeration are alerts too, so a gap in the inventory is never silent.
+        one per BCS LOB system and per Secure Store target application. A failed or partial
+        assessment and a failed web application enumeration are alerts too, so a gap in the
+        inventory is never silent.
 
         Each alert gets its severity, explanation, remediation and Microsoft Learn reference
         from the alert catalog (see Get-SPSAlertCatalog), so the same signal always gives the
@@ -27,6 +28,15 @@
         .PARAMETER BcsInventoryComplete
         Whether the BCS inventory could be read in full. It only matters when
         BcsApplication is supplied: when false, a BcsInventoryPartial alert is raised.
+
+        .PARAMETER SecureStoreApplication
+        Optional Secure Store target application rows from Get-SPSSecureStoreApplication. One
+        alert is raised per target application.
+
+        .PARAMETER SecureStoreInventoryComplete
+        Whether the Secure Store inventory could be read in full. It only matters when
+        SecureStoreApplication is supplied: when false, a SecureStoreInventoryPartial alert is
+        raised.
 
         .PARAMETER TargetMode
         SharePointOnline (the default) or SharePointOnPrem. It chooses the catalog of the alerts.
@@ -52,6 +62,15 @@
         [Parameter()]
         [System.Boolean]
         $BcsInventoryComplete = $true,
+
+        [Parameter()]
+        [AllowEmptyCollection()]
+        [System.Object[]]
+        $SecureStoreApplication = @(),
+
+        [Parameter()]
+        [System.Boolean]
+        $SecureStoreInventoryComplete = $true,
 
         [Parameter()]
         [System.String]
@@ -198,6 +217,14 @@
     }
     if ($PSBoundParameters.ContainsKey('BcsApplication') -and -not $BcsInventoryComplete) {
         $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'BcsInventoryPartial' -Url $('') -Value $($false)))
+    }
+
+    # Secure Store target applications belong to the farm too: one alert per target application.
+    foreach ($secureStoreRow in @($SecureStoreApplication)) {
+        $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'SecureStoreApplication' -Url $(([string]$secureStoreRow.WebApplicationUrls -split '; ')[0]) -Value $([string]$secureStoreRow.Name)))
+    }
+    if ($PSBoundParameters.ContainsKey('SecureStoreApplication') -and -not $SecureStoreInventoryComplete) {
+        $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'SecureStoreInventoryPartial' -Url $('') -Value $($false)))
     }
 
     return $alerts.ToArray()
