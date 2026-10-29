@@ -11,7 +11,9 @@
 
         Each alert gets its severity, explanation, remediation and Microsoft Learn reference
         from the alert catalog (see Get-SPSAlertCatalog), so the same signal always gives the
-        same advice. The function is pure: it reads no farm and writes no file.
+        same advice. The catalog is the one of the target mode: for SharePointOnPrem, the alerts that
+        are only about a migration to SharePoint Online are Low and say so, and the others are worded
+        for the modernization of the farm. The function is pure: it reads no farm and writes no file.
 
         Private because it is an implementation detail of Export-SPSInventoryReport.
 
@@ -25,6 +27,10 @@
         .PARAMETER BcsInventoryComplete
         Whether the BCS inventory could be read in full. It only matters when
         BcsApplication is supplied: when false, a BcsInventoryPartial alert is raised.
+
+        .PARAMETER TargetMode
+        SharePointOnline (the default) or SharePointOnPrem. It chooses the catalog of the alerts.
+        Any other value is rejected, also when there is no record to alert on.
 
         .EXAMPLE
         Get-SPSInventoryAlert -InputObject $scored | Where-Object Severity -eq 'High'
@@ -45,110 +51,130 @@
 
         [Parameter()]
         [System.Boolean]
-        $BcsInventoryComplete = $true
+        $BcsInventoryComplete = $true,
+
+        [Parameter()]
+        [System.String]
+        $TargetMode = 'SharePointOnline'
     )
 
+    $null = Get-SPSTargetProfile -TargetMode $TargetMode
     $alerts = [System.Collections.Generic.List[object]]::new()
     foreach ($record in $InputObject) {
         $scope = if ($null -ne $record.PSObject.Properties['InventoryScope']) { [string]$record.InventoryScope } else { 'SiteCollection' }
         if ($scope -eq 'WebApplication') {
-            $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'WebApplicationEnumerationFailed' -Url $(if ($record.WebAppUrl) { $record.WebAppUrl } else { $record.Url }) -Value $(if ($record.SiteInventoryWarnings) { $record.SiteInventoryWarnings } else { $record.AssessmentWarnings })))
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'WebApplicationEnumerationFailed' -Url $(if ($record.WebAppUrl) { $record.WebAppUrl } else { $record.Url }) -Value $(if ($record.SiteInventoryWarnings) { $record.SiteInventoryWarnings } else { $record.AssessmentWarnings })))
         }
         if ($record.AssessmentStatus -eq 'Failed') {
-            $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'AssessmentFailed' -Url $($record.Url) -Value $($record.AssessmentWarnings)))
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'AssessmentFailed' -Url $($record.Url) -Value $($record.AssessmentWarnings)))
         }
         if ($record.AssessmentStatus -eq 'Partial') {
-            $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'AssessmentPartial' -Url $($record.Url) -Value $($record.AssessmentWarnings)))
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'AssessmentPartial' -Url $($record.Url) -Value $($record.AssessmentWarnings)))
         }
         if ($scope -eq 'SiteCollection' -and [int]$record.Workflow2010Count -gt 0) {
-            $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'Workflow2010' -Url $($record.Url) -Value $([int]$record.Workflow2010Count)))
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'Workflow2010' -Url $($record.Url) -Value $([int]$record.Workflow2010Count)))
         }
         if ($scope -eq 'SiteCollection' -and [int]$record.Workflow2010RunningInstanceCount -gt 0) {
-            $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'Workflow2010Running' -Url $($record.Url) -Value $([int]$record.Workflow2010RunningInstanceCount)))
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'Workflow2010Running' -Url $($record.Url) -Value $([int]$record.Workflow2010RunningInstanceCount)))
         }
         if ($scope -eq 'SiteCollection' -and [int]$record.Workflow2013Count -gt 0) {
-            $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'Workflow2013' -Url $($record.Url) -Value $([int]$record.Workflow2013Count)))
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'Workflow2013' -Url $($record.Url) -Value $([int]$record.Workflow2013Count)))
         }
         if ($scope -eq 'SiteCollection' -and [int]$record.Workflow2013RunningInstanceCount -gt 0) {
-            $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'Workflow2013Running' -Url $($record.Url) -Value $([int]$record.Workflow2013RunningInstanceCount)))
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'Workflow2013Running' -Url $($record.Url) -Value $([int]$record.Workflow2013RunningInstanceCount)))
         }
         if ($scope -eq 'SiteCollection' -and [int]$record.AppInstanceCount -gt 0) {
-            $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'AppInstances' -Url $($record.Url) -Value $([int]$record.AppInstanceCount)))
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'AppInstances' -Url $($record.Url) -Value $([int]$record.AppInstanceCount)))
         }
         if ($scope -eq 'SiteCollection' -and [int]$record.AppWebCount -gt 0) {
-            $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'AppWebs' -Url $($record.Url) -Value $([int]$record.AppWebCount)))
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'AppWebs' -Url $($record.Url) -Value $([int]$record.AppWebCount)))
         }
         if ($scope -eq 'SiteCollection' -and ([bool]$record.PublishingInfrastructureEnabled -or [int]$record.PublishingWebCount -gt 0)) {
-            $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'PublishingSite' -Url $($record.Url) -Value $([int]$record.PublishingWebCount)))
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'PublishingSite' -Url $($record.Url) -Value $([int]$record.PublishingWebCount)))
         }
         if ($scope -eq 'SiteCollection' -and [int]$record.PublishingPageCount -gt 0) {
-            $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'PublishingPages' -Url $($record.Url) -Value $([int]$record.PublishingPageCount)))
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'PublishingPages' -Url $($record.Url) -Value $([int]$record.PublishingPageCount)))
         }
         if ($scope -eq 'SiteCollection' -and [int]$record.CustomizedPageCount -gt 0) {
-            $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'CustomizedPages' -Url $($record.Url) -Value $([int]$record.CustomizedPageCount)))
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'CustomizedPages' -Url $($record.Url) -Value $([int]$record.CustomizedPageCount)))
+        }
+        if ($scope -eq 'SiteCollection' -and [int]$record.AlternateCssUrlCount -gt 0) {
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'AlternateCssUrl' -Url $($record.Url) -Value $([int]$record.AlternateCssUrlCount)))
+        }
+        if ($scope -eq 'SiteCollection' -and [int]$record.XsltListViewCount -gt 0) {
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'XsltListViews' -Url $($record.Url) -Value $([int]$record.XsltListViewCount)))
+        }
+        if ($scope -eq 'SiteCollection' -and [int]$record.ScriptWebPartCount -gt 0) {
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'ScriptWebParts' -Url $($record.Url) -Value $([int]$record.ScriptWebPartCount)))
+        }
+        if ($scope -eq 'SiteCollection' -and [int]$record.ClassicExperienceOptOutCount -gt 0) {
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'ModernExperienceOptOut' -Url $($record.Url) -Value $([int]$record.ClassicExperienceOptOutCount)))
+        }
+        if ($scope -eq 'SiteCollection' -and [int]$record.ClassicExperienceListCount -gt 0) {
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'ClassicExperienceLists' -Url $($record.Url) -Value $([int]$record.ClassicExperienceListCount)))
         }
         if ($scope -eq 'SiteCollection' -and [int]$record.CustomPermissionLevelCount -gt 0) {
-            $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'CustomPermissionLevels' -Url $($record.Url) -Value $([int]$record.CustomPermissionLevelCount)))
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'CustomPermissionLevels' -Url $($record.Url) -Value $([int]$record.CustomPermissionLevelCount)))
         }
         if ($scope -eq 'SiteCollection' -and [int]$record.EmailEnabledListCount -gt 0) {
-            $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'EmailEnabledLists' -Url $($record.Url) -Value $([int]$record.EmailEnabledListCount)))
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'EmailEnabledLists' -Url $($record.Url) -Value $([int]$record.EmailEnabledListCount)))
         }
         if ($scope -eq 'SiteCollection' -and [int]$record.HtmlFileCount -gt 0) {
-            $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'HtmlFiles' -Url $($record.Url) -Value $([int]$record.HtmlFileCount)))
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'HtmlFiles' -Url $($record.Url) -Value $([int]$record.HtmlFileCount)))
         }
         if ($scope -eq 'SiteCollection' -and [int]$record.ManagedMetadataListCount -gt 0) {
-            $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'ManagedMetadataColumns' -Url $($record.Url) -Value $([int]$record.ManagedMetadataListCount)))
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'ManagedMetadataColumns' -Url $($record.Url) -Value $([int]$record.ManagedMetadataListCount)))
         }
         if ($scope -eq 'SiteCollection' -and [int]$record.ExternalListCount -gt 0) {
-            $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'ExternalLists' -Url $($record.Url) -Value $([int]$record.ExternalListCount)))
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'ExternalLists' -Url $($record.Url) -Value $([int]$record.ExternalListCount)))
         }
         if ($scope -eq 'SiteCollection' -and [int]$record.SharePointAlertCount -gt 0) {
-            $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'AlertSubscriptions' -Url $($record.Url) -Value $([int]$record.SharePointAlertCount)))
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'AlertSubscriptions' -Url $($record.Url) -Value $([int]$record.SharePointAlertCount)))
         }
         if ($scope -eq 'SiteCollection' -and [bool]$record.IsUnsupportedSiteTemplate) {
-            $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'UnsupportedSiteTemplate' -Url $($record.Url) -Value $($record.Template) -Message ([string]$record.TemplateCompatibilityReason)))
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'UnsupportedSiteTemplate' -Url $($record.Url) -Value $($record.Template) -Message ([string]$record.TemplateCompatibilityReason)))
         }
         if ($scope -eq 'SiteCollection' -and -not [bool]$record.IsUnsupportedSiteTemplate -and [string]$record.TemplateCompatibility -eq 'Review') {
-            $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'TemplateCompatibilityReview' -Url $($record.Url) -Value $($record.Template) -Message ([string]$record.TemplateCompatibilityReason)))
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'TemplateCompatibilityReview' -Url $($record.Url) -Value $($record.Template) -Message ([string]$record.TemplateCompatibilityReason)))
         }
         if ($scope -eq 'SiteCollection' -and [bool]$record.TemplateLanguageReviewRequired) {
-            $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'TemplateLanguageReview' -Url $($record.Url) -Value $(if ($null -ne $record.TemplateLanguageLcid) { [int]$record.TemplateLanguageLcid } else { $null }) -Message ([string]$record.TemplateLanguageReason)))
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'TemplateLanguageReview' -Url $($record.Url) -Value $(if ($null -ne $record.TemplateLanguageLcid) { [int]$record.TemplateLanguageLcid } else { $null }) -Message ([string]$record.TemplateLanguageReason)))
         }
         if ($scope -eq 'SiteCollection' -and [int]$record.InfoPathFormCount -gt 0) {
-            $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'InfoPath' -Url $($record.Url) -Value $([int]$record.InfoPathFormCount)))
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'InfoPath' -Url $($record.Url) -Value $([int]$record.InfoPathFormCount)))
         }
         if ($scope -eq 'SiteCollection' -and [bool]$record.UsesFullTrustCode) {
-            $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'FullTrustCode' -Url $($record.Url) -Value $($true)))
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'FullTrustCode' -Url $($record.Url) -Value $($true)))
         }
         if ([bool]$record.HasFbaZone) {
-            $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'FbaConfigured' -Url $($record.Url) -Value $($true)))
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'FbaConfigured' -Url $($record.Url) -Value $($true)))
         }
         if ($scope -eq 'SiteCollection' -and [bool]$record.HasNoAccessLock) {
-            $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'NoAccessSite' -Url $($record.Url) -Value $($record.SiteLockState)))
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'NoAccessSite' -Url $($record.Url) -Value $($record.SiteLockState)))
         }
         elseif ($scope -eq 'SiteCollection' -and [bool]$record.IsLockedSite) {
-            $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'LockedSite' -Url $($record.Url) -Value $($record.SiteLockState)))
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'LockedSite' -Url $($record.Url) -Value $($record.SiteLockState)))
         }
         if ($scope -eq 'SiteCollection' -and [int]$record.IrmEnabledListCount -gt 0) {
-            $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'IrmEnabledLists' -Url $($record.Url) -Value $([int]$record.IrmEnabledListCount)))
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'IrmEnabledLists' -Url $($record.Url) -Value $([int]$record.IrmEnabledListCount)))
         }
         if ($scope -eq 'SiteCollection' -and [bool]$record.IsLargeSite) {
-            $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'LargeSite' -Url $($record.Url) -Value $($record.SizeGB)))
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'LargeSite' -Url $($record.Url) -Value $($record.SizeGB)))
         }
         if ($scope -eq 'SiteCollection' -and [int]$record.LargeListCount -gt 0) {
-            $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'LargeLists' -Url $($record.Url) -Value $([int]$record.LargeListCount)))
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'LargeLists' -Url $($record.Url) -Value $([int]$record.LargeListCount)))
         }
         if ($scope -eq 'SiteCollection' -and [int]$record.LargeListViewCount -gt 0) {
-            $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'LargeListViews' -Url $($record.Url) -Value $([int]$record.LargeListViewCount)))
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'LargeListViews' -Url $($record.Url) -Value $([int]$record.LargeListViewCount)))
         }
         if ($scope -eq 'SiteCollection' -and [int]$record.CheckedOutFileCount -gt 0) {
-            $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'CheckedOutFiles' -Url $($record.Url) -Value $([int]$record.CheckedOutFileCount)))
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'CheckedOutFiles' -Url $($record.Url) -Value $([int]$record.CheckedOutFileCount)))
         }
         if ($scope -eq 'SiteCollection' -and [int]$record.FileVersionCount -gt 0) {
-            $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'FileVersions' -Url $($record.Url) -Value $([int]$record.FileVersionCount)))
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'FileVersions' -Url $($record.Url) -Value $([int]$record.FileVersionCount)))
         }
         if ($scope -eq 'SiteCollection' -and [int]$record.SubsiteCount -gt 0) {
-            $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'Subsites' -Url $($record.Url) -Value $([int]$record.SubsiteCount)))
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'Subsites' -Url $($record.Url) -Value $([int]$record.SubsiteCount)))
         }
     }
 
@@ -156,19 +182,19 @@
     foreach ($group in ($InputObject | Where-Object { $_.WebAppUrl } | Group-Object -Property WebAppUrl)) {
         $webAppRecord = $group.Group[0]
         if ([int]$webAppRecord.WebAppPolicyCount -gt 0) {
-            $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'WebApplicationPolicies' -Url $($webAppRecord.WebAppUrl) -Value $([int]$webAppRecord.WebAppPolicyCount)))
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'WebApplicationPolicies' -Url $($webAppRecord.WebAppUrl) -Value $([int]$webAppRecord.WebAppPolicyCount)))
         }
         if ([string]$webAppRecord.BrowserFileHandling -eq 'Permissive') {
-            $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'PermissiveBrowserFileHandling' -Url $($webAppRecord.WebAppUrl) -Value $('Permissive')))
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'PermissiveBrowserFileHandling' -Url $($webAppRecord.WebAppUrl) -Value $('Permissive')))
         }
     }
 
     # BCS applications belong to the farm, so alert once per LOB system rather than per site.
     foreach ($bcsApplicationRow in @($BcsApplication)) {
-        $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'BcsApplication' -Url $(([string]$bcsApplicationRow.WebApplicationUrls -split '; ')[0]) -Value $([string]$bcsApplicationRow.LobSystemName)))
+        $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'BcsApplication' -Url $(([string]$bcsApplicationRow.WebApplicationUrls -split '; ')[0]) -Value $([string]$bcsApplicationRow.LobSystemName)))
     }
     if ($PSBoundParameters.ContainsKey('BcsApplication') -and -not $BcsInventoryComplete) {
-        $alerts.Add((ConvertTo-SPSInventoryAlert -AlertType 'BcsInventoryPartial' -Url $('') -Value $($false)))
+        $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'BcsInventoryPartial' -Url $('') -Value $($false)))
     }
 
     return $alerts.ToArray()

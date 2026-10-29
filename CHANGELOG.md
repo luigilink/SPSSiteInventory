@@ -82,8 +82,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stays 0 without marking the site collection partial. The two example configurations weigh the
   signals: lightly for a migration to SharePoint Online, and as the work of modernizing a farm for
   `SharePointOnPrem`. The aggregate itself weighs nothing, or each blocker would count twice. The
-  lab has five scenarios for them, and the wiki pages "Usage" and "Configuration" document them.
-  The HTML report has no section for them yet, and they raise no alert yet. (#25)
+  lab has five scenarios for them, and the wiki pages "Usage" and "Configuration" document them. (#25)
+- The report of the `SharePointOnPrem` mode speaks of the modernization of the farm, not of a
+  migration. The alert catalog has five new alert types for the signals of the modern experience
+  (`AlternateCssUrl`, `XsltListViews`, `ScriptWebParts`, `ModernExperienceOptOut` and
+  `ClassicExperienceLists`), raised in both modes, and the mode has a catalog of its own, with the same
+  types in the same order. The alerts that are only about a migration to SharePoint Online (external
+  lists and BCS, incoming e-mail, forms-based authentication, IRM, unsupported templates, SharePoint
+  alerts, permission levels, large sites, checked-out files and file versions, the web application
+  policies and the like) are `Low` and start by saying so, with the original text after it. The
+  InfoPath forms and the SharePoint 2010 workflows stay `High`, with the date from which Microsoft no
+  longer supports them in SharePoint Server Subscription Edition (14 July 2026) and a link to the page
+  that says so; the full-trust code, which is rebuilt with the SharePoint Framework and runs until
+  then, and the SharePoint 2013 workflows, whose engine SharePoint Workflow Manager replaces, are
+  `Medium`; the classic pages, the add-ins, the large lists and the subsites have the words of the
+  modernization. The risk indicators of the HTML report are ranked with the severities of the mode, the
+  report has a *Modern experience readiness* section (how many site collections have a blocker, how
+  many have each kind of blocker, and the 100 that have the most kinds), and the details of a site
+  collection list its signals of the modern experience, in both modes. The wiki page "Alerts" documents
+  the new alerts and the catalog of the mode. (#25)
 
 ### Changed
 

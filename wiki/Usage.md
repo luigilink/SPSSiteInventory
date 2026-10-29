@@ -46,7 +46,7 @@ report pack, plus a dedicated farm-solution report, to the output folder:
 | `*-publishing-*.json` | Publishing and customized-page dataset (`PublishingInfrastructureEnabled`, `PublishingWebCount`, `PublishingPageCount`, `PublishingPageLayoutCount`/`PublishingPageLayoutExamples`, `CustomizedPageCount`/`CustomizedPageExamples`, status, category). |
 | `*-irm-locks-*.json` | Security/lock dataset (`IrmEnabledListCount`, `SiteLockState`, `IsLockedSite`, `HasNoAccessLock`). |
 | `*-large-content-*.json` | Large-content risk dataset (`IsLargeSite`, large lists/views, checked-out files, high file-version counts, plus examples). |
-| `*-alerts-*.csv` / `*-alerts-*.json` | Normalized risk alerts extracted from the site signals, each with its severity, an explanation and a remediation hint (and the Microsoft Learn page behind it). One alert per site collection and signal; web application and BCS alerts are written once per web application and per LOB system. The CSV is for Excel, the JSON for automation. The alert types and their advice are listed in [Alerts and remediation](Alerts). |
+| `*-alerts-*.csv` / `*-alerts-*.json` | Normalized risk alerts extracted from the site signals, each with its severity, an explanation and a remediation hint (and the Microsoft Learn page behind it). The `SharePointOnPrem` mode has its own severity and words for them. One alert per site collection and signal; web application and BCS alerts are written once per web application and per LOB system. The CSV is for Excel, the JSON for automation. The alert types and their advice are listed in [Alerts and remediation](Alerts). |
 | `*-solutions-*.csv` | Farm-solution (WSP) inventory for Excel; one row per solution, with the feature scopes/ids flattened. |
 | `*-solutions-*.json` | Farm-solution (WSP) inventory for automation, with the feature scopes/ids kept as arrays. |
 | `*-contenttypes-*.csv` / `*-contenttypes-*.json` | Content-type definitions and list bindings, including standard types. One row per web definition or list binding, not per item. |
@@ -233,6 +233,15 @@ folder can be moved, zipped and sent. The manifest lists the pages in `Files.Inv
     again, or the button that appears next to the filters, to remove the filter.
   - The **alerts** are lines with their severity, name and number of affected site collections.
     Open one to read what it means, what to do about it and the Microsoft Learn page.
+  - The **modern experience readiness** section is in the report of the
+    [`SharePointOnPrem` mode](Configuration#targetmode-section) only, after the alerts. It says how
+    many assessed site collections have a blocker of the modern experience (a custom master page,
+    an alternate CSS URL, publishing features, XSLT list views, script web parts, an opt-out of the
+    modern list experience, lists forced to classic), how many site collections have each kind and how
+    many items are behind it, and lists the site collections that have a blocker, the most kinds
+    first, then the highest score, at most 100 of them. A site collection whose assessment is
+    partial is marked, because its counts are lower bounds. The `ModernBlockerCount` and
+    `ModernBlockers` columns of the CSV and JSON files hold the same for all of them.
   - The **migration wave plan** gives, for each wave, the number of site collections, their
     content and how many of them are partial. The `Needs review` wave holds the Simple site
     collections whose assessment is partial, and the summary says how many wait there.

@@ -59,10 +59,13 @@ Describe 'The wiki page on the target mode' {
         }
     }
 
-    It 'says that the alerts and the HTML section of the modern-readiness signals are not there yet, so that the page does not promise them' {
-        $script:Section | Should -Match 'no section for them yet'
-        $script:Section | Should -Match 'raise no alert yet'
-        $script:Section | Should -Match 'still those of a migration to SharePoint Online'
+    It 'says that the alerts of the mode and the readiness section of the report are there, and what the mode does to an alert of a migration' {
+        $script:Section | Should -Match '\*Modern experience readiness\* section'
+        $script:Section | Should -Match 'raise their\s+own \[alerts\]\(Alerts\)'
+        $script:Section | Should -Match 'is `Low` and says that it is only about a migration to SharePoint\s+Online'
+        $script:Section | Should -Match '\[Alerts in the SharePointOnPrem mode\]\(Alerts#alerts-in-the-sharepointonprem-mode\)'
+        $script:Section | Should -Not -Match 'no section for them yet'
+        $script:Section | Should -Not -Match 'raise no alert yet'
     }
 
     It 'dates the end of support that it cites, 14 July 2026, in the past tense, since that date has passed' {

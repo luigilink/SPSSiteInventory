@@ -85,4 +85,33 @@ Describe 'Get-SPSModernBlocker' {
     It 'rejects a call without signals' {
         { & $script:Module { Get-SPSModernBlocker -Signals $null } } | Should -Throw
     }
+
+    It 'gives one object per kind found, with its label, its items and its unit, and the text of the summary' {
+        $result = Get-Blocker -Signals @{
+            CustomMasterPage = $true; AlternateCssUrlCount = 2; PublishingWebCount = 3; XsltListViewCount = 4
+            ScriptWebPartCount = 1; ClassicExperienceOptOutCount = 2; ClassicExperienceListCount = 6
+        }
+
+        @($result.Kind) | Should -HaveCount 7
+        @($result.Kind.Name) | Should -Be @($result.Names)
+        (@($result.Kind.Text) -join '; ') | Should -Be $result.Summary
+        $master = $result.Kind | Where-Object Name -eq 'CustomMasterPage'
+        $master.Label | Should -Be 'Custom master page'
+        $master.Items | Should -BeNullOrEmpty
+        $master.Unit | Should -Be ''
+        $css = $result.Kind | Where-Object Name -eq 'AlternateCssUrl'
+        $css.Label | Should -Be 'Alternate CSS URL'
+        $css.Items | Should -Be 2
+        $css.Unit | Should -Be 'web(s)'
+        ($result.Kind | Where-Object Name -eq 'Publishing').Items | Should -Be 3
+        ($result.Kind | Where-Object Name -eq 'XsltListView').Unit | Should -Be 'view(s)'
+        ($result.Kind | Where-Object Name -eq 'ScriptWebPart').Unit | Should -Be 'web part(s)'
+        ($result.Kind | Where-Object Name -eq 'ClassicExperienceOptOut').Items | Should -Be 2
+        ($result.Kind | Where-Object Name -eq 'ClassicExperienceList').Label | Should -Be 'Lists forced to classic'
+    }
+
+    It 'gives no kind, and no items for a publishing site collection that has no webs with the feature, when nothing is found' {
+        @((Get-Blocker -Signals @{}).Kind) | Should -HaveCount 0
+        ((Get-Blocker -Signals @{ PublishingInfrastructureEnabled = $true }).Kind | Where-Object Name -eq 'Publishing').Items | Should -Be 0
+    }
 }

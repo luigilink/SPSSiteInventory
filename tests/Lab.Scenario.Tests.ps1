@@ -257,6 +257,10 @@ Describe 'The lab scenarios' {
 Describe 'The scenarios of the modern-readiness signals' {
     BeforeAll {
         $script:ModernScenario = @('alternate-css', 'xslt-view', 'script-web-part', 'modern-opt-out', 'forced-classic')
+        $script:ModernAlert = @{
+            'alternate-css' = 'AlternateCssUrl'; 'xslt-view' = 'XsltListViews'; 'script-web-part' = 'ScriptWebParts'
+            'modern-opt-out' = 'ModernExperienceOptOut'; 'forced-classic' = 'ClassicExperienceLists'
+        }
         $script:Passing = @{
             'alternate-css'   = [PSCustomObject]@{ AlternateCssUrlCount = 1; AlternateCssUrlExamples = 'https://lab.contoso.local/sites/spslab-alternate-css (/sites/spslab-alternate-css/LabStyles/lab.css)'; ModernBlockerCount = 1 }
             'xslt-view'       = [PSCustomObject]@{ XsltListViewCount = 1; XsltListViewExamples = 'LabXslList/LabXslView'; ModernBlockerCount = 1 }
@@ -322,8 +326,18 @@ Describe 'The scenarios of the modern-readiness signals' {
         foreach ($name in $script:ModernScenario) {
             $scenario = $script:Scenario | Where-Object { $_.Name -eq $name }
             foreach ($expectation in @($scenario.Expect)) {
-                (Test-SPSLabExpectation -Expectation $expectation -Record $script:Passing[$name] -Alert @()).Status | Should -Be 'PASS' -Because "$name expects $($expectation.Property)"
+                (Test-SPSLabExpectation -Expectation $expectation -Record $script:Passing[$name] -Alert @($script:ModernAlert[$name])).Status | Should -Be 'PASS' -Because "$name expects $($expectation.Property)$($expectation.Alert)"
             }
+        }
+    }
+
+    It 'expect the alert of the signal, which the inventory raises for it, and fail without it' {
+        foreach ($name in $script:ModernScenario) {
+            $scenario = $script:Scenario | Where-Object { $_.Name -eq $name }
+            $alert = @($scenario.Expect | Where-Object { $_.ContainsKey('Alert') -and -not $_.Absent })
+            $alert | Should -HaveCount 1 -Because $name
+            $alert[0].Alert | Should -Be $script:ModernAlert[$name]
+            (Test-SPSLabExpectation -Expectation $alert[0] -Record $script:Passing[$name] -Alert @()).Status | Should -Be 'FAIL' -Because $name
         }
     }
 

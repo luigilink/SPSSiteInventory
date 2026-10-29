@@ -118,8 +118,10 @@
 
         .PARAMETER TargetMode
         SharePointOnline (the default) or SharePointOnPrem, from the TargetMode setting. The HTML
-        report uses it for the names of the categories and the framing, and the manifest records it
-        (Summary.TargetMode). Any other value is rejected before a file is written.
+        report uses it for the names of the categories and the framing (and, for SharePointOnPrem,
+        for the Modern experience readiness section), the alerts files and the HTML report use the
+        alert catalog of the mode, and the manifest records it (Summary.TargetMode). Any other value
+        is rejected before a file is written.
 
         .EXAMPLE
         Export-SPSInventoryReport -InputObject $scored -OutputFolder C:\Inventory
@@ -353,7 +355,7 @@
         }
     )
 
-    $alertParams = @{ InputObject = @($records) }
+    $alertParams = @{ InputObject = @($records); TargetMode = $targetProfile.TargetMode }
     if ($PSBoundParameters.ContainsKey('BcsApplications')) {
         $alertParams['BcsApplication'] = @($BcsApplications)
         $alertParams['BcsInventoryComplete'] = $BcsInventoryComplete

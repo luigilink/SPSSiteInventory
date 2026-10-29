@@ -21,12 +21,12 @@ BeforeAll {
         SharePointOnline = @('simple', 'moderate', 'complex', 'blocking')
         SharePointOnPrem = @('modern-ready', 'light-remediation', 'rebuild-spfx', 'blocked')
     }
-    # The last site has full-trust code, a signal of High severity: the group of the high-severity signals is only drawn then.
+    # The last site has InfoPath forms, a signal of High severity in both modes: the group of the high-severity signals is only drawn then.
     function Get-Sites {
         param ([string]$Mode)
         foreach ($category in 1..4) {
             $site = New-Site -Name ('s{0}' -f $category) -Category $category -CategoryName $script:Names[$Mode][$category - 1] -WaveName ('Wave {0}' -f $category)
-            $site | Add-Member -NotePropertyName UsesFullTrustCode -NotePropertyValue ($category -eq 4)
+            $site | Add-Member -NotePropertyName InfoPathFormCount -NotePropertyValue $(if ($category -eq 4) { 1 } else { 0 })
             $site
         }
     }
@@ -161,6 +161,32 @@ Describe 'Export-SPSInventoryReport and the target mode' {
 
         @($rows | ForEach-Object { $_.CategoryName }) | Should -Be $script:Names.SharePointOnPrem
         @($rows | ForEach-Object { $_.Category }) | Should -Be @('1', '2', '3', '4')
+    }
+
+    It 'writes the alerts of the catalog of the mode, the same types in both, and the readiness section in the report of the on-premises mode only' {
+        $records = @(
+            [PSCustomObject]@{
+                InventoryScope = 'SiteCollection'; Url = 'https://intranet/sites/a'; Title = 'A'; WebApp = 'Intranet'; WebAppUrl = 'https://intranet'
+                AssessmentStatus = 'Complete'; Category = 3; CategoryName = 'x'; Score = 4; Wave = 3; WaveName = 'w'; SizeGB = 1; Template = 'STS#0'; Reasons = ''
+                ExternalListCount = 2; InfoPathFormCount = 1; ScriptWebPartCount = 3
+            }
+        )
+
+        $online = Export-SPSInventoryReport -InputObject $records -OutputFolder (Join-Path $TestDrive 'alerts-online') -BaseName 'Online'
+        $onPrem = Export-SPSInventoryReport -InputObject $records -OutputFolder (Join-Path $TestDrive 'alerts-onprem') -BaseName 'OnPrem' -TargetMode 'SharePointOnPrem'
+
+        # No @() around ConvertFrom-Json: Windows PowerShell 5.1 emits a JSON array as one object, which @() would nest.
+        $onlineAlerts = Get-Content -Path $online.AlertsJsonPath -Raw | ConvertFrom-Json
+        $onPremAlerts = Get-Content -Path $onPrem.AlertsJsonPath -Raw | ConvertFrom-Json
+        (@($onPremAlerts.AlertType) -join ',') | Should -Be (@($onlineAlerts.AlertType) -join ',')
+        ($onlineAlerts | Where-Object AlertType -eq 'ExternalLists').Severity | Should -Be 'High'
+        ($onPremAlerts | Where-Object AlertType -eq 'ExternalLists').Severity | Should -Be 'Low'
+        ($onPremAlerts | Where-Object AlertType -eq 'ExternalLists').Message | Should -Match '^Migration to SharePoint Online only\. '
+        ($onPremAlerts | Where-Object AlertType -eq 'InfoPath').Severity | Should -Be 'High'
+        (Get-Content -Path $online.HtmlPath -Raw) | Should -Not -Match 'modern-readiness'
+        (Get-Content -Path $onPrem.HtmlPath -Raw) | Should -Match '<h2 id="modern-readiness">Modern experience readiness</h2>'
+        $importedAlerts = @(Import-Csv -Path $onPrem.AlertsCsvPath)
+        ($importedAlerts | Where-Object AlertType -eq 'ExternalLists').Severity | Should -Be 'Low'
     }
 
     It 'refuses a mode that is not one of the two before it writes a file' {

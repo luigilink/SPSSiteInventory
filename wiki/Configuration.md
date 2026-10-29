@@ -61,6 +61,16 @@ wave mapping that reads `Category` does not change. The mode changes the words:
 - The HTML report: the header says `Target SharePoint on-premises modernization`, the wave plan
   is the *Modernization wave plan*, and the summary of the sites that wait in *Needs review* is
   named after the first category of the mode.
+- The alerts: the catalog of the mode has the same alert types, but what is only about a
+  migration to SharePoint Online is `Low` and says so, and the alerts that matter for the
+  modernization are worded for it, with another severity where the weight of the signal says so
+  (the full-trust code that has to be rebuilt with SPFx is `Medium`, InfoPath and the SharePoint
+  2010 workflows, which SharePoint Server Subscription Edition no longer supports, stay `High`).
+  See [Alerts in the SharePointOnPrem mode](Alerts#alerts-in-the-sharepointonprem-mode). The
+  ranking of the risk indicators of the HTML report follows these severities.
+- The HTML report has a *Modern experience readiness* section, after the alerts: how many site
+  collections have a blocker of the modern experience, how many have each kind, and the site
+  collections that have the most. The report of the default mode does not have it.
 - The log: the warnings that tell you to add a signal to `Scoring.BlockingSignals` because a
   migration to SharePoint Online would be blocked by it (FBA, unsupported templates, NoAccess
   locks, IRM lists, external lists) are not raised in the modernization mode.
@@ -103,11 +113,14 @@ CSS URL (`AlternateCssUrlCount = 1.5` a web), a list view that renders with XSLT
 (`ScriptWebPartCount = 1.5`), an opt-out of the modern list experience
 (`ClassicExperienceOptOutCount = 1.0`) and a list forced to the classic experience
 (`ClassicExperienceListCount = 0.5`), next to the custom master page and the publishing
-features that it already weighs. They are columns of the CSV and JSON reports. The HTML report has
-no section for them yet, and they raise no alert yet. The alerts, their severity and the texts of
-the alert catalog are still those of a migration to SharePoint Online in this version, whatever
-the mode: a signal that the preset does not weigh still raises its alert, with its migration
-wording.
+features that it already weighs. They are columns of the CSV and JSON reports, they raise their
+own [alerts](Alerts), and the *Modern experience readiness* section of the HTML report lists, for
+each site collection, what keeps it in the classic experience.
+
+A signal that the preset does not weigh still raises its alert, so that nothing disappears from
+the inventory, but the alert is `Low` and says that it is only about a migration to SharePoint
+Online. The report of this mode is therefore short on what does not matter for the modernization,
+and long on what does.
 
 ## Custom solution detection
 

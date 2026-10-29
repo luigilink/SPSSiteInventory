@@ -694,6 +694,7 @@ function Get-SPSLabScenario {
                 (Get-SPSLabExpectation AlternateCssUrlCount ge 1)
                 (Get-SPSLabExpectation AlternateCssUrlExamples like '*lab.css*')
                 (Get-SPSLabExpectation ModernBlockerCount ge 1)
+                (Get-SPSLabExpectation -Alert 'AlternateCssUrl')
             )
         })
 
@@ -721,6 +722,7 @@ function Get-SPSLabScenario {
                 (Get-SPSLabExpectation XsltListViewCount ge 1)
                 (Get-SPSLabExpectation XsltListViewExamples like '*LabXslView*')
                 (Get-SPSLabExpectation ModernBlockerCount ge 1)
+                (Get-SPSLabExpectation -Alert 'XsltListViews')
             )
         })
 
@@ -765,6 +767,7 @@ function Get-SPSLabScenario {
                 (Get-SPSLabExpectation ScriptWebPartExamples like '*Script Editor*')
                 (Get-SPSLabExpectation ScriptWebPartExamples like '*Content Editor*')
                 (Get-SPSLabExpectation ModernBlockerCount ge 1)
+                (Get-SPSLabExpectation -Alert 'ScriptWebParts')
             )
         })
 
@@ -788,6 +791,7 @@ function Get-SPSLabScenario {
                 (Get-SPSLabExpectation ClassicExperienceOptOutExamples like '*(site collection)*')
                 (Get-SPSLabExpectation ClassicExperienceOptOutExamples like '*(web)*')
                 (Get-SPSLabExpectation ModernBlockerCount ge 1)
+                (Get-SPSLabExpectation -Alert 'ModernExperienceOptOut')
             )
         })
 
@@ -808,6 +812,7 @@ function Get-SPSLabScenario {
                 (Get-SPSLabExpectation ClassicExperienceListCount ge 1)
                 (Get-SPSLabExpectation ClassicExperienceListExamples like '*LabClassic*')
                 (Get-SPSLabExpectation ModernBlockerCount ge 1)
+                (Get-SPSLabExpectation -Alert 'ClassicExperienceLists')
             )
         })
 

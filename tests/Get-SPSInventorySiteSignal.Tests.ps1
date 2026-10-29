@@ -69,6 +69,11 @@ Describe 'Get-SPSInventorySiteSignal' {
         @{ Field = 'EventReceivers'; Value = 2; Label = 'Custom event receivers'; Expected = '2' }
         @{ Field = 'CustomMasterPage'; Value = $true; Label = 'Custom master page'; Expected = 'Yes' }
         @{ Field = 'CustomizedPageCount'; Value = 4; Label = 'Customized pages'; Expected = '4' }
+        @{ Field = 'AlternateCssUrlCount'; Value = 2; Label = 'Alternate CSS URL (webs)'; Expected = '2' }
+        @{ Field = 'XsltListViewCount'; Value = 3; Label = 'XSLT list views'; Expected = '3' }
+        @{ Field = 'ScriptWebPartCount'; Value = 4; Label = 'Script web parts'; Expected = '4' }
+        @{ Field = 'ClassicExperienceOptOutCount'; Value = 1; Label = 'Opted out of modern lists'; Expected = '1' }
+        @{ Field = 'ClassicExperienceListCount'; Value = 5; Label = 'Lists forced to classic'; Expected = '5' }
         @{ Field = 'AppInstanceCount'; Value = 1; Label = 'App instances'; Expected = '1' }
         @{ Field = 'AppWebCount'; Value = 2; Label = 'App webs'; Expected = '2' }
         @{ Field = 'InfoPathFormCount'; Value = 5; Label = 'InfoPath forms'; Expected = '5' }
@@ -114,6 +119,11 @@ Describe 'Get-SPSInventorySiteSignal' {
 
     It 'gives the examples that go with a count as its Detail' -ForEach @(
         @{ Count = 'CustomizedPageCount'; Examples = 'CustomizedPageExamples'; Label = 'Customized pages' }
+        @{ Count = 'AlternateCssUrlCount'; Examples = 'AlternateCssUrlExamples'; Label = 'Alternate CSS URL (webs)' }
+        @{ Count = 'XsltListViewCount'; Examples = 'XsltListViewExamples'; Label = 'XSLT list views' }
+        @{ Count = 'ScriptWebPartCount'; Examples = 'ScriptWebPartExamples'; Label = 'Script web parts' }
+        @{ Count = 'ClassicExperienceOptOutCount'; Examples = 'ClassicExperienceOptOutExamples'; Label = 'Opted out of modern lists' }
+        @{ Count = 'ClassicExperienceListCount'; Examples = 'ClassicExperienceListExamples'; Label = 'Lists forced to classic' }
         @{ Count = 'AppInstanceCount'; Examples = 'AppInstanceExamples'; Label = 'App instances' }
         @{ Count = 'PublishingPageLayoutCount'; Examples = 'PublishingPageLayoutExamples'; Label = 'Page layouts in use' }
         @{ Count = 'ExternalListCount'; Examples = 'ExternalListExamples'; Label = 'External lists' }
@@ -249,5 +259,16 @@ Describe 'Get-SPSInventorySiteSignal' {
         $labels = @((Get-Signal -Record $record).Label)
 
         $labels | Should -Be @('Template compatibility', 'Site lock', 'Full-trust code', 'FBA configured', 'Publishing pages', 'Large lists', 'Site inventory incomplete')
+    }
+
+    It 'lists the signals of the modern experience with the code and customization ones, before the identity ones' {
+        $record = New-RecordWith @{
+            CustomMasterPage = $true; AlternateCssUrlCount = 1; XsltListViewCount = 2; ScriptWebPartCount = 3
+            ClassicExperienceOptOutCount = 1; ClassicExperienceListCount = 2; CustomizedPageCount = 4; HasFbaZone = $true
+        }
+
+        $labels = @((Get-Signal -Record $record).Label)
+
+        $labels | Should -Be @('Custom master page', 'Alternate CSS URL (webs)', 'XSLT list views', 'Script web parts', 'Opted out of modern lists', 'Lists forced to classic', 'Customized pages', 'FBA configured')
     }
 }

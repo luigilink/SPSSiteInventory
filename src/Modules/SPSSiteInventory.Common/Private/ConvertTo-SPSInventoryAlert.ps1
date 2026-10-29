@@ -27,6 +27,10 @@
         .PARAMETER Message
         Optional message that replaces the catalog message when it is not empty.
 
+        .PARAMETER TargetMode
+        SharePointOnline (the default) or SharePointOnPrem: the catalog of the mode gives the severity
+        and the words of the alert. Any other value is rejected.
+
         .EXAMPLE
         ConvertTo-SPSInventoryAlert -AlertType 'InfoPath' -Url 'https://intranet/sites/hr' -Value 3
     #>
@@ -52,10 +56,14 @@
         [AllowNull()]
         [AllowEmptyString()]
         [System.String]
-        $Message = ''
+        $Message = '',
+
+        [Parameter()]
+        [System.String]
+        $TargetMode = 'SharePointOnline'
     )
 
-    $catalog = Get-SPSAlertCatalog
+    $catalog = Get-SPSAlertCatalog -TargetMode $TargetMode
     if (-not $catalog.Contains($AlertType)) {
         throw "The alert type '$AlertType' is not in the alert catalog."
     }

@@ -105,8 +105,11 @@
 
         .PARAMETER TargetMode
         SharePointOnline (the default) or SharePointOnPrem. It chooses the names of the categories,
-        the names of the table pages of a split report, and the line of the header that says what
-        the report is for. Any other value is rejected.
+        the names of the table pages of a split report, the line of the header that says what
+        the report is for, the severity and the words of the alerts (the catalog of the mode, see
+        Get-SPSAlertCatalog) and the severity of the risk indicators. The SharePointOnPrem report also
+        has a Modern experience readiness section, after the alerts: what keeps each site collection
+        in the classic experience. Any other value is rejected.
 
         .PARAMETER FileName
         The file name of the entry page, for example SPSSiteInventory-PROD-20261028-1146.html.
@@ -296,10 +299,10 @@
     # table. The severity is the one of the alert of the signal in the alert catalog (High blocks or
     # breaks a migration, Medium needs a plan or a check, Low is information to pass on); a signal that
     # has no alert has its own.
-    $alertCatalog = Get-SPSAlertCatalog
+    $alertCatalog = Get-SPSAlertCatalog -TargetMode $targetProfile.TargetMode
     $riskIndicators = @(
         @{ Key = 'full-trust'; Label = 'Sites with full-trust code'; Short = 'full-trust code'; Alert = 'FullTrustCode'; Test = { param($r) [bool]$r.UsesFullTrustCode } }
-        @{ Key = 'custom-farm-feature'; Label = 'Sites with custom farm features'; Short = 'custom farm features'; Severity = 'High'; Test = { param($r) [bool]$r.UsesCustomFarmFeature } }
+        @{ Key = 'custom-farm-feature'; Label = 'Sites with custom farm features'; Short = 'custom farm features'; Severity = $(if ($isOnPrem) { 'Medium' } else { 'High' }); Test = { param($r) [bool]$r.UsesCustomFarmFeature } }
         @{ Key = 'sandbox'; Label = 'Sites with sandbox solutions'; Short = 'sandbox solutions'; Severity = 'Medium'; Test = { param($r) [int]$r.SandboxSolutions -gt 0 } }
         @{ Key = 'custom-master-page'; Label = 'Sites with a custom master page'; Short = 'a custom master page'; Severity = 'Medium'; Test = { param($r) [bool]$r.CustomMasterPage } }
         @{ Key = 'event-receivers'; Label = 'Sites with custom event receivers'; Short = 'custom event receivers'; Severity = 'Medium'; Test = { param($r) [int]$r.EventReceivers -gt 0 } }
@@ -319,6 +322,11 @@
         @{ Key = 'publishing-features'; Label = 'Sites with publishing features'; Short = 'publishing features'; Alert = 'PublishingSite'; Test = { param($r) [bool]$r.PublishingInfrastructureEnabled -or [int]$r.PublishingWebCount -gt 0 } }
         @{ Key = 'publishing-pages'; Label = 'Sites with publishing pages'; Short = 'publishing pages'; Alert = 'PublishingPages'; Test = { param($r) [int]$r.PublishingPageCount -gt 0 } }
         @{ Key = 'customized-pages'; Label = 'Sites with customized pages'; Short = 'customized pages'; Alert = 'CustomizedPages'; Test = { param($r) [int]$r.CustomizedPageCount -gt 0 } }
+        @{ Key = 'alternate-css'; Label = 'Sites with an alternate CSS URL'; Short = 'an alternate CSS URL'; Alert = 'AlternateCssUrl'; Test = { param($r) [int]$r.AlternateCssUrlCount -gt 0 } }
+        @{ Key = 'xslt-views'; Label = 'Sites with XSLT list views'; Short = 'XSLT list views'; Alert = 'XsltListViews'; Test = { param($r) [int]$r.XsltListViewCount -gt 0 } }
+        @{ Key = 'script-web-parts'; Label = 'Sites with script web parts'; Short = 'script web parts'; Alert = 'ScriptWebParts'; Test = { param($r) [int]$r.ScriptWebPartCount -gt 0 } }
+        @{ Key = 'modern-opt-out'; Label = 'Sites that opted out of modern lists'; Short = 'an opt-out of modern lists'; Alert = 'ModernExperienceOptOut'; Test = { param($r) [int]$r.ClassicExperienceOptOutCount -gt 0 } }
+        @{ Key = 'classic-lists'; Label = 'Sites with lists forced to classic'; Short = 'lists forced to classic'; Alert = 'ClassicExperienceLists'; Test = { param($r) [int]$r.ClassicExperienceListCount -gt 0 } }
         @{ Key = 'custom-permission-levels'; Label = 'Sites with custom permission levels'; Short = 'custom permission levels'; Alert = 'CustomPermissionLevels'; Test = { param($r) [int]$r.CustomPermissionLevelCount -gt 0 } }
         @{ Key = 'email-enabled-lists'; Label = 'Sites with e-mail enabled lists'; Short = 'e-mail enabled lists'; Alert = 'EmailEnabledLists'; Test = { param($r) [int]$r.EmailEnabledListCount -gt 0 } }
         @{ Key = 'html-files'; Label = 'Sites with HTML files'; Short = 'HTML files'; Alert = 'HtmlFiles'; Test = { param($r) [int]$r.HtmlFileCount -gt 0 } }
@@ -385,6 +393,8 @@
     $hasAlertSection = $PSBoundParameters.ContainsKey('Alert')
     $hasExternalListSection = $PSBoundParameters.ContainsKey('ExternalLists')
     $hasBcsSection = $PSBoundParameters.ContainsKey('BcsApplications')
+    $hasReadinessSection = $isOnPrem -and $total -gt 0
+    $readiness = if ($hasReadinessSection) { Get-SPSModernReadiness -InputObject $siteRecords } else { $null }
 
     $encTitle = ConvertTo-SPSHtmlText -Value $Title
     $encEnv = ConvertTo-SPSHtmlText -Value $EnvName
@@ -661,6 +671,9 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
     if ($hasAlertSection) {
         [void]$navigation.AppendLine('<a href="#alerts">Alerts</a>')
     }
+    if ($hasReadinessSection) {
+        [void]$navigation.AppendLine('<a href="#modern-readiness">Modern readiness</a>')
+    }
     if ($waveKeys.Count -gt 0) {
         [void]$navigation.AppendLine(('<a href="#wave-plan">{0}</a>' -f $waveNavLabel))
     }
@@ -763,7 +776,7 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
 
     # Alerts grouped by type, with what to do about each.
     if ($hasAlertSection) {
-        $alertCatalog = Get-SPSAlertCatalog
+        $alertCatalog = Get-SPSAlertCatalog -TargetMode $targetProfile.TargetMode
         $severityRank = @{ High = 0; Medium = 1; Low = 2 }
         $alertRows = @($Alert | Where-Object { $null -ne $_ })
         $alertGroups = @(
@@ -809,6 +822,61 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
                     $referenceLink))
                 [void]$sb.AppendLine('</details>')
             }
+            [void]$sb.AppendLine('</div>')
+        }
+    }
+
+    # Modern experience readiness: what keeps each site collection in the classic experience. The modernization
+    # of a farm is the work of removing it, so the report of that mode has a section for it.
+    if ($hasReadinessSection) {
+        [void]$sb.AppendLine('<h2 id="modern-readiness">Modern experience readiness</h2>')
+        if ($readiness.WithBlocker -eq 0) {
+            [void]$sb.AppendLine(('<p class="muted">No assessed site collection has a blocker of the modern experience ({0} assessed).</p>' -f $readiness.Assessed))
+        }
+        else {
+            $readinessNote = ''
+            if ($readiness.NotAssessed -gt 0) {
+                $readinessNote += ' <strong>{0}</strong> site collection(s) whose assessment failed are not counted.' -f $readiness.NotAssessed
+            }
+            if ($partialCount -gt 0) {
+                $readinessNote += ' The counts of a site collection whose assessment is partial are lower bounds.'
+            }
+            [void]$sb.AppendLine(('<p><strong>{0}</strong> of <strong>{1}</strong> assessed site collection(s) have at least one blocker of the modern experience: something that keeps a page or a list in the classic experience, and that has to be rebuilt to leave it. A blocker is counted once per kind, so a site collection with a custom master page and 40 XSLT list views has two.{2}</p>' -f $readiness.WithBlocker, $readiness.Assessed, $readinessNote))
+            [void]$sb.AppendLine('<div class="table-scroll">')
+            [void]$sb.AppendLine('<table class="waves">')
+            [void]$sb.AppendLine('<thead><tr><th>Blocker</th><th class="num">Site collections</th><th class="num">Items</th></tr></thead>')
+            [void]$sb.AppendLine('<tbody>')
+            foreach ($kind in $readiness.Kind) {
+                $itemsText = if ($null -eq $kind.Items) { '-' } elseif ($kind.SiteCount -eq 0) { '-' } else { '{0} {1}' -f ([double]$kind.Items).ToString('0.##', $invariant), $kind.Unit }
+                [void]$sb.AppendLine(('<tr><td>{0}</td><td class="num">{1}</td><td class="num">{2}</td></tr>' -f (ConvertTo-SPSHtmlText -Value $kind.Label), $kind.SiteCount, (ConvertTo-SPSHtmlText -Value $itemsText)))
+            }
+            [void]$sb.AppendLine('</tbody>')
+            [void]$sb.AppendLine('</table>')
+            [void]$sb.AppendLine('</div>')
+            $readinessListNote = 'The site collections that have a blocker, the most kinds first, then the highest score.'
+            if ($readiness.SiteTotal -gt $readiness.Site.Count) {
+                $readinessListNote = 'The <strong>{0}</strong> site collections with the most kinds of blocker are listed below, of <strong>{1}</strong>. The CSV and JSON files carry ModernBlockerCount and ModernBlockers for all of them.' -f $readiness.Site.Count, $readiness.SiteTotal
+            }
+            [void]$sb.AppendLine(('<p class="muted">{0}</p>' -f $readinessListNote))
+            [void]$sb.AppendLine('<div class="table-scroll">')
+            [void]$sb.AppendLine('<table class="waves">')
+            [void]$sb.AppendLine('<thead><tr><th>Site collection</th><th class="num">Kinds</th><th>Blockers</th><th>Category</th></tr></thead>')
+            [void]$sb.AppendLine('<tbody>')
+            foreach ($readinessSite in $readiness.Site) {
+                $readinessCategory = 0
+                if ($null -ne $readinessSite.Category) { $readinessCategory = [int]$readinessSite.Category }
+                $readinessCategoryName = if ($categoryMeta.Contains($readinessCategory)) { $categoryMeta[$readinessCategory].Name } else { [string]$readinessSite.CategoryName }
+                $readinessSiteCell = if ($readinessSite.Title -and $readinessSite.Title -ne $readinessSite.Url) {
+                    '<div class="site-title">{0}</div><div class="site-url">{1}</div>' -f (ConvertTo-SPSHtmlText -Value $readinessSite.Title), (ConvertTo-SPSHtmlText -Value $readinessSite.Url)
+                }
+                else {
+                    '<div class="site-title">{0}</div>' -f (ConvertTo-SPSHtmlText -Value $readinessSite.Url)
+                }
+                $readinessPartial = if ($readinessSite.AssessmentStatus -eq 'Partial') { ' <span class="pill warn">Partial</span>' } else { '' }
+                [void]$sb.AppendLine(('<tr><td>{0}</td><td class="num">{1}</td><td>{2}{3}</td><td><span class="badge b{4}">{5}</span></td></tr>' -f $readinessSiteCell, $readinessSite.Count, (ConvertTo-SPSHtmlText -Value $readinessSite.Text), $readinessPartial, $readinessCategory, (ConvertTo-SPSHtmlText -Value $readinessCategoryName)))
+            }
+            [void]$sb.AppendLine('</tbody>')
+            [void]$sb.AppendLine('</table>')
             [void]$sb.AppendLine('</div>')
         }
     }
@@ -1572,6 +1640,9 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
         [void]$nav.AppendLine(('<a href="{0}#risk-indicators">Risk indicators</a>' -f $entryLink))
         if ($hasAlertSection) {
             [void]$nav.AppendLine(('<a href="{0}#alerts">Alerts</a>' -f $entryLink))
+        }
+        if ($hasReadinessSection) {
+            [void]$nav.AppendLine(('<a href="{0}#modern-readiness">Modern readiness</a>' -f $entryLink))
         }
         if ($waveKeys.Count -gt 0) {
             [void]$nav.AppendLine(('<a href="{0}#wave-plan">{1}</a>' -f $entryLink, $waveNavLabel))

@@ -59,4 +59,36 @@ Describe 'ConvertTo-SPSInventoryAlert' {
     It 'rejects an alert type that is not in the catalog' {
         { New-Alert -Parameters @{ AlertType = 'Nonexistent'; Url = 'u'; Value = 1 } } | Should -Throw "*'Nonexistent' is not in the alert catalog*"
     }
+
+    It 'takes the severity and the words of the catalog of the target mode' {
+        $default = & $script:Module { Get-SPSAlertCatalog }
+        $onPrem = & $script:Module { Get-SPSAlertCatalog -TargetMode 'SharePointOnPrem' }
+
+        $online = New-Alert -Parameters @{ AlertType = 'ExternalLists'; Url = 'u'; Value = 2; TargetMode = 'SharePointOnline' }
+        $local = New-Alert -Parameters @{ AlertType = 'ExternalLists'; Url = 'u'; Value = 2; TargetMode = 'SharePointOnPrem' }
+
+        $online.Severity | Should -Be 'High'
+        $online.Message | Should -Be $default['ExternalLists'].Message
+        $local.Severity | Should -Be 'Low'
+        $local.Message | Should -Be $onPrem['ExternalLists'].Message
+        $local.Remediation | Should -Be $onPrem['ExternalLists'].Remediation
+        $local.Reference | Should -Be $onPrem['ExternalLists'].Reference
+    }
+
+    It 'is the default mode when the mode is not given' {
+        $without = New-Alert -Parameters @{ AlertType = 'FullTrustCode'; Url = 'u'; Value = $true }
+        $with = New-Alert -Parameters @{ AlertType = 'FullTrustCode'; Url = 'u'; Value = $true; TargetMode = 'SharePointOnline' }
+
+        ($with | ConvertTo-Json) | Should -Be ($without | ConvertTo-Json)
+        $without.Severity | Should -Be 'High'
+    }
+
+    It 'still prefers a specific message to the one of the catalog of the mode' {
+        (New-Alert -Parameters @{ AlertType = 'UnsupportedSiteTemplate'; Url = 'u'; Value = 'APP#0'; Message = 'App webs are not targets.'; TargetMode = 'SharePointOnPrem' }).Message | Should -Be 'App webs are not targets.'
+    }
+
+    It 'rejects a target mode that is not one of the two, and an alert type that is not in the catalog of the mode' {
+        { New-Alert -Parameters @{ AlertType = 'InfoPath'; Url = 'u'; Value = 1; TargetMode = 'Online' } } | Should -Throw "*TargetMode must be 'SharePointOnline' or 'SharePointOnPrem'*"
+        { New-Alert -Parameters @{ AlertType = 'Nonexistent'; Url = 'u'; Value = 1; TargetMode = 'SharePointOnPrem' } } | Should -Throw "*'Nonexistent' is not in the alert catalog*"
+    }
 }
