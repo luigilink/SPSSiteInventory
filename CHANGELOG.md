@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- SMAT parity for the collaboration features that migrate without the data that makes them work. The
+  inventory counts the list items that target an audience (`AudienceTargetedItemCount`, with
+  `AudienceTargetedListCount` and `AudienceTargetedExamples`): the Target Audiences column, which a
+  list has once audience targeting is enabled on it and a Pages library has from the start, is not
+  empty. The column is found by its ID and not by its name (it is `Audience` in a Pages library), its
+  value is read as the three parts that SharePoint stores (the IDs of the audiences of the User
+  Profile service, the distribution lists and the SharePoint groups), and an audience is shown by its
+  name when the audience manager can give it and by its ID when it cannot, as the SMAT report does.
+  The audience data does not migrate, so the items are shown to every reader afterwards. Hidden lists
+  and the system catalogs are skipped, and at most
+  `LargeContentThresholds.MaxItemsForAudienceTargetingScanPerList` items (2000 by default) are read in
+  each list, whatever their value, because how a query behaves on the column is not documented: a list
+  above the cap makes the site collection partial. The inventory also counts the site notebooks
+  (`SiteNotebookCount`, `SiteNotebookExamples`): the OneNote notebooks of the Site Assets library
+  whose name ends in Notebook, as the SMAT scan reads them (SMAT also leaves out an empty notebook: the
+  inventory does not test that), which are migrated under another name so
+  that the links to them break (at most `MaxItemsForNotebookScanPerLibrary` folders are read). Both
+  signals reach the CSV, the JSON, a new `-collaboration-` dataset of the report pack
+  (`Files.CollaborationJson`), a risk indicator and the details of the HTML report, weigh nothing in
+  either example configuration and raise the `AudienceTargeting` (Medium) and `SiteNotebook` (Low)
+  alerts, which are two of the alerts that are only about a migration in the `SharePointOnPrem` mode.
+  A column, a list or a library that cannot be read marks the site collection partial instead of
+  counting for nothing. The lab has two scenarios, `audience-targeting` and `site-notebook`. (#47)
 - SMAT Secure Store parity: the new `Get-SPSSecureStoreApplication` reads the Secure Store target
   applications of the farm once, through the service application proxy group of each web
   application and the service context of that group, for the default partition, so a web

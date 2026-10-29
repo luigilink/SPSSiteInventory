@@ -38,6 +38,8 @@ BeforeDiscovery {
         @{ Type = 'LargeLists'; Severity = 'Medium'; Signals = @{ LargeListCount = 1 }; Value = 1 }
         @{ Type = 'LargeListViews'; Severity = 'Medium'; Signals = @{ LargeListViewCount = 2 }; Value = 2 }
         @{ Type = 'CheckedOutFiles'; Severity = 'Medium'; Signals = @{ CheckedOutFileCount = 9 }; Value = 9 }
+        @{ Type = 'AudienceTargeting'; Severity = 'Medium'; Signals = @{ AudienceTargetedItemCount = 12 }; Value = 12 }
+        @{ Type = 'SiteNotebook'; Severity = 'Low'; Signals = @{ SiteNotebookCount = 1 }; Value = 1 }
         @{ Type = 'FileVersions'; Severity = 'Medium'; Signals = @{ FileVersionCount = 3 }; Value = 3 }
         @{ Type = 'LargeExcelFiles'; Severity = 'Low'; Signals = @{ LargeExcelFileCount = 2 }; Value = 2 }
         @{ Type = 'Subsites'; Severity = 'Low'; Signals = @{ SubsiteCount = 4 }; Value = 4 }

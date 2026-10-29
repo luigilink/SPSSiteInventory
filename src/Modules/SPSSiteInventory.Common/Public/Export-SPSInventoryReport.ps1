@@ -37,6 +37,7 @@
         - `*-permissions-*.json`
         - `*-irm-locks-*.json`
         - `*-large-content-*.json`
+        - `*-collaboration-*.json`
         - `*-alerts-*.json` (also written as `*-alerts-*.csv` for Excel)
         - `*-manifest-*.json`
 
@@ -251,6 +252,7 @@
     $permissionsJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-permissions-{1}.json' -f $BaseName, $timestamp)
     $irmLocksJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-irm-locks-{1}.json' -f $BaseName, $timestamp)
     $largeContentJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-large-content-{1}.json' -f $BaseName, $timestamp)
+    $collaborationJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-collaboration-{1}.json' -f $BaseName, $timestamp)
     $alertsJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-alerts-{1}.json' -f $BaseName, $timestamp)
     $alertsCsvPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-alerts-{1}.csv' -f $BaseName, $timestamp)
     $manifestJsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-manifest-{1}.json' -f $BaseName, $timestamp)
@@ -379,6 +381,21 @@
             }
         }
     )
+    $collaborationRecords = @(
+        foreach ($record in $siteRecords) {
+            [PSCustomObject]@{
+                Url = $record.Url
+                WebApp = $record.WebApp
+                AssessmentStatus = $record.AssessmentStatus
+                Category = $record.Category
+                AudienceTargetedListCount = $record.AudienceTargetedListCount
+                AudienceTargetedItemCount = $record.AudienceTargetedItemCount
+                AudienceTargetedExamples = $record.AudienceTargetedExamples
+                SiteNotebookCount = $record.SiteNotebookCount
+                SiteNotebookExamples = $record.SiteNotebookExamples
+            }
+        }
+    )
 
     $alertParams = @{ InputObject = @($records); TargetMode = $targetProfile.TargetMode }
     if ($PSBoundParameters.ContainsKey('BcsApplications')) {
@@ -399,6 +416,7 @@
     ConvertTo-Json -InputObject @($permissionRecords) -Depth 6 | Set-Content -Path $permissionsJsonPath -Encoding UTF8
     ConvertTo-Json -InputObject @($irmLockRecords) -Depth 6 | Set-Content -Path $irmLocksJsonPath -Encoding UTF8
     ConvertTo-Json -InputObject @($largeContentRecords) -Depth 6 | Set-Content -Path $largeContentJsonPath -Encoding UTF8
+    ConvertTo-Json -InputObject @($collaborationRecords) -Depth 6 | Set-Content -Path $collaborationJsonPath -Encoding UTF8
     ConvertTo-Json -InputObject @($alerts) -Depth 6 | Set-Content -Path $alertsJsonPath -Encoding UTF8
     $alertColumns = @('AlertType', 'Severity', 'Url', 'Value', 'Message', 'Remediation', 'Reference')
     if ($alerts.Count -gt 0) {
@@ -610,6 +628,7 @@
             PermissionsJson = $permissionsJsonPath
             IrmLocksJson = $irmLocksJsonPath
             LargeContentJson = $largeContentJsonPath
+            CollaborationJson = $collaborationJsonPath
             AlertsJson = $alertsJsonPath
             AlertsCsv = $alertsCsvPath
             ContentTypesCsv = $contentTypesCsvPath
@@ -642,6 +661,7 @@
         PermissionsJsonPath = $permissionsJsonPath
         IrmLocksJsonPath = $irmLocksJsonPath
         LargeContentJsonPath = $largeContentJsonPath
+        CollaborationJsonPath = $collaborationJsonPath
         AlertsJsonPath = $alertsJsonPath
         AlertsCsvPath = $alertsCsvPath
         ManifestJsonPath = $manifestJsonPath

@@ -187,6 +187,10 @@
     & $count 'FileVersionCount' 'High-version files' 'FileVersionExamples'
     & $count 'LargeExcelFileCount' 'Large Excel files' 'LargeExcelFileExamples'
 
+    # Collaboration features that do not migrate as they are.
+    & $count 'AudienceTargetedItemCount' 'Audience-targeted items' 'AudienceTargetedExamples'
+    & $count 'SiteNotebookCount' 'Site notebooks' 'SiteNotebookExamples'
+
     # Completeness of the inventory: a figure above is a lower bound when one of these is False.
     foreach ($check in @(
             @{ Name = 'SiteInventoryComplete'; Label = 'Site inventory incomplete' }

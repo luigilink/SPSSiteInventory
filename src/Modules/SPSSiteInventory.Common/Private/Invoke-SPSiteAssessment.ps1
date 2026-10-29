@@ -218,6 +218,11 @@
                     FileVersionExamples = $signals['FileVersionExamples']
                     LargeExcelFileCount = $signals['LargeExcelFileCount']
                     LargeExcelFileExamples = $signals['LargeExcelFileExamples']
+                    AudienceTargetedListCount = $signals['AudienceTargetedListCount']
+                    AudienceTargetedItemCount = $signals['AudienceTargetedItemCount']
+                    AudienceTargetedExamples = $signals['AudienceTargetedExamples']
+                    SiteNotebookCount = $signals['SiteNotebookCount']
+                    SiteNotebookExamples = $signals['SiteNotebookExamples']
                     IsLockedSite = $signals['IsLockedSite']
                     HasNoAccessLock = $signals['HasNoAccessLock']
                     SiteLockState = $signals['SiteLockState']
@@ -329,6 +334,11 @@
                     FileVersionExamples = $null
                     LargeExcelFileCount = $null
                     LargeExcelFileExamples = $null
+                    AudienceTargetedListCount = $null
+                    AudienceTargetedItemCount = $null
+                    AudienceTargetedExamples = $null
+                    SiteNotebookCount = $null
+                    SiteNotebookExamples = $null
                     IsLockedSite = $null
                     HasNoAccessLock = $null
                     SiteLockState = $null

@@ -274,6 +274,38 @@ Large-content parity signals are threshold-driven:
   At most `LargeContentThresholds.MaxItemsForExcelFileScanPerLibrary` workbooks are checked in each
   library; when it is reached, the count is a lower bound and the assessment is marked partial.
 
+Collaboration signals describe features that migrate without the data that makes them work. They are
+reported (the `AudienceTargeting` and `SiteNotebook` alerts say what to do) and weigh nothing in either
+example configuration, because the content itself migrates:
+
+- `AudienceTargetedItemCount` — list items that target an audience, that is, whose Target Audiences
+  column is not empty. The column has the ID `61cbb965-1e04-4273-b658-eedaa662f48d` (its internal name is
+  `Target_x0020_Audiences`, and `Audience` in a Pages library), a list has it once audience targeting is
+  enabled on it, and a Pages library has it from the start. The audience data does not migrate to
+  SharePoint Online, so the items are shown to every reader afterwards, until the targeting is rebuilt
+  (the SMAT List Items with Audience Targeting scan says the same). `AudienceTargetedListCount` counts the
+  lists that hold such items, and `AudienceTargetedExamples` lists up to five of them with the number of
+  items and the audiences, for example `/sites/team/Lists/Announcements (3 item(s): Sales, Marketing)`. An audience of the User Profile service is shown by its name when the account that runs the
+  inventory can read the audiences, and by its ID when it cannot or when the audience was deleted; a
+  distribution list is shown by its common name and a SharePoint group by its name. Hidden lists and the
+  system catalogs are skipped. At most `LargeContentThresholds.MaxItemsForAudienceTargetingScanPerList`
+  items are read in each list that has the column, whatever their value; when it is reached, the counts
+  are lower bounds and the assessment is marked partial with a warning. The column is not filtered on,
+  because how a query behaves on it is not documented: the pages of the list are read in order of ID, with
+  the override of the list view threshold (run the scan as the farm account), and the value is tested by the
+  inventory. The audience targeting of web parts, of navigation links and of pages is not reported, as in
+  SMAT.
+- `SiteNotebookCount` — the site notebooks: the OneNote notebooks of the Site Assets library (a folder that
+  SharePoint marks with the HTML file type `OneNote.Notebook`) whose name ends in `Notebook`, as the SMAT
+  Site Notebook scan reads them, except that SMAT also leaves out an empty notebook and the inventory does
+  not test that: a notebook with no section is listed too. The notebook that the Site Notebook feature creates is named after the
+  site, and the name changes with the migration, so the links to it break. `SiteNotebookExamples` lists up
+  to five of them. The library is found by the name of its root folder, `SiteAssets`, which is not
+  translated. A notebook whose name does not end in `Notebook` is not counted, as in SMAT, so a site whose
+  language gives its notebook another name is not found. At most
+  `LargeContentThresholds.MaxItemsForNotebookScanPerLibrary` folders of the library are read; when it is
+  reached, the count is a lower bound and the assessment is marked partial with a warning.
+
 Publishing and customized-page signals describe classic publishing dependencies:
 
 - `PublishingInfrastructureEnabled` — the SharePoint Server Publishing Infrastructure
@@ -712,6 +744,8 @@ LargeContentThresholds = @{
     MaxItemsForWebPartScanPerLibrary = 200
     LargeExcelFileSizeMB = 10
     MaxItemsForExcelFileScanPerLibrary = 2000
+    MaxItemsForAudienceTargetingScanPerList = 2000
+    MaxItemsForNotebookScanPerLibrary = 2000
     MaxAlertRowsPerSite = 5000
 }
 ```
@@ -745,6 +779,14 @@ LargeContentThresholds = @{
   library, whatever their size. When it is reached, the count is a lower bound and the assessment is
   marked partial with a warning. The query filters on the file type column, which is not indexed, so it
   asks SharePoint to override the list view threshold; run the scan as the farm account.
+- `MaxItemsForAudienceTargetingScanPerList` — cap for the items read in each list that has the audience
+  targeting column, to count `AudienceTargetedItemCount`, whatever their value. When it is reached, the
+  counts are lower bounds and the assessment is marked partial with a warning. The query reads the pages
+  of the list in order of ID, with the override of the list view threshold; run the scan as the farm
+  account.
+- `MaxItemsForNotebookScanPerLibrary` — cap for the folders of the Site Assets library read to find the
+  site notebooks. When it is reached, the count is a lower bound and the assessment is marked partial with
+  a warning.
 - `MaxAlertRowsPerSite` — cap for the SharePoint alert rows exported per site
   collection. `SharePointAlertCount` stays exact; when the cap is reached the rows are cut,
   the assessment is marked partial and a warning names the setting.
