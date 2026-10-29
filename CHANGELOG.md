@@ -16,9 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   time-out, like the SMAT report; the fields of the applications and the credentials are never read.
   The report reaches a `-securestore-` CSV and JSON, the manifest (`Summary.SecureStoreInventoryComplete`,
   `Files.SecureStoreCsv` and `Files.SecureStoreJson`) and a Secure Store section of the HTML report,
-  which leaves the contact e-mail address out because it is personal data. A web application, a
-  proxy or an application that cannot be read, or a proxy group with several Secure Store proxies
-  (a service context binds the default one), marks the report partial: the new
+  which leaves the contact e-mail address out because it is personal data. A service context binds the
+  default Secure Store proxy of its group, so that proxy identifies the store: a group with several
+  proxies is read through its default one. A web application, a proxy or an application that cannot be
+  read, a Secure Store proxy that is the default of no proxy group that was read, or a default that cannot
+  be told, marks the report partial: the new
   `SecureStoreInventoryPartial` alert, the manifest and a note in the HTML report say so. The new
   `SecureStoreApplication` alert is Low, one per target application: the applications are not
   migrated to SharePoint Online, the ones that are still needed have to be created again as Group

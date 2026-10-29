@@ -32,6 +32,24 @@ public class SPSTestFailingEmailApplication
     public object Type { get { return SPSTestTargetApplicationType.Group; } }
     public string ContactEmail { get { throw new InvalidOperationException("email unavailable"); } }
 }
+
+// The members of the contract of the Secure Store service are named in lower camel case.
+public class SPSTestContractApplication
+{
+    public string appId { get { return "ContractTarget"; } }
+    public string friendlyName { get { return "Contract display"; } }
+    public string contactEmail { get { return "contract@contoso.com"; } }
+    public string credentialManagementUrl { get { return "https://contoso.com/contract"; } }
+    public int ticketTimeout { get { return 7; } }
+    public object type { get { return SPSTestTargetApplicationType.GroupWithTicketing; } }
+}
+
+public class SPSTestContractFailingEmailApplication
+{
+    public string appId { get { return "ContractTarget"; } }
+    public object type { get { return SPSTestTargetApplicationType.Group; } }
+    public string contactEmail { get { throw new InvalidOperationException("contact unavailable"); } }
+}
 '@
     }
 
@@ -81,6 +99,8 @@ Describe 'ConvertTo-SPSSecureStoreApplicationRecord' {
         @{ Name = 'parameter names'; Object = [PSCustomObject]@{ Name = 'T1'; FriendlyName = 'F1'; ContactEmail = 'a@b.c'; ApplicationType = 'Group'; SetCredentialsUri = 'https://x/y'; TimeoutInMinutes = 5 } }
         @{ Name = 'wrapped target application'; Object = [PSCustomObject]@{ TargetApplication = [PSCustomObject]@{ Name = 'T1'; FriendlyName = 'F1'; ContactEmail = 'a@b.c'; Type = 'Group'; CredentialManagementUrl = 'https://x/y'; TicketTimeoutInMinutes = 5 } } }
         @{ Name = 'application ID'; Object = [PSCustomObject]@{ ApplicationId = 'T1'; FriendlyName = 'F1'; ContactEmail = 'a@b.c'; Type = 'Group'; CredentialManagementUri = 'https://x/y'; TicketTimeout = 5 } }
+        @{ Name = 'names of the contract'; Object = [PSCustomObject]@{ appId = 'T1'; friendlyName = 'F1'; contactEmail = 'a@b.c'; type = 'Group'; credentialManagementUrl = 'https://x/y'; ticketTimeout = 5 } }
+        @{ Name = 'wrapped target application with the names of the contract'; Object = [PSCustomObject]@{ TargetApplication = [PSCustomObject]@{ appId = 'T1'; friendlyName = 'F1'; contactEmail = 'a@b.c'; type = 'Group'; credentialManagementUrl = 'https://x/y'; ticketTimeout = 5 } } }
     ) {
         $record = Convert-Application -Application $Object
 
@@ -90,6 +110,18 @@ Describe 'ConvertTo-SPSSecureStoreApplicationRecord' {
         $record.ApplicationType | Should -Be 'Group' -Because $Name
         $record.CredentialManagementUrl | Should -Be 'https://x/y' -Because $Name
         $record.TicketTimeoutMinutes | Should -Be 5 -Because $Name
+    }
+
+    It 'reads an object whose members are named like the contract of the service: appId, friendlyName, contactEmail, type' {
+        # The type exists once the tests run, not when they are discovered.
+        $record = Convert-Application -Application ([SPSTestContractApplication]::new())
+
+        $record.Name | Should -Be 'ContractTarget'
+        $record.FriendlyName | Should -Be 'Contract display'
+        $record.ContactEmail | Should -Be 'contract@contoso.com'
+        $record.ApplicationType | Should -Be 'GroupWithTicketing'
+        $record.CredentialManagementUrl | Should -Be 'https://contoso.com/contract'
+        $record.TicketTimeoutMinutes | Should -Be 7
     }
 
     It 'leaves the values that have no member empty, and keeps a time-out of 0' {
@@ -128,12 +160,14 @@ Describe 'ConvertTo-SPSSecureStoreApplicationRecord' {
         @{ Member = 'name'; Pattern = 'name unavailable' }
         @{ Member = 'type'; Pattern = 'type unavailable' }
         @{ Member = 'email'; Pattern = 'email unavailable' }
+        @{ Member = 'email of a member named in lower camel case'; Pattern = 'contact unavailable' }
     ) {
         # The types exist once the tests run, not when they are discovered.
         $object = switch ($Member) {
             'name' { [SPSTestFailingNameApplication]::new() }
             'type' { [SPSTestFailingTypeApplication]::new() }
             'email' { [SPSTestFailingEmailApplication]::new() }
+            'email of a member named in lower camel case' { [SPSTestContractFailingEmailApplication]::new() }
         }
 
         { Convert-Application -Application $object } | Should -Throw ('*' + $Pattern + '*')

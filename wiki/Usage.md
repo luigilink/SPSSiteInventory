@@ -371,18 +371,22 @@ target application, like the SMAT Secure Store report:
 | `ContactEmail` | The contact e-mail address of the application. It is personal data: it is in these files only, never in the HTML report |
 | `ApplicationType` | `Individual`, `Group`, `IndividualWithTicketing`, `GroupWithTicketing`, `RestrictedIndividual` or `RestrictedGroup`. The target only supports the Group Restricted type, which is `RestrictedGroup` |
 | `CredentialManagementUrl` | The URL where the users manage their credentials, when the application has one |
-| `TicketTimeoutMinutes` | The ticket time-out in minutes: from 1 for a type with tickets, 0 for the others |
+| `TicketTimeoutMinutes` | The ticket time-out in minutes: from 1 for a type with tickets, 0 for the others ([MS-SSWPS](https://learn.microsoft.com/en-us/openspecs/sharepoint_protocols/ms-sswps/bbd7588a-abb2-46ab-96f3-fe4d027b8c3d)) |
 
 The Secure Store service application of each web application is found through the service
 application proxy group of the web application, and read with `Get-SPSecureStoreApplication`
 through the service context of that group, for the default (non-tenant) partition. No site
 collection is needed, so a web application without any site collection is read too, and a web
-application whose proxy group has no Secure Store proxy simply has no Secure Store. Web
-applications that share a Secure Store proxy report its applications once, with every web
-application that sees it. A service context binds the default Secure Store proxy of its group,
-so a group that holds more than one Secure Store proxy makes the report partial: the
-applications of the other proxies cannot be read. The fields of the applications and the
-credentials are never read, and no external system is contacted.
+application whose proxy group has no Secure Store proxy simply has no Secure Store (when no web
+application has one at all, the run log says so: a farm without the Secure Store service has none,
+and a proxy type that is not recognized would look the same). Web applications that share a
+Secure Store proxy report its applications once, with every web application that sees it. A
+service context binds the default Secure Store proxy of its group, so that proxy identifies the
+store: a group that holds several is read through its default one, and groups that hold the same
+proxies with other defaults are read once each. A proxy that is the default of no group that was
+read cannot be read, and neither can the applications of a group whose default cannot be told:
+the report is partial. The fields of the applications and the credentials are never read, and no
+external system is contacted.
 
 A web application, proxy or application that cannot be read is reported as a warning in the run
 log and marks the Secure Store report partial: the `SecureStoreInventoryPartial` alert,

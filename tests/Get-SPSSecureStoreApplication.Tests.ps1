@@ -36,8 +36,8 @@ BeforeAll {
 
     # What the mocked command returns for a proxy group, and how often it was asked.
     function Get-TestGroup {
-        param ([object[]]$Proxies = @(), [object[]]$Applications = @(), [string]$ListError = '', [string]$ContextError = '')
-        [PSCustomObject]@{ Proxies = $Proxies; Applications = $Applications; ListError = $ListError; ContextError = $ContextError; Calls = 0; ContextCalls = 0 }
+        param ([object[]]$Proxies = @(), [object[]]$Applications = @(), [string]$ListError = '', [string]$ContextError = '', $Default = $null, [string]$DefaultError = '')
+        [PSCustomObject]@{ Proxies = $Proxies; Applications = $Applications; ListError = $ListError; ContextError = $ContextError; Default = $Default; DefaultError = $DefaultError; Calls = 0; ContextCalls = 0 }
     }
 
     function Get-TestWebApplication {
@@ -51,13 +51,24 @@ BeforeAll {
         param ([object[]]$WebApplications)
         $global:SPSTestSecureStoreWebApplications = $WebApplications
         Mock Get-SPWebApplication -ModuleName SPSSiteInventory.Common -MockWith {
-            if ($Identity) { return @($global:SPSTestSecureStoreWebApplications | Where-Object { $_.Url -eq $Identity }) }
+            if ($Identity) {
+                $found = @($global:SPSTestSecureStoreWebApplications | Where-Object { $_.Url -eq $Identity })
+                if ($found.Count -eq 0) { throw "Cannot find the web application '$Identity'." }
+                return $found
+            }
             $global:SPSTestSecureStoreWebApplications
         }
         Mock Get-SPSProxyGroupServiceContext -ModuleName SPSSiteInventory.Common -MockWith {
             $ProxyGroup.ContextCalls++
             if ($ProxyGroup.ContextError) { throw $ProxyGroup.ContextError }
-            [PSCustomObject]@{ Group = $ProxyGroup }
+            $context = [PSCustomObject]@{ Group = $ProxyGroup }
+            # What a service context answers when it is asked for its default proxy of a type.
+            $context | Add-Member -MemberType ScriptMethod -Name GetDefaultProxy -Value {
+                param ($Type)
+                if ($this.Group.DefaultError) { throw $this.Group.DefaultError }
+                $this.Group.Default
+            }
+            $context
         }
         Mock Get-SPSecureStoreApplication -ModuleName SPSSiteInventory.Common -MockWith {
             $ServiceContext.Group.Calls++
@@ -123,7 +134,20 @@ Describe 'Get-SPSSecureStoreApplication' {
         $result.Applications[1].SecureStoreProxyName | Should -Be 'Text proxy'
     }
 
-    It 'reports no Secure Store, without a warning and without reading anything, for a web application whose proxy group has no Secure Store proxy' {
+    It 'reports no Secure Store, complete and without reading anything, for a web application whose proxy group has no Secure Store proxy, as long as another one has a proxy' {
+        $none = Get-TestGroup -Proxies @((Get-TestOtherProxy))
+        $has = Get-TestGroup -Proxies @((Get-TestSecureStoreProxy -Id $script:IdA)) -Applications @((Get-TestTarget -Name 'SapTarget'))
+        Set-TestFarm -WebApplications @((Get-TestWebApplication -Url 'https://a' -Group $none), (Get-TestWebApplication -Url 'https://b' -Group (Get-TestGroup)), (Get-TestWebApplication -Url 'https://c' -Group $has))
+
+        $result = Get-SPSSecureStoreApplication
+
+        $result.Applications | Should -HaveCount 1
+        $result.Complete | Should -BeTrue
+        $result.Warnings | Should -HaveCount 0
+        $none.ContextCalls | Should -Be 0
+    }
+
+    It 'says once in the run log, and stays complete, when no web application has a Secure Store proxy at all: a farm without the service, or a proxy type that is not recognized' {
         $group = Get-TestGroup -Proxies @((Get-TestOtherProxy))
         Set-TestFarm -WebApplications @((Get-TestWebApplication -Url 'https://a' -Group $group), (Get-TestWebApplication -Url 'https://b' -Group (Get-TestGroup)))
 
@@ -131,8 +155,19 @@ Describe 'Get-SPSSecureStoreApplication' {
 
         $result.Applications | Should -HaveCount 0
         $result.Complete | Should -BeTrue
-        $result.Warnings | Should -HaveCount 0
+        $result.Warnings | Should -HaveCount 1
+        $result.Warnings[0] | Should -Match 'No Secure Store service application proxy was found in the service application proxy group of the 2 web application\(s\) that were read'
         $group.ContextCalls | Should -Be 0
+    }
+
+    It 'does not add that note when no web application could be read at all: the other warnings say why' {
+        Set-TestFarm -WebApplications @((Get-TestWebApplication -Url 'https://nogroup' -NoProxyGroup))
+
+        $result = Get-SPSSecureStoreApplication
+
+        $result.Complete | Should -BeFalse
+        $result.Warnings | Should -HaveCount 1
+        $result.Warnings[0] | Should -Match 'service application proxy group could not be read'
     }
 
     It 'reads only the requested web applications' {
@@ -159,6 +194,8 @@ Describe 'Get-SPSSecureStoreApplication' {
         $result.Applications | Should -HaveCount 1
         $result.Applications[0].WebApplicationUrls | Should -Be 'https://a; https://b'
         $first.Calls + $second.Calls | Should -Be 1
+        # A group with a single Secure Store proxy has nothing to resolve: its context is built only for the read.
+        $first.ContextCalls + $second.ContextCalls | Should -Be 1
     }
 
     It 'keeps distinct Secure Store proxies separate even when their applications have the same name' {
@@ -178,8 +215,67 @@ Describe 'Get-SPSSecureStoreApplication' {
         $b.Calls | Should -Be 1
     }
 
-    It 'marks the result incomplete when a proxy group holds several Secure Store proxies: a service context binds the default one only' {
-        $group = Get-TestGroup -Proxies @((Get-TestSecureStoreProxy -Id $script:IdA -Name 'First'), (Get-TestSecureStoreProxy -Id $script:IdB -Name 'Second')) -Applications @((Get-TestTarget -Name 'SapTarget'))
+    It 'identifies the store by the default proxy that the service context binds, when the group holds several, and says that the others are not read' {
+        $first = Get-TestSecureStoreProxy -Id $script:IdA -Name 'First'
+        $second = Get-TestSecureStoreProxy -Id $script:IdB -Name 'Second'
+        $group = Get-TestGroup -Proxies @($first, $second) -Applications @((Get-TestTarget -Name 'SapTarget')) -Default $second
+        Set-TestFarm -WebApplications @((Get-TestWebApplication -Url 'https://a' -Group $group))
+
+        $result = Get-SPSSecureStoreApplication
+
+        $result.Applications | Should -HaveCount 1
+        $result.Applications[0].SecureStoreProxyId | Should -Be $script:IdB
+        $result.Applications[0].SecureStoreProxyName | Should -Be 'Second'
+        $result.Complete | Should -BeFalse
+        $result.Warnings | Should -HaveCount 1
+        $result.Warnings[0] | Should -Match ("The Secure Store proxy 'First' \({0}\) is not the default Secure Store proxy of the service application proxy group of any web application" -f $script:IdA)
+        $group.Calls | Should -Be 1
+        $group.ContextCalls | Should -Be 1
+    }
+
+    It 'reads each default proxy once when groups that hold the same proxies have different defaults, and stays complete' {
+        $first = Get-TestSecureStoreProxy -Id $script:IdA -Name 'First'
+        $second = Get-TestSecureStoreProxy -Id $script:IdB -Name 'Second'
+        $groupA = Get-TestGroup -Proxies @($first, $second) -Applications @((Get-TestTarget -Name 'SapTarget')) -Default $first
+        $groupB = Get-TestGroup -Proxies @($first, $second) -Applications @((Get-TestTarget -Name 'CrmTarget')) -Default $second
+        Set-TestFarm -WebApplications @((Get-TestWebApplication -Url 'https://a' -Group $groupA), (Get-TestWebApplication -Url 'https://b' -Group $groupB))
+
+        $result = Get-SPSSecureStoreApplication
+
+        $result.Complete | Should -BeTrue
+        $result.Warnings | Should -HaveCount 0
+        $result.Applications | Should -HaveCount 2
+        $result.Applications[0].Name | Should -Be 'SapTarget'
+        $result.Applications[0].WebApplicationUrls | Should -Be 'https://a'
+        $result.Applications[0].SecureStoreProxyId | Should -Be $script:IdA
+        $result.Applications[1].Name | Should -Be 'CrmTarget'
+        $result.Applications[1].WebApplicationUrls | Should -Be 'https://b'
+        $result.Applications[1].SecureStoreProxyId | Should -Be $script:IdB
+        $groupA.Calls | Should -Be 1
+        $groupB.Calls | Should -Be 1
+    }
+
+    It 'reports a proxy once when a group that holds only it and a group that holds it and another one, with it as the default, see it' {
+        $first = Get-TestSecureStoreProxy -Id $script:IdA -Name 'First'
+        $second = Get-TestSecureStoreProxy -Id $script:IdB -Name 'Second'
+        $only = Get-TestGroup -Proxies @($first) -Applications @((Get-TestTarget -Name 'SapTarget'))
+        $both = Get-TestGroup -Proxies @($first, $second) -Applications @((Get-TestTarget -Name 'SapTarget')) -Default $first
+        Set-TestFarm -WebApplications @((Get-TestWebApplication -Url 'https://a' -Group $only), (Get-TestWebApplication -Url 'https://b' -Group $both))
+
+        $result = Get-SPSSecureStoreApplication
+
+        $result.Applications | Should -HaveCount 1
+        $result.Applications[0].WebApplicationUrls | Should -Be 'https://a; https://b'
+        $result.Applications[0].SecureStoreProxyId | Should -Be $script:IdA
+        $only.Calls + $both.Calls | Should -Be 1
+        $result.Complete | Should -BeFalse
+        ($result.Warnings -join ';') | Should -Match "'Second' \($($script:IdB)\) is not the default"
+    }
+
+    It 'marks the result incomplete when the default proxy of a group that holds several cannot be told: the IDs and the names are listed in the same order' {
+        $zeta = Get-TestSecureStoreProxy -Id $script:IdA -Name 'Zeta'
+        $alpha = Get-TestSecureStoreProxy -Id $script:IdB -Name 'Alpha'
+        $group = Get-TestGroup -Proxies @($alpha, $zeta) -Applications @((Get-TestTarget -Name 'SapTarget'))
         Set-TestFarm -WebApplications @((Get-TestWebApplication -Url 'https://a' -Group $group))
 
         $result = Get-SPSSecureStoreApplication
@@ -187,9 +283,61 @@ Describe 'Get-SPSSecureStoreApplication' {
         $result.Complete | Should -BeFalse
         $result.Applications | Should -HaveCount 1
         $result.Applications[0].SecureStoreProxyId | Should -Be ('{0}; {1}' -f $script:IdA, $script:IdB)
-        $result.Applications[0].SecureStoreProxyName | Should -Be 'First; Second'
-        ($result.Warnings -join ';') | Should -Match "Web application 'https://a' has 2 Secure Store proxies"
+        $result.Applications[0].SecureStoreProxyName | Should -Be 'Zeta; Alpha'
+        $result.Warnings | Should -HaveCount 1
+        $result.Warnings[0] | Should -Match "Web application 'https://a' has 2 Secure Store proxies .* default one could not be determined \(the service context has no default Secure Store proxy among them\)"
         $group.Calls | Should -Be 1
+    }
+
+    It 'gives the reason when the service context cannot answer for its default proxy, and still reads the store once' {
+        $group = Get-TestGroup -Proxies @((Get-TestSecureStoreProxy -Id $script:IdA -Name 'First'), (Get-TestSecureStoreProxy -Id $script:IdB -Name 'Second')) -Applications @((Get-TestTarget -Name 'SapTarget')) -DefaultError 'The default proxy is unavailable'
+        Set-TestFarm -WebApplications @((Get-TestWebApplication -Url 'https://a' -Group $group))
+
+        $result = Get-SPSSecureStoreApplication
+
+        $result.Complete | Should -BeFalse
+        $result.Applications | Should -HaveCount 1
+        $result.Warnings | Should -HaveCount 1
+        $result.Warnings[0] | Should -Match 'default one could not be determined \(.*The default proxy is unavailable.*\)'
+        $group.Calls | Should -Be 1
+        $group.ContextCalls | Should -Be 1
+    }
+
+    It 'does not list the applications of a group that holds several proxies when its service context cannot be built' {
+        $group = Get-TestGroup -Proxies @((Get-TestSecureStoreProxy -Id $script:IdA), (Get-TestSecureStoreProxy -Id $script:IdB)) -Applications @((Get-TestTarget -Name 'SapTarget')) -ContextError 'The service context is unavailable'
+        Set-TestFarm -WebApplications @((Get-TestWebApplication -Url 'https://a' -Group $group))
+
+        $result = Get-SPSSecureStoreApplication
+
+        $result.Complete | Should -BeFalse
+        $result.Applications | Should -HaveCount 0
+        $result.Warnings | Should -HaveCount 1
+        $result.Warnings[0] | Should -Match "The Secure Store applications could not be read for web application 'https://a': The service context is unavailable"
+        $group.Calls | Should -Be 0
+    }
+
+    It 'warns about a web application that cannot be found and still reads the others' {
+        $good = Get-TestGroup -Proxies @((Get-TestSecureStoreProxy -Id $script:IdA)) -Applications @((Get-TestTarget -Name 'SapTarget'))
+        Set-TestFarm -WebApplications @((Get-TestWebApplication -Url 'https://good' -Group $good))
+
+        $result = Get-SPSSecureStoreApplication -WebApplicationUrl @('https://stale', 'https://good')
+
+        $result.Complete | Should -BeFalse
+        $result.Applications | Should -HaveCount 1
+        $result.Applications[0].WebApplicationUrls | Should -Be 'https://good'
+        $result.Warnings | Should -HaveCount 1
+        $result.Warnings[0] | Should -Match "The web application 'https://stale' could not be read: Cannot find the web application 'https://stale'"
+    }
+
+    It 'warns about every web application that cannot be found, and does not add the note about a missing Secure Store' {
+        Set-TestFarm -WebApplications @()
+
+        $result = Get-SPSSecureStoreApplication -WebApplicationUrl @('https://stale', 'https://gone')
+
+        $result.Complete | Should -BeFalse
+        $result.Applications | Should -HaveCount 0
+        $result.Warnings | Should -HaveCount 2
+        ($result.Warnings -join ';') | Should -Not -Match 'No Secure Store service application proxy'
     }
 
     It 'returns an empty complete result when the Secure Store defines no application' {

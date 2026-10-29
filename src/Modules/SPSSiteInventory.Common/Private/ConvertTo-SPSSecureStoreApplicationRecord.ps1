@@ -56,8 +56,11 @@
         param ([System.String[]] $Names)
         foreach ($source in $sources) {
             foreach ($candidate in $Names) {
-                if ($null -ne $source.PSObject.Properties[$candidate]) {
-                    return [PSCustomObject]@{ Found = $true; Value = (Get-SPSPropertyValue -InputObject $source -Name $candidate) }
+                $member = $source.PSObject.Properties[$candidate]
+                if ($null -ne $member) {
+                    # The lookup ignores the case and the strict getter does not: the member is read under its own name, so that a
+                    # getter that fails is not read the normal way, as an empty value.
+                    return [PSCustomObject]@{ Found = $true; Value = (Get-SPSPropertyValue -InputObject $source -Name $member.Name) }
                 }
             }
         }
@@ -69,7 +72,7 @@
         return (@($names | Sort-Object -Unique) -join ', ')
     }
 
-    $nameMember = & $read @('Name', 'ApplicationId')
+    $nameMember = & $read @('Name', 'ApplicationId', 'AppId')
     if (-not $nameMember.Found -or [string]::IsNullOrWhiteSpace([string]$nameMember.Value)) {
         throw ('A Secure Store application has no readable name (members: {0}).' -f (& $memberNames))
     }
