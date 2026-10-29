@@ -250,8 +250,8 @@ public sealed class SPSSiteInventoryBrokenAlertCollection : IEnumerable
         $library | Add-Member -MemberType NoteProperty -Name HtmlQueries -Value ([System.Collections.Generic.List[object]]::new())
         $library | Add-Member -MemberType ScriptMethod -Name GetItems -Value {
             param ($Query)
-            # Checkout and version scans share GetItems; only the HTML query returns files.
-            if ($Query.PSObject.Properties['Query'] -and [string]$Query.Query -match 'File_x0020_Type') {
+            # Checkout, version and workbook scans share GetItems; only the HTML query returns files.
+            if ($Query.PSObject.Properties['Query'] -and [string]$Query.Query -match 'File_x0020_Type' -and [string]$Query.Query -notmatch '>xlsx<') {
                 $this.HtmlQueries.Add($Query)
                 $batch = $this.HtmlBatches[$this.HtmlBatchIndex]
                 $this.HtmlBatchIndex++

@@ -112,6 +112,13 @@
         A web whose URL cannot be placed below the site collection marks the collection
         partial.
 
+        LargeExcelFileCount counts the Excel workbooks (.xlsx) in document libraries that are at
+        least LargeExcelFileSizeMB large (10 MB by default): SharePoint Online does not open a
+        workbook above that size in the browser, it asks the user to open it in Excel. The workbooks
+        are migrated; the signal tells which users to warn. LargeExcelFileExamples lists up to five
+        of them with their size. System catalogs (/_catalogs/) are skipped, and at most
+        MaxItemsForExcelFileScanPerLibrary workbooks are checked in each library.
+
         The modern-readiness signals say what keeps a site collection in the classic experience.
         AlternateCssUrlCount counts the webs that set an alternate CSS URL. XsltListViewCount counts
         the list views that render with a customized XSLT (an XslLink other than main.xsl, or an
@@ -165,7 +172,9 @@
         FileVersionCount, and MaxItemsForVersionScanPerLibrary. Also reads
         MaxItemsForPublishingPageScanPerLibrary, which caps how many pages per Pages
         library are read to count page layouts, and MaxItemsForHtmlFileScanPerLibrary,
-        which caps how many .htm and .html files are counted per library, and
+        which caps how many .htm and .html files are counted per library,
+        LargeExcelFileSizeMB (10 by default), the size from which a workbook is large,
+        MaxItemsForExcelFileScanPerLibrary, which caps how many workbooks are checked per library, and
         MaxItemsForWebPartScanPerLibrary, which caps how many pages of each Site Pages or Pages
         library have their web parts read.
         MaxAlertRowsPerSite caps how many alert rows are exported per site collection.
@@ -266,6 +275,8 @@
         CheckedOutFileExamples   = ''
         FileVersionCount         = 0
         FileVersionExamples      = ''
+        LargeExcelFileCount      = 0
+        LargeExcelFileExamples   = ''
         IsLockedSite             = $false
         HasNoAccessLock          = $false
         SiteLockState            = 'Unknown'
@@ -301,6 +312,7 @@
     $largeListViewExamples = [System.Collections.Generic.List[string]]::new()
     $checkedOutFileExamples = [System.Collections.Generic.List[string]]::new()
     $fileVersionExamples = [System.Collections.Generic.List[string]]::new()
+    $largeExcelFileExamples = [System.Collections.Generic.List[string]]::new()
     $appInstanceExamples = [System.Collections.Generic.List[string]]::new()
     $customizedPageExamples = [System.Collections.Generic.List[string]]::new()
     $customPermissionLevels = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
@@ -346,6 +358,9 @@
     # is active, the lists and libraries open in the classic experience unless their own setting says otherwise.
     $classicOptOutSiteFeatureId = 'e3540c7d-6bea-403c-a224-1a12eafee4c4'
     $classicOptOutWebFeatureId = '52e14b6f-b1bb-4969-b89b-c4faa56745ef'
+    # Above this size SharePoint Online does not open a workbook in the browser (10 MB by default, as in the SMAT scan).
+    $largeExcelFileBytes = [double](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'LargeExcelFileSizeMB' -DefaultValue 10 -MinimumValue 0.001) * 1MB
+    $maxExcelFileScan = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'MaxItemsForExcelFileScanPerLibrary' -DefaultValue 2000 -MinimumValue 1)
     $maxHtmlFileScan = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'MaxItemsForHtmlFileScanPerLibrary' -DefaultValue 2000 -MinimumValue 1)
     $maxAlertRows = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'MaxAlertRowsPerSite' -DefaultValue 5000 -MinimumValue 1)
     # Names SharePoint provisions with a None type, in English; PermissionLevels.BuiltInNames adds localized ones.
@@ -1294,6 +1309,58 @@
                                 Write-Warning -Message "Could not scan HTML files on '$listTitle' in web '$($web.Url)': $($_.Exception.Message)"
                             }
                         }
+
+                        if ($isDocumentLibrary -and $null -ne $list.PSObject.Methods['GetItems'] -and [string]$list.RootFolder.ServerRelativeUrl -notmatch '/_catalogs/') {
+                            try {
+                                # The workbooks only: the size of each is read from its file, so the query stays light.
+                                $excelQuery = & $newPagedQuery -RowLimit 200 -QueryText '<Where><Eq><FieldRef Name="File_x0020_Type" /><Value Type="Text">xlsx</Value></Eq></Where>'
+                                & $setQueryProperty $excelQuery 'ViewFields' '<FieldRef Name="FileRef" />'
+                                & $setQueryProperty $excelQuery 'ViewFieldsOnly' $true
+                                # The file type column is not indexed; an override lets farm administrators pass the list view threshold.
+                                & $setQueryProperty $excelQuery 'QueryThrottleMode' 'Override'
+                                $excelScanCount = 0
+                                $hasUnscannedExcel = $false
+                                $excelPosition = $null
+                                do {
+                                    & $setQueryProperty $excelQuery 'ListItemCollectionPosition' $excelPosition
+                                    $excelBatch = $list.GetItems($excelQuery)
+                                    foreach ($excelItem in (& $getBatchItems $excelBatch)) {
+                                        if ($excelScanCount -ge $maxExcelFileScan) {
+                                            $hasUnscannedExcel = $true
+                                            break
+                                        }
+                                        $excelScanCount++
+                                        if ($null -eq $excelItem.File) {
+                                            throw "The file of a workbook is unavailable on '$listTitle'."
+                                        }
+                                        $excelSize = Get-SPSPropertyValue -InputObject $excelItem.File -Name 'Length'
+                                        if ($null -eq $excelSize) {
+                                            throw "The size of a workbook could not be read on '$listTitle'."
+                                        }
+                                        if ([double]$excelSize -ge $largeExcelFileBytes) {
+                                            $signals.LargeExcelFileCount++
+                                            if ($largeExcelFileExamples.Count -lt 5) {
+                                                $excelIdentity = [string](& $getFileIdentity $excelItem.File $excelItem)
+                                                $largeExcelFileExamples.Add(('{0} ({1} MB)' -f $excelIdentity, ([double]$excelSize / 1MB).ToString('0.#', [System.Globalization.CultureInfo]::InvariantCulture)))
+                                            }
+                                        }
+                                    }
+                                    $excelPosition = & $getBatchPosition $excelBatch
+                                    if ($excelScanCount -ge $maxExcelFileScan -and $null -ne $excelPosition) {
+                                        $hasUnscannedExcel = $true
+                                    }
+                                } while ($null -ne $excelPosition -and $excelScanCount -lt $maxExcelFileScan)
+
+                                if ($hasUnscannedExcel) {
+                                    $signals.CustomizationInventoryComplete = $false
+                                    Write-Warning -Message "Excel file scan stopped on '$listTitle' in web '$($web.Url)' after $maxExcelFileScan workbook(s). Increase LargeContentThresholds.MaxItemsForExcelFileScanPerLibrary to check more workbooks."
+                                }
+                            }
+                            catch {
+                                $signals.CustomizationInventoryComplete = $false
+                                Write-Warning -Message "Could not scan the Excel files on '$listTitle' in web '$($web.Url)': $($_.Exception.Message)"
+                            }
+                        }
                     }
                 }
                 catch {
@@ -1465,6 +1532,7 @@
     $signals.LargeListViewExamples = $largeListViewExamples -join '; '
     $signals.CheckedOutFileExamples = $checkedOutFileExamples -join '; '
     $signals.FileVersionExamples = $fileVersionExamples -join '; '
+    $signals.LargeExcelFileExamples = $largeExcelFileExamples -join '; '
     $signals.AppInstanceExamples = $appInstanceExamples -join '; '
     $signals.CustomizedPageExamples = $customizedPageExamples -join '; '
     $signals.CustomPermissionLevelCount = $customPermissionLevels.Count

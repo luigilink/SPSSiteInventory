@@ -254,6 +254,24 @@ Describe 'The lab scenarios' {
     }
 }
 
+Describe 'The large-excel scenario' {
+    It 'builds a workbook above the lab threshold and one below it, so that it triggers whatever the threshold is' {
+        $scenario = $script:Scenario | Where-Object { $_.Name -eq 'large-excel' }
+        $source = $scenario.Provision.ToString()
+
+        $source | Should -Match 'Threshold\.LargeExcelFileSizeMB'
+        $source | Should -Match 'lab-large\.xlsx'
+        $source | Should -Match 'lab-small\.xlsx'
+        (Get-SPSLabThreshold).LargeExcelFileSizeMB | Should -BeLessThan 1
+        @($scenario.Expect | Where-Object { $_.Info }).Count | Should -Be 0
+        $count = @($scenario.Expect | Where-Object { $_.Property -eq 'LargeExcelFileCount' })
+        $count | Should -HaveCount 1
+        $count[0].Operator | Should -Be 'eq'
+        $count[0].Value | Should -Be 1
+        @($scenario.Expect | Where-Object { $_.Alert -eq 'LargeExcelFiles' }) | Should -HaveCount 1
+    }
+}
+
 Describe 'The scenarios of the modern-readiness signals' {
     BeforeAll {
         $script:ModernScenario = @('alternate-css', 'xslt-view', 'script-web-part', 'modern-opt-out', 'forced-classic')

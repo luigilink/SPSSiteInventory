@@ -264,6 +264,15 @@ Large-content parity signals are threshold-driven:
 - `CheckedOutFileCount` — checked-out files detected in document libraries.
 - `FileVersionCount` — files whose version count is at or above
   `LargeContentThresholds.FileVersionCount`.
+- `LargeExcelFileCount` — Excel workbooks (`.xlsx`) in document libraries (the system catalogs
+  under `/_catalogs/` are skipped) that are at least `LargeContentThresholds.LargeExcelFileSizeMB`
+  large, 10 MB by default. SharePoint Online does not open a workbook above that size in the
+  browser: it asks the user to open it in the Excel client. The workbooks are migrated, so the
+  signal is reported (`LargeExcelFileExamples` lists up to five of them with their size, and the
+  `LargeExcelFiles` alert says whom to warn) and weighs nothing in either example configuration. The
+  source farm can open larger workbooks in the browser, which is why the size is a setting.
+  At most `LargeContentThresholds.MaxItemsForExcelFileScanPerLibrary` workbooks are checked in each
+  library; when it is reached, the count is a lower bound and the assessment is marked partial.
 
 Publishing and customized-page signals describe classic publishing dependencies:
 
@@ -622,6 +631,17 @@ the scan then reports as many site collections as 1.x did. A settings file from 
 Each option must be `$true` or `$false`. Anything else, such as the string `'false'`, is
 rejected when the settings file is loaded, before any site collection is read.
 
+### Long OneDrive URLs
+
+The SMAT scan "Long OneDrive URLs" is **not covered**, by decision. It measures the path of every
+file of every personal site against the limit of 400 characters, once the URL of the OneDrive uses the
+user principal name (`personal/user_contoso_com`) instead of `personal/domain_user`. That needs what
+this inventory does not do: read the files of every personal site, which `IncludePersonalSites` leaves
+out by default because those sites belong to the OneDrive migration, and know the user principal name
+that each owner will have in the target. The OneDrive migration tooling knows both. With
+`IncludePersonalSites` set to `$true` the personal sites are inventoried like any site collection, with
+the same signals, but the length of their file paths is not measured.
+
 ## Report section
 
 ```powershell
@@ -690,6 +710,8 @@ LargeContentThresholds = @{
     MaxItemsForPublishingPageScanPerLibrary = 2000
     MaxItemsForHtmlFileScanPerLibrary = 2000
     MaxItemsForWebPartScanPerLibrary = 200
+    LargeExcelFileSizeMB = 10
+    MaxItemsForExcelFileScanPerLibrary = 2000
     MaxAlertRowsPerSite = 5000
 }
 ```
@@ -715,6 +737,13 @@ LargeContentThresholds = @{
   read). Reading the web parts of a page is the costliest of the scans, so the default is 200
   pages. When a library has more, the count is a lower bound and the assessment is marked
   partial with a warning. The query filters on the file type column, which is not indexed, so it
+  asks SharePoint to override the list view threshold; run the scan as the farm account.
+- `LargeExcelFileSizeMB` — minimum size, in MB, of a workbook for `LargeExcelFileCount`. The default,
+  10, is the size above which SharePoint Online asks the user to open a workbook in Excel instead of
+  the browser. A value that is not a number above 0 is replaced by the default.
+- `MaxItemsForExcelFileScanPerLibrary` — cap for the workbooks (`.xlsx`) checked in each document
+  library, whatever their size. When it is reached, the count is a lower bound and the assessment is
+  marked partial with a warning. The query filters on the file type column, which is not indexed, so it
   asks SharePoint to override the list view threshold; run the scan as the farm account.
 - `MaxAlertRowsPerSite` — cap for the SharePoint alert rows exported per site
   collection. `SharePointAlertCount` stays exact; when the cap is reached the rows are cut,

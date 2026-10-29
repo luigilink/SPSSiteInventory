@@ -279,6 +279,12 @@
             Remediation = 'Decide whether all versions must be kept: the migration time grows with the number of versions.'
             Reference   = 'https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-file-versions'
         }
+        LargeExcelFiles = @{
+            Severity    = 'Low'
+            Message     = 'Large Excel workbooks were detected: SharePoint Online does not open a workbook above its size limit in the browser, and asks the user to open it in Excel.'
+            Remediation = 'Tell the users which workbooks are concerned before the migration (LargeExcelFileExamples in the inventory shows where to start): the workbooks are migrated, but SharePoint Online asks them to open a workbook larger than 10 MB in the Excel client instead of the browser. Where a workbook is large for no good reason, reducing its size keeps it in the browser.'
+            Reference   = 'https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-large-excel-files'
+        }
         Subsites = @{
             Severity    = 'Low'
             Message     = 'This site collection has subsites. SharePoint Online supports them, but modern SharePoint favors one site collection per unit of work, connected by hub sites.'

@@ -58,6 +58,10 @@
     # its Site Pages and Pages libraries: MaxItemsForWebPartScanPerLibrary caps how many pages
     # of each library are read, and a library above it makes the site marked partial.
     #
+    # LargeExcelFileCount counts the Excel workbooks (.xlsx) of at least LargeExcelFileSizeMB (10 MB:
+    # the size above which SharePoint Online asks the user to open a workbook in Excel instead of the
+    # browser); MaxItemsForExcelFileScanPerLibrary caps how many workbooks are checked in a library.
+    #
     # MaxAlertRowsPerSite caps how many SharePoint alert rows are exported per site
     # collection; SharePointAlertCount stays exact. When the cap is hit, the site is
     # marked partial and a warning is emitted.
@@ -72,6 +76,8 @@
         MaxItemsForPublishingPageScanPerLibrary = 2000
         MaxItemsForHtmlFileScanPerLibrary = 2000
         MaxItemsForWebPartScanPerLibrary = 200
+        LargeExcelFileSizeMB = 10
+        MaxItemsForExcelFileScanPerLibrary = 2000
         MaxAlertRowsPerSite = 5000
     }
 
@@ -255,6 +261,9 @@
             LargeListCount           = 0.5
             LargeListViewCount       = 0.5
             CheckedOutFileCount      = 0.05
+            # Excel workbooks that SharePoint Online does not open in the browser are migrated: the
+            # signal says whom to warn, it does not move a site collection to a worse category.
+            LargeExcelFileCount      = 0
             FileVersionCount         = 0.02
             SandboxSolutions         = 3.0
             CustomMasterPage         = 2.0

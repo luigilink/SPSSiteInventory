@@ -216,6 +216,8 @@
                     CheckedOutFileExamples = $signals['CheckedOutFileExamples']
                     FileVersionCount = $signals['FileVersionCount']
                     FileVersionExamples = $signals['FileVersionExamples']
+                    LargeExcelFileCount = $signals['LargeExcelFileCount']
+                    LargeExcelFileExamples = $signals['LargeExcelFileExamples']
                     IsLockedSite = $signals['IsLockedSite']
                     HasNoAccessLock = $signals['HasNoAccessLock']
                     SiteLockState = $signals['SiteLockState']
@@ -325,6 +327,8 @@
                     CheckedOutFileExamples = $null
                     FileVersionCount = $null
                     FileVersionExamples = $null
+                    LargeExcelFileCount = $null
+                    LargeExcelFileExamples = $null
                     IsLockedSite = $null
                     HasNoAccessLock = $null
                     SiteLockState = $null

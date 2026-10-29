@@ -339,6 +339,7 @@
         @{ Key = 'large-lists'; Label = 'Sites with large lists'; Short = 'large lists'; Alert = 'LargeLists'; Test = { param($r) [int]$r.LargeListCount -gt 0 } }
         @{ Key = 'checked-out-files'; Label = 'Sites with checked-out files'; Short = 'checked-out files'; Alert = 'CheckedOutFiles'; Test = { param($r) [int]$r.CheckedOutFileCount -gt 0 } }
         @{ Key = 'file-versions'; Label = 'Sites with high file-version counts'; Short = 'high file-version counts'; Alert = 'FileVersions'; Test = { param($r) [int]$r.FileVersionCount -gt 0 } }
+        @{ Key = 'large-excel'; Label = 'Sites with large Excel files'; Short = 'large Excel files'; Alert = 'LargeExcelFiles'; Test = { param($r) [int]$r.LargeExcelFileCount -gt 0 } }
     )
     $riskCounts = @{}
     foreach ($indicator in $riskIndicators) { $riskCounts[$indicator.Key] = 0 }

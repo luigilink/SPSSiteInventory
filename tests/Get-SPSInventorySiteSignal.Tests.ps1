@@ -93,6 +93,7 @@ Describe 'Get-SPSInventorySiteSignal' {
         @{ Field = 'LargeListViewCount'; Value = 1; Label = 'Large-list views'; Expected = '1' }
         @{ Field = 'CheckedOutFileCount'; Value = 3; Label = 'Checked-out files'; Expected = '3' }
         @{ Field = 'FileVersionCount'; Value = 2; Label = 'High-version files'; Expected = '2' }
+        @{ Field = 'LargeExcelFileCount'; Value = 3; Label = 'Large Excel files'; Expected = '3' }
         @{ Field = 'BrowserFileHandling'; Value = 'Permissive'; Label = 'Browser file handling'; Expected = 'Permissive' }
     ) {
         $signal = @(Get-Signal -Record (New-RecordWith @{ $Field = $Value }))
@@ -134,6 +135,7 @@ Describe 'Get-SPSInventorySiteSignal' {
         @{ Count = 'LargeListViewCount'; Examples = 'LargeListViewExamples'; Label = 'Large-list views' }
         @{ Count = 'CheckedOutFileCount'; Examples = 'CheckedOutFileExamples'; Label = 'Checked-out files' }
         @{ Count = 'FileVersionCount'; Examples = 'FileVersionExamples'; Label = 'High-version files' }
+        @{ Count = 'LargeExcelFileCount'; Examples = 'LargeExcelFileExamples'; Label = 'Large Excel files' }
     ) {
         $signal = @(Get-Signal -Record (New-RecordWith @{ $Count = 2; $Examples = 'first (1); second (2)' }))
 

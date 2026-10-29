@@ -192,6 +192,17 @@ Describe 'Get-SPSAlertCatalog' {
         }
     }
 
+    It 'tells the users about the workbooks that SharePoint Online does not open in the browser, as information' {
+        $entry = $script:Catalog['LargeExcelFiles']
+
+        $entry.Severity | Should -Be 'Low'
+        $entry.Message | Should -Match 'does not open a workbook above its size limit in the browser'
+        $entry.Remediation | Should -Match 'Tell the users'
+        $entry.Remediation | Should -Match 'larger than 10 MB'
+        $entry.Remediation | Should -Match 'LargeExcelFileExamples'
+        $entry.Reference | Should -Match 'migration-assessment-scan-large-excel-files$'
+    }
+
     It 'rejects a target mode that is not one of the two' {
         { & $script:Module { Get-SPSAlertCatalog -TargetMode 'Online' } } | Should -Throw "*TargetMode must be 'SharePointOnline' or 'SharePointOnPrem'*"
         { & $script:Module { Get-SPSAlertCatalog -TargetMode '' } } | Should -Throw "*TargetMode must be*"
@@ -237,7 +248,7 @@ Describe 'Get-SPSAlertCatalog for the SharePointOnPrem mode' {
     }
 
     It 'makes the alerts that are only about a migration to SharePoint Online Low, and says so before the original text' {
-        $script:MigrationOnly.Count | Should -Be 17
+        $script:MigrationOnly.Count | Should -Be 18
         foreach ($key in $script:MigrationOnly) {
             $entry = $script:OnPrem[$key]
 
@@ -246,7 +257,7 @@ Describe 'Get-SPSAlertCatalog for the SharePointOnPrem mode' {
             $entry.Remediation | Should -Be ('Nothing to do to modernize this farm. If you migrate to SharePoint Online, this applies. ' + $script:Catalog[$key].Remediation) -Because $key
             $entry.Reference | Should -Be $script:Catalog[$key].Reference -Because $key
         }
-        foreach ($key in @('ExternalLists', 'FbaConfigured', 'IrmEnabledLists', 'BcsApplication', 'UnsupportedSiteTemplate', 'AlertSubscriptions')) {
+        foreach ($key in @('ExternalLists', 'FbaConfigured', 'IrmEnabledLists', 'BcsApplication', 'UnsupportedSiteTemplate', 'AlertSubscriptions', 'LargeExcelFiles')) {
             $script:MigrationOnly | Should -Contain $key
         }
     }

@@ -40,6 +40,8 @@ function Get-SPSLabThreshold {
         LargeListViewRowLimit = 100
         CheckedOutFileCount   = 1
         FileVersionCount      = 5
+        # A workbook of 20 KB is large for the lab, which a real workbook never is.
+        LargeExcelFileSizeMB  = 0.01
         # The alerts scenario has two alerts, which the cap lets through; partial-simple has three.
         MaxAlertRowsPerSite   = 2
     }
@@ -486,6 +488,24 @@ function Get-SPSLabScenario {
                 (Get-SPSLabExpectation -Alert 'LargeListViews')
                 (Get-SPSLabExpectation -Alert 'CheckedOutFiles')
                 (Get-SPSLabExpectation -Alert 'FileVersions')
+            )
+        })
+
+    $scenario.Add([PSCustomObject]@{
+            Name        = 'large-excel'
+            Description = 'A workbook above the large-workbook threshold and a small one in a library: only the large one must be reported.'
+            Template    = 'STS#0'
+            Provision   = {
+                param ($Context)
+                $library = Add-SPSLabList -Web $Context.Web -Title 'LabWorkbooks' -Template 'DocumentLibrary'
+                $largeSize = [System.Int32]([System.Double]$Context.Threshold.LargeExcelFileSizeMB * 1MB) + 10000
+                $null = $library.RootFolder.Files.Add('lab-large.xlsx', (New-Object -TypeName System.Byte[] -ArgumentList $largeSize), $true)
+                $null = $library.RootFolder.Files.Add('lab-small.xlsx', (New-Object -TypeName System.Byte[] -ArgumentList 100), $true)
+            }
+            Expect      = @(
+                (Get-SPSLabExpectation LargeExcelFileCount eq 1)
+                (Get-SPSLabExpectation LargeExcelFileExamples like '*lab-large.xlsx*')
+                (Get-SPSLabExpectation -Alert 'LargeExcelFiles')
             )
         })
 

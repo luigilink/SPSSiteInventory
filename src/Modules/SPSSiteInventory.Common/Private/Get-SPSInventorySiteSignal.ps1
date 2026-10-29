@@ -185,6 +185,7 @@
     & $count 'LargeListViewCount' 'Large-list views' 'LargeListViewExamples'
     & $count 'CheckedOutFileCount' 'Checked-out files' 'CheckedOutFileExamples'
     & $count 'FileVersionCount' 'High-version files' 'FileVersionExamples'
+    & $count 'LargeExcelFileCount' 'Large Excel files' 'LargeExcelFileExamples'
 
     # Completeness of the inventory: a figure above is a lower bound when one of these is False.
     foreach ($check in @(

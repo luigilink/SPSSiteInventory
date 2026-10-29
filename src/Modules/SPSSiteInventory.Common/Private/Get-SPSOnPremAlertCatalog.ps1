@@ -51,7 +51,7 @@
     $migrationOnly = @(
         'CustomPermissionLevels', 'EmailEnabledLists', 'HtmlFiles', 'ManagedMetadataColumns', 'ExternalLists',
         'AlertSubscriptions', 'UnsupportedSiteTemplate', 'TemplateCompatibilityReview', 'TemplateLanguageReview',
-        'FbaConfigured', 'IrmEnabledLists', 'LargeSite', 'CheckedOutFiles', 'FileVersions',
+        'FbaConfigured', 'IrmEnabledLists', 'LargeSite', 'CheckedOutFiles', 'FileVersions', 'LargeExcelFiles',
         'WebApplicationPolicies', 'PermissiveBrowserFileHandling', 'BcsApplication'
     )
 

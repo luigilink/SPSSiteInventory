@@ -72,6 +72,19 @@ Describe 'The inventory record' {
         }
     }
 
+    It 'has a field for the large Excel files, in both records, documents it and keeps it out of the score of both examples' {
+        foreach ($signal in @('LargeExcelFileCount', 'LargeExcelFileExamples')) {
+            $script:Record[0] | Should -Contain $signal
+            $script:Record[1] | Should -Contain $signal
+            $script:Usage | Should -Match ('(?m)^\| [^|]*`{0}`' -f $signal)
+        }
+        $script:Settings.Scoring.Weights['LargeExcelFileCount'] | Should -Be 0
+        $script:OnPremSettings.Scoring.Weights['LargeExcelFileCount'] | Should -Be 0
+        $script:Settings.LargeContentThresholds.LargeExcelFileSizeMB | Should -Be 10
+        $script:OnPremSettings.LargeContentThresholds.LargeExcelFileSizeMB | Should -Be 10
+        $script:Settings.LargeContentThresholds.MaxItemsForExcelFileScanPerLibrary | Should -Be 2000
+    }
+
     It 'has a field for each modern-readiness signal, in both records' {
         foreach ($signal in $script:ModernReadinessSignal) {
             $script:Record[0] | Should -Contain $signal

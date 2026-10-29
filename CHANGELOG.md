@@ -102,6 +102,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   collection list its signals of the modern experience, in both modes. The wiki page "Alerts" documents
   the new alerts and the catalog of the mode. (#25)
 
+- The inventory counts the Excel workbooks that SharePoint Online does not open in the browser, as the
+  SMAT scan "Large Excel Files" does. `LargeExcelFileCount` counts the `.xlsx` files of the document
+  libraries (the system catalogs are skipped) that are at least `LargeContentThresholds.LargeExcelFileSizeMB`
+  large, 10 MB by default, and `LargeExcelFileExamples` lists up to five of them with their size. At most
+  `LargeContentThresholds.MaxItemsForExcelFileScanPerLibrary` workbooks (2000 by default) are checked in each
+  library; a library above it, or a size that cannot be read, marks the site collection partial. The new
+  `LargeExcelFiles` alert (`Low`: the workbooks are migrated, the users are told) is raised in both modes,
+  and in the `SharePointOnPrem` mode it is one of the alerts that are only about a migration. The signal weighs
+  nothing in either example configuration, it is a column of the `*-large-content-*` dataset and of the CSV
+  and JSON files, a risk indicator of the HTML report and a line of the details of a site collection, and the
+  lab has a scenario for it. The SMAT scan "Long OneDrive URLs" is not covered, by decision: it needs the file
+  paths of every personal site and the user principal name of each owner in the target, which belong to the
+  OneDrive migration tooling (see the `Scope` section of the wiki page "Configuration"). (#48)
+
 ### Changed
 
 - The risk indicators of the HTML report are a ranked list instead of a grid of 33 cards, 16 of

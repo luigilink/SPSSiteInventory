@@ -39,6 +39,7 @@ BeforeDiscovery {
         @{ Type = 'LargeListViews'; Severity = 'Medium'; Signals = @{ LargeListViewCount = 2 }; Value = 2 }
         @{ Type = 'CheckedOutFiles'; Severity = 'Medium'; Signals = @{ CheckedOutFileCount = 9 }; Value = 9 }
         @{ Type = 'FileVersions'; Severity = 'Medium'; Signals = @{ FileVersionCount = 3 }; Value = 3 }
+        @{ Type = 'LargeExcelFiles'; Severity = 'Low'; Signals = @{ LargeExcelFileCount = 2 }; Value = 2 }
         @{ Type = 'Subsites'; Severity = 'Low'; Signals = @{ SubsiteCount = 4 }; Value = 4 }
     )
 }
@@ -134,6 +135,12 @@ Describe 'Get-SPSInventoryAlert' {
         }
 
         @((Get-Alert -Record @($row)).AlertType) | Should -Be @('AssessmentFailed')
+    }
+
+    It 'raises the LargeExcelFiles alert for a single workbook, and none for 0' {
+        @((Get-Alert -Record @((New-Site -Signals @{ LargeExcelFileCount = 1 }))).AlertType) | Should -Be @('LargeExcelFiles')
+        Get-Alert -Record @((New-Site -Signals @{ LargeExcelFileCount = 0 })) | Should -HaveCount 0
+        Get-Alert -Record @((New-Site -Signals @{ LargeExcelFileCount = $null })) | Should -HaveCount 0
     }
 
     It 'raises the alert of each signal of the modern experience for a single item, and for none when the count is 0' -ForEach @(

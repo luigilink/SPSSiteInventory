@@ -351,6 +351,8 @@
                 CheckedOutFileExamples = $record.CheckedOutFileExamples
                 FileVersionCount = $record.FileVersionCount
                 FileVersionExamples = $record.FileVersionExamples
+                LargeExcelFileCount = $record.LargeExcelFileCount
+                LargeExcelFileExamples = $record.LargeExcelFileExamples
             }
         }
     )

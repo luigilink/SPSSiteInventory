@@ -173,6 +173,9 @@
         if ($scope -eq 'SiteCollection' -and [int]$record.FileVersionCount -gt 0) {
             $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'FileVersions' -Url $($record.Url) -Value $([int]$record.FileVersionCount)))
         }
+        if ($scope -eq 'SiteCollection' -and [int]$record.LargeExcelFileCount -gt 0) {
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'LargeExcelFiles' -Url $($record.Url) -Value $([int]$record.LargeExcelFileCount)))
+        }
         if ($scope -eq 'SiteCollection' -and [int]$record.SubsiteCount -gt 0) {
             $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'Subsites' -Url $($record.Url) -Value $([int]$record.SubsiteCount)))
         }
