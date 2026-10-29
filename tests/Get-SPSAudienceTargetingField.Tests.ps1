@@ -57,6 +57,18 @@ Describe 'Get-SPSAudienceTargetingField' {
         (Find-Field -List $list).InternalName | Should -Be 'Targets'
     }
 
+    It 'prefers the column that has the ID to a column of the type TargetTo that comes first' {
+        $list = [PSCustomObject]@{ Title = 'Links'; Fields = @((New-Field), (New-Field -InternalName 'Targets' -TypeAsString 'TargetTo'), (New-Field -InternalName 'Target_x0020_Audiences' -Id $script:TargetingId -TypeAsString 'TargetTo')) }
+
+        (Find-Field -List $list).InternalName | Should -Be 'Target_x0020_Audiences'
+    }
+
+    It 'takes the first column of the type TargetTo when no column has the ID' {
+        $list = [PSCustomObject]@{ Title = 'Links'; Fields = @((New-Field), (New-Field -InternalName 'First' -TypeAsString 'TargetTo'), (New-Field -InternalName 'Second' -TypeAsString 'TargetTo')) }
+
+        (Find-Field -List $list).InternalName | Should -Be 'First'
+    }
+
     It 'does not take a column of another type that is named like it for the audience targeting column' {
         $list = [PSCustomObject]@{ Title = 'Links'; Fields = @((New-Field -InternalName 'Target_x0020_Audiences' -TypeAsString 'Text')) }
 

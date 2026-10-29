@@ -579,7 +579,7 @@ function Get-SPSLabScenario {
                     $notebooks = @($assets[0].RootFolder.SubFolders | Where-Object { $_.Name -like '*Notebook' })
                 }
                 if ($notebooks.Count -eq 0) {
-                    throw 'SKIP: the Site Notebook feature is active, but it did not create the notebook (it may need the OneNote web application): open the Site Notebook link of the site, then run the scenario again.'
+                    throw 'SKIP: the Site Notebook feature is active, but it did not create the notebook (it may need the OneNote web application). The site collection stays in the lab and is not provisioned or verified again: open the Site Notebook link of the site, run -Action Inventory, and check by hand that SiteNotebookCount is at least 1 for the site.'
                 }
             }
             Expect      = @(

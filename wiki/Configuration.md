@@ -285,8 +285,7 @@ example configuration, because the content itself migrates:
   SharePoint Online, so the items are shown to every reader afterwards, until the targeting is rebuilt
   (the SMAT List Items with Audience Targeting scan says the same). `AudienceTargetedListCount` counts the
   lists that hold such items, and `AudienceTargetedExamples` lists up to five of them with the number of
-  items and the audiences, for example `Announcements (/sites/team/Lists/Announcements): 3 item(s): Sales,
-  Marketing`. An audience of the User Profile service is shown by its name when the account that runs the
+  items and the audiences, for example `/sites/team/Lists/Announcements (3 item(s): Sales, Marketing)`. An audience of the User Profile service is shown by its name when the account that runs the
   inventory can read the audiences, and by its ID when it cannot or when the audience was deleted; a
   distribution list is shown by its common name and a SharePoint group by its name. Hidden lists and the
   system catalogs are skipped. At most `LargeContentThresholds.MaxItemsForAudienceTargetingScanPerList`
@@ -298,7 +297,8 @@ example configuration, because the content itself migrates:
   SMAT.
 - `SiteNotebookCount` — the site notebooks: the OneNote notebooks of the Site Assets library (a folder that
   SharePoint marks with the HTML file type `OneNote.Notebook`) whose name ends in `Notebook`, as the SMAT
-  Site Notebook scan reads them. The notebook that the Site Notebook feature creates is named after the
+  Site Notebook scan reads them, except that SMAT also leaves out an empty notebook and the inventory does
+  not test that: a notebook with no section is listed too. The notebook that the Site Notebook feature creates is named after the
   site, and the name changes with the migration, so the links to it break. `SiteNotebookExamples` lists up
   to five of them. The library is found by the name of its root folder, `SiteAssets`, which is not
   translated. A notebook whose name does not end in `Notebook` is not counted, as in SMAT, so a site whose

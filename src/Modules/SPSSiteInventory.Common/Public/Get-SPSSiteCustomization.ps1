@@ -1394,6 +1394,13 @@
                         # Audience targeting: the Target Audiences column says which audiences an item is shown to. That data does not
                         # migrate, so the item is shown to everybody afterwards. Hidden lists and the system catalogs are left out.
                         if (-not $isHiddenList -and $null -ne $list.PSObject.Methods['GetItems'] -and [string]$list.RootFolder.ServerRelativeUrl -notmatch '/_catalogs/') {
+                            # What the scan finds is counted even when a later read fails: the counts are then lower bounds, and the site collection is partial.
+                            $audienceListUrl = [string]$list.RootFolder.ServerRelativeUrl
+                            $targetedItemCount = 0
+                            $listAudienceIds = [System.Collections.Generic.List[string]]::new()
+                            $listDistributionLists = [System.Collections.Generic.List[string]]::new()
+                            $listSharePointGroups = [System.Collections.Generic.List[string]]::new()
+                            $listUnrecognized = [System.Collections.Generic.List[string]]::new()
                             try {
                                 $audienceField = Get-SPSAudienceTargetingField -List $list
                                 if ($null -ne $audienceField) {
@@ -1410,11 +1417,6 @@
                                     $audienceScanCount = 0
                                     $hasUnscannedAudienceItems = $false
                                     $audiencePosition = $null
-                                    $targetedItemCount = 0
-                                    $listAudienceIds = [System.Collections.Generic.List[string]]::new()
-                                    $listDistributionLists = [System.Collections.Generic.List[string]]::new()
-                                    $listSharePointGroups = [System.Collections.Generic.List[string]]::new()
-                                    $listUnrecognized = [System.Collections.Generic.List[string]]::new()
                                     do {
                                         & $setQueryProperty $audienceQuery 'ListItemCollectionPosition' $audiencePosition
                                         $audienceBatch = $list.GetItems($audienceQuery)
@@ -1444,20 +1446,6 @@
                                         }
                                     } while ($null -ne $audiencePosition -and $audienceScanCount -lt $maxAudienceScan)
 
-                                    if ($targetedItemCount -gt 0) {
-                                        $signals.AudienceTargetedListCount++
-                                        $signals.AudienceTargetedItemCount += $targetedItemCount
-                                        if ($audienceTargetedLists.Count -lt 5) {
-                                            $audienceTargetedLists.Add([PSCustomObject]@{
-                                                    ListUrl          = [string]$list.RootFolder.ServerRelativeUrl
-                                                    ItemCount        = $targetedItemCount
-                                                    AudienceId       = $listAudienceIds.ToArray()
-                                                    DistributionList = $listDistributionLists.ToArray()
-                                                    SharePointGroup  = $listSharePointGroups.ToArray()
-                                                    Unrecognized     = $listUnrecognized.ToArray()
-                                                })
-                                        }
-                                    }
                                     if ($hasUnscannedAudienceItems) {
                                         $signals.CustomizationInventoryComplete = $false
                                         Write-Warning -Message "Audience targeting scan stopped on '$listTitle' in web '$($web.Url)' after $maxAudienceScan item(s). Increase LargeContentThresholds.MaxItemsForAudienceTargetingScanPerList to check more items; the counts are lower bounds."
@@ -1466,7 +1454,22 @@
                             }
                             catch {
                                 $signals.CustomizationInventoryComplete = $false
-                                Write-Warning -Message "Could not scan the audience targeting on '$listTitle' in web '$($web.Url)': $($_.Exception.Message)"
+                                $lowerBound = if ($targetedItemCount -gt 0) { " The $targetedItemCount item(s) found before the failure are counted: the counts are lower bounds." } else { '' }
+                                Write-Warning -Message "Could not scan the audience targeting on '$listTitle' in web '$($web.Url)': $($_.Exception.Message)$lowerBound"
+                            }
+                            if ($targetedItemCount -gt 0) {
+                                $signals.AudienceTargetedListCount++
+                                $signals.AudienceTargetedItemCount += $targetedItemCount
+                                if ($audienceTargetedLists.Count -lt 5) {
+                                    $audienceTargetedLists.Add([PSCustomObject]@{
+                                            ListUrl          = $audienceListUrl
+                                            ItemCount        = $targetedItemCount
+                                            AudienceId       = $listAudienceIds.ToArray()
+                                            DistributionList = $listDistributionLists.ToArray()
+                                            SharePointGroup  = $listSharePointGroups.ToArray()
+                                            Unrecognized     = $listUnrecognized.ToArray()
+                                        })
+                                }
                             }
                         }
 

@@ -21,7 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   each list, whatever their value, because how a query behaves on the column is not documented: a list
   above the cap makes the site collection partial. The inventory also counts the site notebooks
   (`SiteNotebookCount`, `SiteNotebookExamples`): the OneNote notebooks of the Site Assets library
-  whose name ends in Notebook, as the SMAT scan reads them, which are migrated under another name so
+  whose name ends in Notebook, as the SMAT scan reads them (SMAT also leaves out an empty notebook: the
+  inventory does not test that), which are migrated under another name so
   that the links to them break (at most `MaxItemsForNotebookScanPerLibrary` folders are read). Both
   signals reach the CSV, the JSON, a new `-collaboration-` dataset of the report pack
   (`Files.CollaborationJson`), a risk indicator and the details of the HTML report, weigh nothing in

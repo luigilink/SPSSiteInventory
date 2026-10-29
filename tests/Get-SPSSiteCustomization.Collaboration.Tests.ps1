@@ -47,7 +47,8 @@ public class SPSTestCollabFailingIdField
     function New-TestList {
         param (
             [string]$Title = 'Announcements', [string]$Url = '/sites/team/Lists/Announcements', [int]$BaseTemplate = 104,
-            [object[]]$Fields = @(), [object[]]$Batches = @(), [string]$ErrorText = '', [bool]$Hidden = $false, [string]$FieldName = 'Target_x0020_Audiences', [switch]$Folders
+            [object[]]$Fields = @(), [object[]]$Batches = @(), [string]$ErrorText = '', [bool]$Hidden = $false, [string]$FieldName = 'Target_x0020_Audiences', [switch]$Folders,
+            [int]$FailOnCall = 0
         )
         $list = [PSCustomObject]@{
             Title = $Title
@@ -69,6 +70,7 @@ public class SPSTestCollabFailingIdField
             BatchIndex = 0
             FieldName = $FieldName
             ErrorText = $ErrorText
+            FailOnCall = $FailOnCall
             Folders = [bool]$Folders
             Calls = 0
             Queries = [System.Collections.Generic.List[object]]::new()
@@ -86,7 +88,7 @@ public class SPSTestCollabFailingIdField
                     ViewFieldsOnly = [string]$Query.ViewFieldsOnly; Throttle = [string]$Query.QueryThrottleMode
                     Position = [string]$Query.ListItemCollectionPosition; ViewAttributes = [string]$Query.ViewAttributes
                 })
-            if ($this.ErrorText) { throw $this.ErrorText }
+            if ($this.ErrorText -and ($this.FailOnCall -eq 0 -or $this.Calls -ge $this.FailOnCall)) { throw $this.ErrorText }
             $batch = $this.Batches[$this.BatchIndex]
             $this.BatchIndex++
             return [PSCustomObject]@{ Items = @($batch.Items); ListItemCollectionPosition = $batch.Position }
@@ -310,6 +312,52 @@ Describe 'Get-SPSSiteCustomization audience targeting' {
         $result.Signals.AudienceTargetedItemCount | Should -Be 1
         $result.Signals.CustomizationInventoryComplete | Should -BeFalse
         ($result.Warnings -join ';') | Should -Match "Could not scan the audience targeting on 'Broken'.*list view threshold"
+    }
+
+    It 'keeps what it counted in a list when a later page cannot be read: the counts are lower bounds, the list is shown, and the collection is partial' {
+        $first = New-TestBatch -Item @((New-TestItem @{ Target_x0020_Audiences = ';;;;Owners' }), (New-TestItem @{ Target_x0020_Audiences = ';;;;Members' }), (New-TestItem @{ Target_x0020_Audiences = '' })) -Position 'Paged=TRUE&p_ID=3'
+        $list = New-TestList -Fields @((New-TargetingField)) -Batches @($first, (New-TestBatch -Item @())) -ErrorText 'The server is busy.' -FailOnCall 2
+        $other = New-TestList -Title 'Good' -Url '/sites/team/Lists/Good' -Fields @((New-TargetingField)) -Batches @((New-TestBatch -Item @((New-TestItem @{ Target_x0020_Audiences = ';;;;Readers' }))))
+
+        $result = Get-Signal -Site (New-TestSite -List @($list, $other))
+
+        $result.Signals.AudienceTargetedItemCount | Should -Be 3
+        $result.Signals.AudienceTargetedListCount | Should -Be 2
+        $result.Signals.AudienceTargetedExamples | Should -Match '/sites/team/Lists/Announcements \(2 item\(s\): Owners, Members\)'
+        $result.Signals.CustomizationInventoryComplete | Should -BeFalse
+        ($result.Warnings -join ';') | Should -Match "Could not scan the audience targeting on 'Announcements'.*The server is busy\..*The 2 item\(s\) found before the failure are counted: the counts are lower bounds"
+    }
+
+    It 'does not mention a lower bound when the failure comes before any targeted item' {
+        $list = New-TestList -Fields @((New-TargetingField)) -Batches @((New-TestBatch -Item @())) -ErrorText 'The query exceeds the list view threshold.'
+
+        $result = Get-Signal -Site (New-TestSite -List @($list))
+
+        $result.Signals.AudienceTargetedItemCount | Should -Be 0
+        $result.Signals.AudienceTargetedListCount | Should -Be 0
+        ($result.Warnings -join ';') | Should -Match "Could not scan the audience targeting on 'Announcements'.*list view threshold"
+        ($result.Warnings -join ';') | Should -Not -Match 'lower bounds'
+    }
+
+    It 'shows for each list the audiences of that list only, of every kind, and its own number of items' {
+        $first = New-TestList -Title 'First' -Url '/sites/team/Lists/First' -Fields @((New-TargetingField)) -Batches @((New-TestBatch -Item @((New-TestItem @{ Target_x0020_Audiences = "$($script:IdSales),junk;;cn=All Staff,ou=lists,dc=contoso;;Owners" }))))
+        $second = New-TestList -Title 'Second' -Url '/sites/team/Lists/Second' -Fields @((New-TargetingField)) -Batches @((New-TestBatch -Item @((New-TestItem @{ Target_x0020_Audiences = ';;;;Members' }), (New-TestItem @{ Target_x0020_Audiences = ';;;;Readers' }))))
+
+        $result = Get-Signal -Site (New-TestSite -List @($first, $second))
+
+        $result.Signals.AudienceTargetedExamples | Should -Be '/sites/team/Lists/First (1 item(s): Sales, All Staff, Owners, junk); /sites/team/Lists/Second (2 item(s): Members, Readers)'
+    }
+
+    It 'does not carry what one list found over to the next list when the next one fails before it reads anything' {
+        $good = New-TestList -Title 'Good' -Url '/sites/team/Lists/Good' -Fields @((New-TargetingField)) -Batches @((New-TestBatch -Item @((New-TestItem @{ Target_x0020_Audiences = ';;;;Owners' }), (New-TestItem @{ Target_x0020_Audiences = ';;;;Members' }))))
+        $broken = New-TestList -Title 'Broken' -Url '/sites/team/Lists/Broken' -Fields @([SPSTestCollabFailingIdField]::new()) -Batches @((New-TestBatch -Item @()))
+
+        $result = Get-Signal -Site (New-TestSite -List @($good, $broken))
+
+        $result.Signals.AudienceTargetedItemCount | Should -Be 2
+        $result.Signals.AudienceTargetedListCount | Should -Be 1
+        $result.Signals.AudienceTargetedExamples | Should -Not -Match 'Broken'
+        ($result.Warnings -join ';') | Should -Not -Match 'lower bounds'
     }
 
     It 'marks the collection partial when the columns of a list cannot be read, and does not take it for a list without targeting' {

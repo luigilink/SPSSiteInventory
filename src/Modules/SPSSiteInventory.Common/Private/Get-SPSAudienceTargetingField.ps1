@@ -8,7 +8,8 @@
         Settings > Audience targeting settings), and the Pages library of a publishing site has it from the
         start. The column has the same ID everywhere, 61cbb965-1e04-4273-b658-eedaa662f48d, but not the same
         internal name: Target_x0020_Audiences in a list, Audience in a Pages library. So it is found by its
-        ID first, and by its type (TargetTo) when the ID is not the one.
+        ID first, in every column of the list, and by its type (TargetTo), the first column that has it, only
+        when no column has the ID.
 
         The ID of a column that cannot be read raises an error instead of being read as no column
         (PowerShell turns a failing .NET getter into $null), so that a list that could not be read is not
@@ -42,6 +43,8 @@
         throw "The columns of list '$($List.Title)' could not be read."
     }
 
+    # The ID is looked for in every column before the type is: a column of the type that comes first must not hide the one that has the ID.
+    $typeMatch = $null
     foreach ($field in $fields) {
         if ($null -eq $field) {
             continue
@@ -50,9 +53,9 @@
         if ($null -ne $fieldId -and [guid]$fieldId -eq $targetingFieldId) {
             return $field
         }
-        if ([string]$field.TypeAsString -eq 'TargetTo') {
-            return $field
+        if ($null -eq $typeMatch -and [string]$field.TypeAsString -eq 'TargetTo') {
+            $typeMatch = $field
         }
     }
-    return $null
+    return $typeMatch
 }

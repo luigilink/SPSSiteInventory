@@ -319,6 +319,9 @@ Describe 'The scenarios of the collaboration signals' {
         $audience | Should -Not -Match 'catch'
         $notebook | Should -Match 'SKIP: the Site Notebook feature \('
         $notebook | Should -Match 'SKIP: the Site Notebook feature is active, but it did not create the notebook'
+        # A skipped scenario is not provisioned or verified again: the message says how to test the notebook by hand.
+        $notebook | Should -Match 'is not provisioned or verified again'
+        $notebook | Should -Match 'run -Action Inventory'
         $notebook | Should -Match 'Get-SPFeature -Identity \$featureId'
         $notebook | Should -Not -Match 'catch'
     }
