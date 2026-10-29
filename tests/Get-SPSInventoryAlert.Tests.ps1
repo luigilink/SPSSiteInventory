@@ -93,6 +93,20 @@ Describe 'Get-SPSInventoryAlert' {
         $alerts[0].Value | Should -Be $Value
     }
 
+    It 'frames the reason of each template alert as migration-only in the on-premises mode, and leaves it as it is in the default mode' {
+        $record = New-Site -Signals @{
+            IsUnsupportedSiteTemplate = $true; Template = 'APP#0'; TemplateCompatibilityReason = 'App webs are not migration targets.'
+        }
+        $review = New-Site -Signals @{ TemplateCompatibility = 'Review'; Template = 'CUSTOM#1'; TemplateCompatibilityReason = 'Template is not mapped.' }
+        $language = New-Site -Signals @{ TemplateLanguageReviewRequired = $true; TemplateLanguageLcid = 999999; TemplateLanguageReason = 'LCID is not recognized.' }
+        $parameters = @{ TargetMode = 'SharePointOnPrem' }
+
+        (Get-Alert -Record @($record) -Parameters $parameters)[0].Message | Should -Be 'Migration to SharePoint Online only. App webs are not migration targets.'
+        (Get-Alert -Record @($review) -Parameters $parameters)[0].Message | Should -Be 'Migration to SharePoint Online only. Template is not mapped.'
+        (Get-Alert -Record @($language) -Parameters $parameters)[0].Message | Should -Be 'Migration to SharePoint Online only. LCID is not recognized.'
+        (Get-Alert -Record @($record))[0].Message | Should -Be 'App webs are not migration targets.'
+    }
+
     It 'raises the same alerts in the default mode with or without the mode, and the same types in both modes' {
         $record = New-Site -Signals @{ ExternalListCount = 2; InfoPathFormCount = 1; ScriptWebPartCount = 3; UsesFullTrustCode = $true }
 

@@ -10,6 +10,11 @@
         too, unless the caller gives a more specific one, such as the reason a site template
         needs review.
 
+        A catalog entry can have a MessagePrefix (the on-premises catalog puts "Migration to
+        SharePoint Online only." before the alerts that are only about a migration): it also goes
+        before a message that the caller gives, so that the reason of a template alert is framed
+        like the message of the catalog.
+
         An alert type that is not in the catalog raises an error: every alert must carry a
         remediation.
 
@@ -68,13 +73,22 @@
         throw "The alert type '$AlertType' is not in the alert catalog."
     }
     $entry = $catalog[$AlertType]
+    $text = if ([string]::IsNullOrWhiteSpace($Message)) {
+        $entry.Message
+    }
+    elseif ($entry.ContainsKey('MessagePrefix')) {
+        '{0}{1}' -f $entry.MessagePrefix, $Message
+    }
+    else {
+        $Message
+    }
 
     [PSCustomObject]@{
         AlertType   = $AlertType
         Severity    = $entry.Severity
         Url         = $Url
         Value       = $Value
-        Message     = if ([string]::IsNullOrWhiteSpace($Message)) { $entry.Message } else { $Message }
+        Message     = $text
         Remediation = $entry.Remediation
         Reference   = $entry.Reference
     }

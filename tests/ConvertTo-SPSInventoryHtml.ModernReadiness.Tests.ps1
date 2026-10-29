@@ -129,11 +129,44 @@ Describe 'The Modern experience readiness section of the HTML report' {
         $section | Should -Match '<strong>1</strong> of <strong>1</strong> assessed'
     }
 
-    It 'says so, with no table, when no assessed site collection has a blocker' {
+    It 'says that no blocker was detected, with no table, when no assessed site collection has one' {
         $section = Get-Section -Html (Get-Html -Record @((New-Site -Name 'a'), (New-Site -Name 'b')))
 
-        $section | Should -Match 'No assessed site collection has a blocker of the modern experience \(2 assessed\)'
+        $section | Should -Match 'No blocker of the modern experience was detected in the <strong>2</strong> assessed site collection\(s\)\.'
+        $section | Should -Not -Match 'has a blocker'
+        $section | Should -Not -Match 'partial'
+        $section | Should -Not -Match 'failed'
         $section | Should -Not -Match '<table'
+    }
+
+    It 'does not call a partial site collection clean when it has no signal: a blocker may have been missed there' {
+        $records = @((New-Site -Name 'partial' -Status 'Partial'), (New-Site -Name 'ok'))
+
+        $section = Get-Section -Html (Get-Html -Record $records)
+
+        $section | Should -Match 'No blocker of the modern experience was detected in the <strong>2</strong> assessed site collection\(s\)\.'
+        $section | Should -Match 'The assessment of <strong>1</strong> site collection\(s\) is partial: a blocker may have been missed there\.'
+    }
+
+    It 'says that nothing was assessed, not that nothing is wrong, when every assessment failed' {
+        $failed = @((New-Site -Name 'a' -Status 'Failed' -Category 0 -CategoryName 'Not assessed'), (New-Site -Name 'b' -Status 'Failed' -Category 0 -CategoryName 'Not assessed'))
+
+        $section = Get-Section -Html (Get-Html -Record $failed)
+
+        $section | Should -Match 'No site collection was assessed, so no blocker of the modern experience was detected\.'
+        $section | Should -Match '<strong>2</strong> site collection\(s\) whose assessment failed are not counted\.'
+        $section | Should -Not -Match 'assessed site collection\(s\)\.'
+        $section | Should -Not -Match '<table'
+    }
+
+    It 'says what failed and what is partial next to a clean result' {
+        $records = @((New-Site -Name 'failed' -Status 'Failed' -Category 0 -CategoryName 'Not assessed'), (New-Site -Name 'partial' -Status 'Partial'))
+
+        $section = Get-Section -Html (Get-Html -Record $records)
+
+        $section | Should -Match 'No blocker of the modern experience was detected in the <strong>1</strong> assessed site collection\(s\)\.'
+        $section | Should -Match '<strong>1</strong> site collection\(s\) whose assessment failed are not counted\.'
+        $section | Should -Match 'is partial: a blocker may have been missed there'
     }
 
     It 'has no section for an empty inventory' {

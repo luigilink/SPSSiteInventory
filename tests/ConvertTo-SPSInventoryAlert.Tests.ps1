@@ -83,8 +83,17 @@ Describe 'ConvertTo-SPSInventoryAlert' {
         $without.Severity | Should -Be 'High'
     }
 
-    It 'still prefers a specific message to the one of the catalog of the mode' {
-        (New-Alert -Parameters @{ AlertType = 'UnsupportedSiteTemplate'; Url = 'u'; Value = 'APP#0'; Message = 'App webs are not targets.'; TargetMode = 'SharePointOnPrem' }).Message | Should -Be 'App webs are not targets.'
+    It 'puts the words of the mode before a specific message too, for the alerts that are only about a migration' {
+        $onPrem = New-Alert -Parameters @{ AlertType = 'UnsupportedSiteTemplate'; Url = 'u'; Value = 'APP#0'; Message = 'App webs are not targets.'; TargetMode = 'SharePointOnPrem' }
+        $online = New-Alert -Parameters @{ AlertType = 'UnsupportedSiteTemplate'; Url = 'u'; Value = 'APP#0'; Message = 'App webs are not targets.' }
+
+        $onPrem.Message | Should -Be 'Migration to SharePoint Online only. App webs are not targets.'
+        $onPrem.Severity | Should -Be 'Low'
+        $online.Message | Should -Be 'App webs are not targets.'
+    }
+
+    It 'keeps the specific message as it is for an alert that matters for the modernization' {
+        (New-Alert -Parameters @{ AlertType = 'InfoPath'; Url = 'u'; Value = 1; Message = 'Specific.'; TargetMode = 'SharePointOnPrem' }).Message | Should -Be 'Specific.'
     }
 
     It 'rejects a target mode that is not one of the two, and an alert type that is not in the catalog of the mode' {

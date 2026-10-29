@@ -251,6 +251,34 @@ Describe 'Get-SPSAlertCatalog for the SharePointOnPrem mode' {
         }
     }
 
+    It 'keeps the words that it puts before a message apart, for the migration-only alerts only, so that a specific message can take them too' {
+        foreach ($key in $script:OnPrem.Keys) {
+            if ($script:MigrationOnly -contains $key) {
+                $script:OnPrem[$key].MessagePrefix | Should -Be 'Migration to SharePoint Online only. ' -Because $key
+                $script:OnPrem[$key].Message.StartsWith($script:OnPrem[$key].MessagePrefix) | Should -BeTrue -Because $key
+            }
+            else {
+                $script:OnPrem[$key].ContainsKey('MessagePrefix') | Should -BeFalse -Because $key
+            }
+        }
+        foreach ($key in $script:Catalog.Keys) {
+            $script:Catalog[$key].ContainsKey('MessagePrefix') | Should -BeFalse -Because $key
+        }
+    }
+
+    It 'does not tell a farm to use hub sites, which SharePoint Server does not have, and says that they are not available' {
+        foreach ($key in $script:OnPrem.Keys) {
+            ($script:OnPrem[$key].Message + ' ' + $script:OnPrem[$key].Remediation) | Should -Not -Match 'connected by (a )?hub site' -Because $key
+        }
+        $entry = $script:OnPrem['Subsites']
+
+        $entry.Message | Should -Not -Match 'hub'
+        $entry.Remediation | Should -Match 'hub sites are not available in SharePoint Server'
+        $entry.Remediation | Should -Match 'linked from the navigation'
+        $entry.Reference | Should -Be 'https://learn.microsoft.com/en-us/sharepoint/sites/sites-and-site-collections-overview'
+        $script:Catalog['Subsites'].Remediation | Should -Match 'connected to the others by a hub site'
+    }
+
     It 'keeps the alerts that matter for the modernization out of the migration-only ones' {
         foreach ($key in @('InfoPath', 'Workflow2010', 'FullTrustCode', 'PublishingSite', 'CustomizedPages', 'AlternateCssUrl', 'XsltListViews', 'ScriptWebParts', 'LargeLists', 'LargeListViews', 'Subsites', 'AssessmentFailed', 'AssessmentPartial', 'WebApplicationEnumerationFailed', 'BcsInventoryPartial')) {
             $script:MigrationOnly | Should -Not -Contain $key

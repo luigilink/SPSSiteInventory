@@ -830,14 +830,25 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
     # of a farm is the work of removing it, so the report of that mode has a section for it.
     if ($hasReadinessSection) {
         [void]$sb.AppendLine('<h2 id="modern-readiness">Modern experience readiness</h2>')
+        # What could not be read must be said where there is no blocker too: a site collection with no collected signal is not a clean one.
+        $failedNote = ''
+        if ($readiness.NotAssessed -gt 0) {
+            $failedNote = ' <strong>{0}</strong> site collection(s) whose assessment failed are not counted.' -f $readiness.NotAssessed
+        }
         if ($readiness.WithBlocker -eq 0) {
-            [void]$sb.AppendLine(('<p class="muted">No assessed site collection has a blocker of the modern experience ({0} assessed).</p>' -f $readiness.Assessed))
+            $partialNote = ''
+            if ($partialCount -gt 0) {
+                $partialNote = ' The assessment of <strong>{0}</strong> site collection(s) is partial: a blocker may have been missed there.' -f $partialCount
+            }
+            if ($readiness.Assessed -eq 0) {
+                [void]$sb.AppendLine(('<p class="muted">No site collection was assessed, so no blocker of the modern experience was detected.{0}</p>' -f $failedNote))
+            }
+            else {
+                [void]$sb.AppendLine(('<p class="muted">No blocker of the modern experience was detected in the <strong>{0}</strong> assessed site collection(s).{1}{2}</p>' -f $readiness.Assessed, $failedNote, $partialNote))
+            }
         }
         else {
-            $readinessNote = ''
-            if ($readiness.NotAssessed -gt 0) {
-                $readinessNote += ' <strong>{0}</strong> site collection(s) whose assessment failed are not counted.' -f $readiness.NotAssessed
-            }
+            $readinessNote = $failedNote
             if ($partialCount -gt 0) {
                 $readinessNote += ' The counts of a site collection whose assessment is partial are lower bounds.'
             }

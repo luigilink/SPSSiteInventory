@@ -134,8 +134,9 @@
             Remediation = 'Review the views, for example by filtering on indexed columns and limiting lookup columns: the list view threshold applies to the views of a modern list too.'
         }
         Subsites = @{
-            Message     = 'This site collection has subsites. They work on this farm, but modern SharePoint favors one site collection per unit of work, connected by hub sites.'
-            Remediation = 'Decide with the site owners, when you plan the modernization, whether each subsite stays where it is or becomes a site collection of its own, connected to the others by a hub site. A subsite is part of the URL of its content, so reorganizing it later breaks the links to it, and the policies of a site collection (retention, classification, features) apply to all its subsites. Restructuring changes URLs, navigation and permissions, so plan the redirects and the communication. SubsiteCount, MaxSubsiteDepth and SubsiteExamples in the inventory show where to start.'
+            Message     = 'This site collection has subsites. They work on this farm, but modern SharePoint favors one site collection per unit of work.'
+            Remediation = 'Decide with the site owners, when you plan the modernization, whether each subsite stays where it is or becomes a site collection of its own, linked from the navigation of the others (hub sites are not available in SharePoint Server). A subsite is part of the URL of its content, so reorganizing it later breaks the links to it, and the policies of a site collection (retention, classification, features) apply to all its subsites. Restructuring changes URLs, navigation and permissions, so plan the redirects and the communication. SubsiteCount, MaxSubsiteDepth and SubsiteExamples in the inventory show where to start.'
+            Reference   = 'https://learn.microsoft.com/en-us/sharepoint/sites/sites-and-site-collections-overview'
         }
         ModernExperienceOptOut = @{
             Severity = 'Medium'
@@ -164,7 +165,9 @@
         }
         if ($migrationOnly -contains $type) {
             $words.Severity = 'Low'
-            $words.Message = 'Migration to SharePoint Online only. {0}' -f $entry.Message
+            # The prefix is kept apart, so that a specific message (the reason of a template alert) can take it too.
+            $words.MessagePrefix = 'Migration to SharePoint Online only. '
+            $words.Message = '{0}{1}' -f $words.MessagePrefix, $entry.Message
             $words.Remediation = 'Nothing to do to modernize this farm. If you migrate to SharePoint Online, this applies. {0}' -f $entry.Remediation
         }
         if ($override.Contains($type)) {
