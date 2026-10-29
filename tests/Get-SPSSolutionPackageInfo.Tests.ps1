@@ -39,7 +39,8 @@ AfterAll {
 Describe 'Get-SPSSolutionPackageInfo' {
     Context 'an expanded package' {
         BeforeAll {
-            $script:Info = @(Get-SPSSolutionPackageInfo -Path $script:Folder)
+            # The 'Genuine' fixture is signed with a throwaway key: its token is given as the token of a Microsoft key.
+            $script:Info = @(Get-SPSSolutionPackageInfo -Path $script:Folder -KnownMicrosoftPublicKeyToken $script:GenuineToken)
         }
 
         It 'returns one record for the package' {
@@ -113,19 +114,86 @@ Describe 'Get-SPSSolutionPackageInfo' {
             $text = $text -replace '(?s)<Assembly Location="Contoso.Fixture.Custom.dll".*?</Assembly>', '' -replace '<Assembly Location="Contoso.Fixture.Legacy.dll"[^>]*/>', ''
             Write-TestFile -Path $manifest -Text $text
 
-            $info = @(Get-SPSSolutionPackageInfo -Path $path)[0]
+            $info = @(Get-SPSSolutionPackageInfo -Path $path -KnownMicrosoftPublicKeyToken $script:GenuineToken)[0]
 
             $info.AssemblyCount | Should -Be 1
             $info.IsCustom | Should -BeFalse
             $info.IsFullTrustCode | Should -BeFalse
             $info.IsCustomSource | Should -Be 'Assembly'
+            $info.Status | Should -Be 'Inspected'
         }
 
-        It 'takes a token that is added as Microsoft' {
-            $info = @(Get-SPSSolutionPackageInfo -Path $script:Folder -KnownMicrosoftPublicKeyToken '30ad4fe6b2a6aeed')[0]
+        It 'takes a token that is added as Microsoft, when the assemblies are signed with it' {
+            $path = & $script:NewFolder
+            [System.IO.File]::Delete((Join-Path $path 'Contoso.Fixture.Custom.dll'))
+            [System.IO.File]::Delete((Join-Path $path 'Contoso.Fixture.Legacy.dll'))
+            $manifest = Join-Path -Path $path -ChildPath 'manifest.xml'
+            $text = [System.IO.File]::ReadAllText($manifest)
+            $text = $text -replace '(?s)<Assembly Location="Contoso.Fixture.Custom.dll".*?</Assembly>', '' -replace '<Assembly Location="Contoso.Fixture.Legacy.dll"[^>]*/>', ''
+            Write-TestFile -Path $manifest -Text $text
 
-            $info.IsCustom | Should -BeFalse
-            $info.CustomAssemblyCount | Should -Be 0
+            $without = @(Get-SPSSolutionPackageInfo -Path $path)[0]
+            $with = @(Get-SPSSolutionPackageInfo -Path $path -KnownMicrosoftPublicKeyToken $script:GenuineToken.ToUpperInvariant())[0]
+
+            $without.IsCustom | Should -BeTrue
+            $with.IsCustom | Should -BeFalse
+            $with.CustomAssemblyCount | Should -Be 0
+        }
+
+        It 'does not take a token that is added for a proof: an assembly that has the public key and is not signed with it stays custom' {
+            $info = @(Get-SPSSolutionPackageInfo -Path $script:Folder -KnownMicrosoftPublicKeyToken @($script:GenuineToken, '30ad4fe6b2a6aeed'))[0]
+
+            $info.IsCustom | Should -BeTrue
+            $info.CustomAssemblyCount | Should -Be 2
+            $info.Status | Should -Be 'Partial'
+            $info.Detail | Should -Match "Assembly 'Contoso.Fixture.Custom.dll' has the public key token of a Microsoft key \(30ad4fe6b2a6aeed\) but is not signed with it"
+        }
+
+        It 'does not call a package Microsoft because an assembly has the public key of Microsoft and is not signed with it' {
+            $path = & $script:NewFolder
+            [System.IO.File]::Delete((Join-Path $path 'Contoso.Fixture.Custom.dll'))
+            [System.IO.File]::Delete((Join-Path $path 'Contoso.Fixture.Legacy.dll'))
+            [System.IO.File]::WriteAllBytes((Join-Path $path 'Fixture.Signed.dll'), (Get-TestAssemblyByte 'Microsoft'))
+            $manifest = Join-Path -Path $path -ChildPath 'manifest.xml'
+            $text = [System.IO.File]::ReadAllText($manifest)
+            $text = $text -replace '(?s)<Assembly Location="Contoso.Fixture.Custom.dll".*?</Assembly>', '' -replace '<Assembly Location="Contoso.Fixture.Legacy.dll"[^>]*/>', ''
+            Write-TestFile -Path $manifest -Text $text
+
+            $info = @(Get-SPSSolutionPackageInfo -Path $path)[0]
+
+            $info.AssemblyCount | Should -Be 1
+            $info.IsCustom | Should -BeTrue
+            $info.IsCustomSource | Should -Be 'Assembly'
+            $info.IsFullTrustCode | Should -BeTrue
+            $info.CustomAssemblyCount | Should -Be 1
+            $info.Status | Should -Be 'Partial'
+            $info.Detail | Should -Match "Assembly 'Fixture.Signed.dll' has the public key token of a Microsoft key \(31bf3856ad364e35\) but is not signed with it \(NotSigned\)"
+            $info.Assemblies[0].HasMicrosoftToken | Should -BeTrue
+            $info.Assemblies[0].IsMicrosoft | Should -BeFalse
+        }
+
+        It 'does not call a package Microsoft because of its name when an assembly was not assessed' {
+            $path = & $script:NewFolder 'microsoft.sharepoint.notassessed'
+            Get-ChildItem -LiteralPath $path -Filter '*.dll' | Remove-Item
+            $manifest = Join-Path -Path $path -ChildPath 'manifest.xml'
+            $text = [System.IO.File]::ReadAllText($manifest)
+            $text = $text -replace '(?s)<Assemblies>.*?</Assemblies>', '<Assemblies><Assembly Location="big.dll" DeploymentTarget="GlobalAssemblyCache" /></Assemblies>'
+            Write-TestFile -Path $manifest -Text $text
+            # The size is all that is looked at (the file is not read), so it need not hold anything.
+            $stream = [System.IO.File]::Create((Join-Path $path 'big.dll'))
+            try {
+                $stream.SetLength(300MB)
+            }
+            finally {
+                $stream.Dispose()
+            }
+
+            $info = @(Get-SPSSolutionPackageInfo -Path $path)[0]
+
+            $info.IsCustom | Should -BeTrue
+            $info.IsCustomSource | Should -Be 'Assembly'
+            $info.Status | Should -Be 'Partial'
+            $info.Detail | Should -Match "Assembly 'big.dll': The file is larger than 256 MB and was not read"
         }
 
         It 'falls back to the name of the package when it has no assembly' {
@@ -374,11 +442,12 @@ Describe 'Get-SPSSolutionPackageInfo' {
             $info[0].Source | Should -Be 'Cabinet'
             $info[0].SolutionId | Should -Be '6f1a8b40-3c2d-4e5f-9a7b-1c2d3e4f5a6b'
             $info[0].AssemblyCount | Should -Be 3
-            $info[0].CustomAssemblyCount | Should -Be 2
+            $info[0].CustomAssemblyCount | Should -Be 3
             $info[0].LegacyFrameworkAssemblyCount | Should -Be 1
             $info[0].FeatureCount | Should -Be 2
             $info[0].FeatureIds | Should -Be @('a1b2c3d4-0000-4000-8000-000000000001', 'a1b2c3d4-0000-4000-8000-000000000002')
             $info[0].FileCount | Should -Be 9
+            $info[0].PackageSizeBytes | Should -Be (Get-Item -LiteralPath $wsp).Length
             $info[0].Sha256 | Should -Be (Get-FileHash -LiteralPath $wsp -Algorithm SHA256).Hash.ToLowerInvariant()
             @(Get-ChildItem -LiteralPath $work -Force -ErrorAction SilentlyContinue) | Should -HaveCount 0
         }

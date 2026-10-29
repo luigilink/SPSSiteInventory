@@ -18,13 +18,22 @@
           strong name, the public key token and the framework it was built for.
 
         An assembly is Microsoft when its public key token is one of the tokens that Microsoft signs
-        with, and custom otherwise (an assembly that is not signed is custom); a satellite assembly
-        (a culture) holds resources only and is not counted. That is a classification on the key
-        of the assembly, not on the name of the solution.
+        with AND its strong-name signature is valid, and custom otherwise (an assembly that is not
+        signed is custom); a satellite assembly (a culture) holds resources only and is not counted.
+        That is a classification on the key of the assembly, not on the name of the solution. The
+        token alone proves nothing: it is a hash of the public key that the assembly declares, and an
+        assembly that is delay-signed with the public key of Microsoft, or altered after it was signed,
+        carries it as well. Such an assembly is custom, and the package says so in Problems.
 
         The function reads what it can: a part that cannot be read (a missing feature manifest, a DLL
-        that is not an assembly) is reported in Problems, and the rest is still returned. It throws
-        when the folder has no readable manifest.xml.
+        that is not an assembly) is reported in Problems, and the rest is still returned. A DLL that
+        was not assessed (above the size limit, not a valid image, a name that could not be read) is
+        reported in Problems too, and counts as custom, because nothing shows that it is Microsoft's.
+        It throws when the folder has no readable manifest.xml.
+
+        The package is not trusted. A location in a manifest, a DLL that is found in a folder and
+        manifest.xml itself must stay in the package, and a symbolic link or a junction is never
+        followed (see Resolve-SPSPackagePath and Get-SPSPackageFile).
 
         Private because it is an implementation detail of Get-SPSSolutionPackageInfo.
 
@@ -69,23 +78,10 @@
     $problem = [System.Collections.Generic.List[string]]::new()
     $token = @($MicrosoftPublicKeyToken | Where-Object { -not [System.String]::IsNullOrWhiteSpace($_) } | ForEach-Object { $_.Trim().ToLowerInvariant() })
 
-    # A location in a manifest comes from a file that is not trusted: it must stay in the package.
+    # A location in a manifest comes from a file that is not trusted: it must stay in the package, and must not go through a link.
     $resolveInside = {
         param ([System.String] $Base, [System.String] $Location)
-        if ([System.String]::IsNullOrWhiteSpace($Location)) {
-            return $null
-        }
-        try {
-            $relative = $Location.Trim() -replace '[\\/]', $separator
-            $full = [System.IO.Path]::GetFullPath((Join-Path -Path $Base -ChildPath $relative))
-        }
-        catch {
-            return $null
-        }
-        if ($full.StartsWith($rootFull, [System.StringComparison]::OrdinalIgnoreCase)) {
-            return $full
-        }
-        return $null
+        return (Resolve-SPSPackagePath -Root $Root -Base $Base -Location $Location)
     }
     $normalizeGuid = {
         param ([System.String] $Text)
@@ -100,9 +96,12 @@
         return ([System.String]$Text).Trim() -ieq 'true'
     }
 
-    $manifestFile = @(Get-ChildItem -LiteralPath $Root -File | Where-Object { $_.Name -ieq 'manifest.xml' }) | Select-Object -First 1
+    $manifestFile = @(Get-ChildItem -LiteralPath $Root -File -Force | Where-Object { $_.Name -ieq 'manifest.xml' }) | Select-Object -First 1
     if ($null -eq $manifestFile) {
         throw 'The package has no manifest.xml.'
+    }
+    if (Test-SPSFileSystemLink -Item $manifestFile) {
+        throw 'manifest.xml is a link (a symbolic link or a junction), which is not followed.'
     }
     try {
         $manifest = Read-SPSPackageXml -Path $manifestFile.FullName
@@ -124,33 +123,37 @@
     $assembly = [System.Collections.Generic.List[object]]::new()
     $seen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
     $addAssembly = {
-        param ([System.String] $Location, [System.String] $Target, [System.String] $FullPath, [System.Int32] $SafeControl)
+        param ([System.String] $Location, [System.String] $Target, $Resolved, [System.Int32] $SafeControl)
         $status = 'Read'
         $detail = ''
         $file = $null
-        if ([System.String]::IsNullOrEmpty($FullPath)) {
-            $status = 'Outside'
-            $detail = 'The location is outside of the package.'
+        if ($null -eq $Resolved.Path) {
+            $status = if ($Resolved.Problem -eq 'Link') { 'Link' } else { 'Outside' }
+            $detail = $Resolved.Detail
         }
-        elseif (-not (Test-Path -LiteralPath $FullPath -PathType Leaf)) {
+        elseif (-not (Test-Path -LiteralPath $Resolved.Path -PathType Leaf)) {
             $status = 'Missing'
             $detail = 'The file is not in the package.'
         }
         else {
-            $file = Get-SPSAssemblyFileInfo -Path $FullPath -MaximumMegabyte $dllLimit
-            if (-not $file.IsManaged) {
-                $status = 'NotManaged'
-                $detail = $file.Detail
-            }
-            elseif ($file.Detail) {
-                $status = 'Partial'
-                $detail = $file.Detail
+            $file = Get-SPSAssemblyFileInfo -Path $Resolved.Path -MaximumMegabyte $dllLimit
+            $detail = $file.Detail
+            # A genuine native DLL is a normal case. A DLL that was skipped or could not be read was not assessed.
+            $status = switch ($file.ReadStatus) {
+                'Read' { 'Read' }
+                'Partial' { 'Partial' }
+                'Native' { 'NotManaged' }
+                'Skipped' { 'Skipped' }
+                default { 'Failed' }
             }
         }
         $managed = ($null -ne $file -and $file.IsManaged)
         $tokenValue = if ($null -ne $file) { $file.PublicKeyToken } else { '' }
         $culture = if ($null -ne $file) { $file.Culture } else { '' }
-        $isMicrosoft = ($tokenValue.Length -gt 0 -and $token -contains $tokenValue)
+        $signature = if ($null -ne $file) { $file.SignatureStatus } else { '' }
+        $hasMicrosoftToken = ($tokenValue.Length -gt 0 -and $token -contains $tokenValue)
+        # The token is only a hash of the key that the assembly declares: it counts when the signature is valid.
+        $isMicrosoft = ($hasMicrosoftToken -and $signature -eq 'Valid')
         $isSatellite = ($managed -and $culture.Length -gt 0)
         $runtime = if ($managed) { $file.RuntimeVersion } else { '' }
         $framework = if ($managed) { $file.TargetFramework } else { '' }
@@ -171,6 +174,8 @@
                 Culture                 = $culture
                 PublicKeyToken          = $tokenValue
                 IsSigned                = ($tokenValue.Length -gt 0)
+                SignatureStatus         = $signature
+                HasMicrosoftToken       = $hasMicrosoftToken
                 IsManaged               = $managed
                 IsMicrosoft             = $isMicrosoft
                 IsSatellite             = $isSatellite
@@ -181,8 +186,11 @@
                 BuiltForLegacyFramework = $legacy
                 SafeControlCount        = $SafeControl
             })
-        if ($status -in @('Outside', 'Missing')) {
+        if ($status -in @('Outside', 'Link', 'Missing', 'Partial', 'Skipped', 'Failed')) {
             $problem.Add("Assembly '$Location': $detail")
+        }
+        if ($hasMicrosoftToken -and -not $isMicrosoft -and -not $isSatellite -and $managed) {
+            $problem.Add("Assembly '$Location' has the public key token of a Microsoft key ($tokenValue) but is not signed with it ($signature), so it counts as custom: $($file.SignatureDetail)")
         }
     }
 
@@ -196,18 +204,25 @@
         }
         $safe = @($node.SelectNodes("./*[local-name()='SafeControls']/*[local-name()='SafeControl']")).Count
         $safeControlCount += $safe
-        $full = & $resolveInside $Root $location
-        if ($null -ne $full) {
-            $null = $seen.Add($full)
+        $resolved = & $resolveInside $Root $location
+        if ($null -ne $resolved.Path) {
+            $null = $seen.Add($resolved.Path)
         }
-        & $addAssembly $location $target $full $safe
+        & $addAssembly $location $target $resolved $safe
     }
-    foreach ($dll in @(Get-ChildItem -LiteralPath $Root -Recurse -File | Where-Object { $_.Extension -ieq '.dll' } | Sort-Object -Property FullName)) {
+
+    # Every file is listed, the hidden ones too, and a link is left alone: it can lead anywhere.
+    $package = Get-SPSPackageFile -Root $Root
+    if ($package.Link.Count -gt 0) {
+        $shown = @($package.Link | Select-Object -First 3 | ForEach-Object { $_.Substring($rootFull.Length) -replace '[\\/]', '\' })
+        $problem.Add("The package has $($package.Link.Count) link(s) (symbolic links or junctions), which are not followed: $($shown -join ', ')$(if ($package.Link.Count -gt 3) { ', ...' }).")
+    }
+    foreach ($dll in @($package.File | Where-Object { $_.Extension -ieq '.dll' } | Sort-Object -Property FullName)) {
         if ($seen.Contains($dll.FullName)) {
             continue
         }
         $relative = $dll.FullName.Substring($rootFull.Length) -replace '[\\/]', '\'
-        & $addAssembly $relative 'Other' $dll.FullName 0
+        & $addAssembly $relative 'Other' ([PSCustomObject]@{ Path = $dll.FullName; Problem = ''; Detail = '' }) 0
     }
 
     # The features of the manifest, read from their own files.
@@ -230,10 +245,12 @@
             ReceiverClass      = ''
             Receiver           = @()
         }
-        $full = & $resolveInside $Root $location
+        $resolved = & $resolveInside $Root $location
+        $full = $resolved.Path
         if ($null -eq $full -or -not (Test-Path -LiteralPath $full -PathType Leaf)) {
             $record['Status'] = 'Missing'
-            $problem.Add("Feature manifest '$location' is not in the package.")
+            $reason = if ($resolved.Problem -eq 'Link') { 'goes through a link, which is not followed' } else { 'is not in the package' }
+            $problem.Add("Feature manifest '$location' $reason.")
             $feature.Add([PSCustomObject]$record)
             continue
         }
@@ -265,9 +282,11 @@
         $folder = Split-Path -Path $full -Parent
         foreach ($elementNode in @($featureRoot.SelectNodes("./*[local-name()='ElementManifests']/*[local-name()='ElementManifest']"))) {
             $elementLocation = $elementNode.GetAttribute('Location')
-            $elementFull = & $resolveInside $folder $elementLocation
+            $elementResolved = & $resolveInside $folder $elementLocation
+            $elementFull = $elementResolved.Path
             if ($null -eq $elementFull -or -not (Test-Path -LiteralPath $elementFull -PathType Leaf)) {
-                $problem.Add("Element manifest '$elementLocation' of the feature '$location' is not in the package.")
+                $reason = if ($elementResolved.Problem -eq 'Link') { 'goes through a link, which is not followed' } else { 'is not in the package' }
+                $problem.Add("Element manifest '$elementLocation' of the feature '$location' $reason.")
                 continue
             }
             try {
@@ -311,12 +330,12 @@
 
     $codeAccessSecurity = @($manifest.SelectNodes("/*[local-name()='Solution']/*[local-name()='CodeAccessSecurity']/*[local-name()='PolicyItem']")).Count -gt 0
     $applicationResource = (& $count 'ApplicationResourceFiles' 'ApplicationResourceFile') -gt 0
-    $globalAssembly = @($assembly | Where-Object { $_.DeploymentTarget -eq 'GlobalAssemblyCache' -and $_.Status -ne 'Outside' }).Count -gt 0
-    $webApplicationAssembly = @($assembly | Where-Object { $_.DeploymentTarget -eq 'WebApplication' -and $_.Status -ne 'Outside' }).Count -gt 0
+    $globalAssembly = @($assembly | Where-Object { $_.DeploymentTarget -eq 'GlobalAssemblyCache' -and $_.Status -notin @('Outside', 'Link') }).Count -gt 0
+    $webApplicationAssembly = @($assembly | Where-Object { $_.DeploymentTarget -eq 'WebApplication' -and $_.Status -notin @('Outside', 'Link') }).Count -gt 0
 
     $fileCount = 0
     $fileBytes = [System.Int64]0
-    foreach ($file in @(Get-ChildItem -LiteralPath $Root -Recurse -Force -File)) {
+    foreach ($file in $package.File) {
         $fileCount++
         $fileBytes += $file.Length
     }

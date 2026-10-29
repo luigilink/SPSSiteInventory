@@ -20,8 +20,19 @@
           4.0 does not).
         - Architecture is 'AnyCPU', 'x86', 'x64', 'ARM' or 'ARM64'.
 
+        - SignatureStatus says whether the strong-name signature is valid (see
+          Test-SPSAssemblyStrongName): the token alone is only a hash of the public key that the
+          assembly declares, and a delay-signed or an altered assembly carries it as well. It is
+          Valid, Invalid, NotSigned or NotVerified for an assembly that has a public key, and
+          NoStrongName for one that has none.
+
         A file that is not a .NET assembly (a native DLL, a text file) is reported with
         IsManaged = $false and the reason in Detail; the function does not throw for a bad file.
+        ReadStatus tells what happened: Read (a managed assembly, read in full), Partial (a managed
+        assembly whose name could not be read), Native (a genuine native DLL: it is a valid image with
+        no .NET header), Skipped (above the size limit, not read) or Failed (not an image, or an
+        image that is not valid or could not be read). Only Native is a normal case for a DLL that is
+        not an assembly: the others are files that were not assessed.
 
         Private because it is an implementation detail of Get-SPSSolutionPackageInfo.
 
@@ -32,8 +43,8 @@
         The size above which the file is not read. Defaults to 256.
 
         .OUTPUTS
-        An object with Path, IsManaged, Name, Version, Culture, PublicKeyToken, IsSigned,
-        RuntimeVersion, TargetFramework, Architecture and Detail.
+        An object with Path, ReadStatus, IsManaged, Name, Version, Culture, PublicKeyToken, IsSigned,
+        SignatureStatus, SignatureDetail, RuntimeVersion, TargetFramework, Architecture and Detail.
 
         .EXAMPLE
         Get-SPSAssemblyFileInfo -Path .\Contoso.Intranet.dll
@@ -54,20 +65,24 @@
 
     $info = [ordered]@{
         Path            = $Path
+        ReadStatus      = 'Failed'
         IsManaged       = $false
         Name            = ''
         Version         = ''
         Culture         = ''
         PublicKeyToken  = ''
         IsSigned        = $false
+        SignatureStatus = 'NoStrongName'
+        SignatureDetail = ''
         RuntimeVersion  = ''
         TargetFramework = ''
         Architecture    = ''
         Detail          = ''
     }
 
-    $length = (Get-Item -LiteralPath $Path -ErrorAction Stop).Length
+    $length = (Get-Item -LiteralPath $Path -Force -ErrorAction Stop).Length
     if ($length -gt ([System.Int64]$MaximumMegabyte * 1MB)) {
+        $info['ReadStatus'] = 'Skipped'
         $info['Detail'] = "The file is larger than $MaximumMegabyte MB and was not read."
         return [PSCustomObject]$info
     }
@@ -103,11 +118,13 @@
         }
         $directoryCount = [System.BitConverter]::ToUInt32($bytes, $directoryCountOffset)
         if ($directoryCount -lt 15) {
+            $info['ReadStatus'] = 'Native'
             $info['Detail'] = 'The file is a native DLL (it has no .NET header).'
             return [PSCustomObject]$info
         }
         $clrRva = [System.BitConverter]::ToUInt32($bytes, $directoryCountOffset + 4 + (14 * 8))
         if ($clrRva -eq 0) {
+            $info['ReadStatus'] = 'Native'
             $info['Detail'] = 'The file is a native DLL (it has no .NET header).'
             return [PSCustomObject]$info
         }
@@ -153,6 +170,7 @@
         $runtime = [System.Text.Encoding]::UTF8.GetString($bytes, [System.Int32]$metadataOffset + 16, [System.Int32]$versionLength).TrimEnd([char]0)
 
         $info['IsManaged'] = $true
+        $info['ReadStatus'] = 'Read'
         $info['RuntimeVersion'] = $runtime
         $info['Architecture'] = switch ($machine) {
             0x14C {
@@ -185,8 +203,14 @@
         $info['Culture'] = [System.String]$assemblyName.CultureName
         $info['PublicKeyToken'] = $token
         $info['IsSigned'] = ($token.Length -gt 0)
+        if ($token.Length -gt 0) {
+            $signature = Test-SPSAssemblyStrongName -Bytes $bytes -PublicKey $assemblyName.GetPublicKey()
+            $info['SignatureStatus'] = $signature.Status
+            $info['SignatureDetail'] = $signature.Detail
+        }
     }
     catch {
+        $info['ReadStatus'] = 'Partial'
         $info['Detail'] = "The assembly name could not be read: $($_.Exception.Message)"
     }
     return [PSCustomObject]$info

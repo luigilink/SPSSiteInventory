@@ -10,8 +10,18 @@
 #   Custom     Contoso.Fixture.Custom 1.2.3.4, token 30ad4fe6b2a6aeed, .NETFramework,Version=v4.8
 #   Legacy     Contoso.Fixture.Legacy 1.0.0.0, token 30ad4fe6b2a6aeed, .NETFramework,Version=v3.5, runtime v2.0.50727
 #   Unsigned   Contoso.Fixture.Unsigned 2.0.0.0, no token, .NETFramework,Version=v4.5.2
-#   Microsoft  Fixture.Signed 15.0.0.0, token 31bf3856ad364e35, .NETFramework,Version=v4.5
+#   Microsoft  Fixture.Signed 15.0.0.0, token 31bf3856ad364e35, not signed, .NETFramework,Version=v4.5
 #   Satellite  Contoso.Fixture.Custom.resources 1.2.3.4, culture fr-FR, token 30ad4fe6b2a6aeed
+#
+# Two more assemblies are signed, each with a throwaway RSA key that was generated for the purpose and written down
+# nowhere, so that their strong-name signature is valid. The tests need them because a token only counts when the
+# signature is valid: the 'Microsoft' assembly above has the token of a Microsoft key and no signature, which is what
+# a spoofed assembly looks like. The keys are not Microsoft keys, so the tests give the two tokens as the tokens that
+# count as Microsoft. They were signed with ManagedPEBuilder.Sign, and the signatures were checked against real
+# assemblies that are signed by their publishers (see Test-SPSAssemblyStrongName.Tests.ps1).
+#
+#   Genuine       Fixture.Genuine 15.0.0.0, RSA 1024 bits, SHA-1, token 8a90a76982b61a21, .NETFramework,Version=v4.5
+#   GenuineSha256 Fixture.GenuineSha256 15.0.0.0, RSA 2048 bits, SHA-256, token 54e39f718d6d4cce, .NETFramework,Version=v4.5
 $script:FixtureAssemblyText = @{
     Custom    = @'
 TVqQAAMAAAAEAAAA//8AALgAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAA4fug4AtAnNIbgB
@@ -163,11 +173,122 @@ AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
 '@
+    Genuine       = @'
+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
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAADAAAAFw0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
+'@
+    GenuineSha256 = @'
+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
+bgBtc2NvcmVlLmRsbAAAAAAA/yUAIEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAADAAAAGQ1AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
+'@
 }
 
 function Get-TestAssemblyByte {
     param ([System.String] $Name)
     return , [System.Convert]::FromBase64String(($script:FixtureAssemblyText[$Name] -replace '\s', ''))
+}
+
+function New-TestNativeDll {
+    <# A valid PE image that has no .NET header: a genuine native DLL. #>
+    $bytes = New-Object -TypeName System.Byte[] -ArgumentList 400
+    $bytes[0] = 0x4D
+    $bytes[1] = 0x5A
+    [System.BitConverter]::GetBytes([System.Int32]64).CopyTo($bytes, 0x3C)
+    $bytes[64] = 0x50
+    $bytes[65] = 0x45
+    [System.BitConverter]::GetBytes([System.UInt16]0x14C).CopyTo($bytes, 68)
+    [System.BitConverter]::GetBytes([System.UInt16]224).CopyTo($bytes, 84)
+    [System.BitConverter]::GetBytes([System.UInt16]0x10B).CopyTo($bytes, 88)
+    [System.BitConverter]::GetBytes([System.UInt32]16).CopyTo($bytes, 180)
+    return , $bytes
+}
+
+function Get-TestDamagedMetadataByte {
+    <# The 'Custom' assembly with the table of its metadata cleared: the PE image and the metadata header are valid, so the file reads as an assembly, but its name cannot be read. #>
+    $bytes = Get-TestAssemblyByte 'Custom'
+    $latin1 = [System.Text.Encoding]::GetEncoding(28591)
+    $root = $latin1.GetString($bytes).IndexOf('BSJB')
+    $versionLength = [System.BitConverter]::ToInt32($bytes, $root + 12)
+    $position = $root + 16 + $versionLength + 2
+    $streamCount = [System.BitConverter]::ToUInt16($bytes, $position)
+    $position += 2
+    for ($index = 0; $index -lt $streamCount; $index++) {
+        $offset = [System.BitConverter]::ToInt32($bytes, $position)
+        $length = 0
+        while ($bytes[$position + 8 + $length] -ne 0) {
+            $length++
+        }
+        if ($latin1.GetString($bytes, $position + 8, $length) -eq '#~') {
+            for ($valid = 0; $valid -lt 8; $valid++) {
+                $bytes[$root + $offset + 8 + $valid] = 0
+            }
+            return , $bytes
+        }
+        $position += 8 + ([System.Math]::Ceiling(($length + 1) / 4) * 4)
+    }
+    throw 'The metadata of the fixture has no table stream.'
 }
 
 function Write-TestFile {
@@ -179,14 +300,55 @@ function Write-TestFile {
     [System.IO.File]::WriteAllText($Path, $Text, (New-Object -TypeName System.Text.UTF8Encoding -ArgumentList $false))
 }
 
+# The token of the 'Genuine' assembly, which a test gives as a token that counts as Microsoft.
+$script:GenuineToken = '8a90a76982b61a21'
+$script:GenuineSha256Token = '54e39f718d6d4cce'
+
+$script:TestLinkPath = [System.Collections.Generic.List[System.String]]::new()
+
+function New-TestLink {
+    <# Creates a link at $Path to $Target: a junction on Windows for a folder (it needs no privilege), a symbolic link otherwise. Returns $false when it cannot. #>
+    param ([System.String] $Path, [System.String] $Target)
+
+    try {
+        $parent = Split-Path -Path $Path -Parent
+        if (-not (Test-Path -LiteralPath $parent)) {
+            $null = New-Item -Path $parent -ItemType Directory -Force
+        }
+        $type = 'SymbolicLink'
+        if ([System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT -and (Test-Path -LiteralPath $Target -PathType Container)) {
+            $type = 'Junction'
+        }
+        $null = New-Item -ItemType $type -Path $Path -Value $Target -ErrorAction Stop
+        $script:TestLinkPath.Add($Path)
+        return (Test-Path -LiteralPath $Path)
+    }
+    catch {
+        return $false
+    }
+}
+
+function Remove-TestLink {
+    <# Removes the links that New-TestLink made, and only the links: Windows PowerShell 5.1 follows a junction when it removes a folder recursively, and would walk the target, or loop. #>
+    foreach ($path in @($script:TestLinkPath)) {
+        if ([System.IO.Directory]::Exists($path)) {
+            [System.IO.Directory]::Delete($path, $false)
+        }
+        elseif ([System.IO.File]::Exists($path)) {
+            [System.IO.File]::Delete($path)
+        }
+    }
+    $script:TestLinkPath.Clear()
+}
+
 function New-TestPackageFolder {
-    <# Builds the expanded content of a package: a manifest, two features, three assemblies and a template file. #>
+    <# Builds the expanded content of a package: a manifest, two features, three assemblies and a template file. The third assembly, Fixture.Signed.dll, is the 'Genuine' one: validly signed. #>
     param ([System.String] $Path)
 
     $null = New-Item -Path $Path -ItemType Directory -Force
     [System.IO.File]::WriteAllBytes((Join-Path $Path 'Contoso.Fixture.Custom.dll'), (Get-TestAssemblyByte 'Custom'))
     [System.IO.File]::WriteAllBytes((Join-Path $Path 'Contoso.Fixture.Legacy.dll'), (Get-TestAssemblyByte 'Legacy'))
-    [System.IO.File]::WriteAllBytes((Join-Path $Path 'Fixture.Signed.dll'), (Get-TestAssemblyByte 'Microsoft'))
+    [System.IO.File]::WriteAllBytes((Join-Path $Path 'Fixture.Signed.dll'), (Get-TestAssemblyByte 'Genuine'))
 
     Write-TestFile -Path (Join-Path $Path 'manifest.xml') -Text @'
 <?xml version="1.0" encoding="utf-8"?>

@@ -37,7 +37,7 @@
         $MaximumMegabyte = 20
     )
 
-    $length = (Get-Item -LiteralPath $Path -ErrorAction Stop).Length
+    $length = (Get-Item -LiteralPath $Path -Force -ErrorAction Stop).Length
     if ($length -gt ([System.Int64]$MaximumMegabyte * 1MB)) {
         throw "The file is larger than $MaximumMegabyte MB."
     }

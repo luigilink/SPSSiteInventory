@@ -12,8 +12,11 @@
         It reads what a farm solution (SPSolution) only shows as booleans:
 
         - the exact strong name of every assembly, with its public key token. A token that Microsoft
-          signs with makes the assembly Microsoft, anything else (or no signature) makes it custom,
-          so IsCustom no longer depends on the name of the solution;
+          signs with makes the assembly Microsoft when the strong-name signature of the assembly is
+          valid, anything else makes it custom, so IsCustom no longer depends on the name of the
+          solution. A token alone is not enough: an assembly that is delay-signed with the public key
+          of Microsoft, or altered after it was signed, has the token and is custom (the package
+          says so in Detail);
         - the feature ids and scopes, even when the solution is not deployed (which is when the farm
           reports no feature), and the features that have a receiver;
         - where the assemblies are deployed (global assembly cache or web application), the safe
@@ -25,15 +28,20 @@
 
         A package that cannot be inspected is returned with Status 'Failed' and the reason in Detail,
         so that one bad file does not stop the others. Status is 'Partial' when the package was read
-        but a part of it could not be (a missing feature manifest, an assembly that is missing).
+        but a part of it could not be, or was not assessed (a missing feature manifest, an assembly
+        that is missing, a DLL that is above the size limit or is not a valid image, a link that was
+        not followed, an assembly with a Microsoft token that is not signed with it).
 
         A folder in -Path that holds manifest.xml at its root is read as a package that is already
         expanded (so a package can be inspected where no cabinet tool is available). A folder that
-        does not is searched for .wsp and .cab files, and for the subfolders too with -Recurse.
+        does not is searched for .wsp and .cab files, and for the subfolders too with -Recurse. A
+        symbolic link or a junction in an expanded package is never followed.
 
-        The cabinet is expanded with expand.exe on Windows, and with cabextract elsewhere. Before
-        anything is written, the cabinet is refused when it lists a file name that is not safe (a name
-        that goes up with '..'), too many files or too large a size.
+        The cabinet is copied to a folder of its own, and that copy is checked and expanded, with
+        expand.exe on Windows and with cabextract elsewhere: what is checked is what is expanded,
+        whatever happens to the original meanwhile. The cabinet is refused when it lists a file name
+        that is not safe (a name that goes up with '..'), too many files or too large a size, and
+        nothing is expanded then. Sha256 and PackageSizeBytes are those of the copy that was read.
 
         With -FarmSolutionMap (from Get-SPSFarmSolutionMap), each package is matched to the farm
         solution that has its solution id, or else its file name, and the differences are listed.
@@ -147,7 +155,7 @@
             foreach ($item in $resolved) {
                 $location = $item.ProviderPath
                 if (Test-Path -LiteralPath $location -PathType Container) {
-                    $hasManifest = @(Get-ChildItem -LiteralPath $location -File | Where-Object { $_.Name -ieq 'manifest.xml' }).Count -gt 0
+                    $hasManifest = @(Get-ChildItem -LiteralPath $location -File -Force | Where-Object { $_.Name -ieq 'manifest.xml' }).Count -gt 0
                     if ($hasManifest) {
                         $target.Add([PSCustomObject]@{ Path = $location; Source = 'Folder'; Problem = '' })
                         continue
@@ -241,6 +249,11 @@
                     $work = Join-Path -Path $workRoot -ChildPath ('spswsp-' + [System.Guid]::NewGuid().ToString('N'))
                     $expanded = Expand-SPSSolutionPackage -Path $package.Path -WorkFolder $work -MaximumMegabyte $MaximumMegabyte
                     $root = $expanded.Path
+                    # What was read is the private copy that was checked and expanded: its size and its hash say which package that was.
+                    if ($null -ne $expanded.Sha256) {
+                        $record['PackageSizeBytes'] = $expanded.SizeBytes
+                        $record['Sha256'] = $expanded.Sha256
+                    }
                 }
                 else {
                     $root = $package.Path
@@ -252,7 +265,8 @@
                 }
 
                 $assembly = @($content.Assemblies)
-                $judged = @($assembly | Where-Object { $_.Status -in @('Read', 'Partial', 'NotManaged') -and -not $_.IsSatellite })
+                # A DLL that was not assessed (too large, not a valid image) is judged too: nothing shows that it is Microsoft's.
+                $judged = @($assembly | Where-Object { $_.Status -in @('Read', 'Partial', 'NotManaged', 'Skipped', 'Failed') -and -not $_.IsSatellite })
                 if ($judged.Count -gt 0) {
                     $isCustom = (@($judged | Where-Object { $_.IsCustom }).Count -gt 0)
                     $record['IsCustomSource'] = 'Assembly'

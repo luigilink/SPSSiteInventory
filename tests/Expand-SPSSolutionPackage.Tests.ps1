@@ -25,6 +25,7 @@ BeforeAll {
 }
 
 AfterAll {
+    Remove-Variable -Name SPSReplacementCabinet -Scope Global -ErrorAction SilentlyContinue
     if (Test-Path -LiteralPath $script:Dir) {
         Remove-Item -LiteralPath $script:Dir -Recurse -Force -ErrorAction SilentlyContinue
     }
@@ -63,6 +64,90 @@ Describe 'Expand-SPSSolutionPackage' {
         $path = & $script:Save (New-TestCabinetBytes -File @(@{ Name = 'big.bin'; Content = [System.Byte[]](1); Size = 600MB }))
 
         { & $script:Expand $path (& $script:NewWork) @{ MaximumMegabyte = 512 } } | Should -Throw '*expands to 600 MB, more than the limit of 512 MB*'
+    }
+
+    Context 'the original package can change at any time' {
+        # The package is a file that is not trusted, often on a share: it can be replaced between the moment it is looked at and the moment it
+        # is copied. The test stands for that with a copy that holds another cabinet than the original.
+        It 'checks the copy that it expands, not the original: a cabinet that is swapped for a hostile one is refused, and nothing is expanded' {
+            $path = & $script:Save (New-TestCabinetBytes -File @(@{ Name = 'manifest.xml'; Content = [System.Text.Encoding]::UTF8.GetBytes('<Solution />') }))
+            $global:SPSReplacementCabinet = New-TestCabinetBytes -File @(
+                @{ Name = 'manifest.xml'; Content = [System.Text.Encoding]::UTF8.GetBytes('<Solution />') }
+                @{ Name = '..\..\evil.txt'; Content = [System.Byte[]](2) }
+            )
+            Mock -ModuleName SPSSiteInventory.Common Copy-Item -MockWith { [System.IO.File]::WriteAllBytes($Destination, $global:SPSReplacementCabinet) }
+            $work = & $script:NewWork
+
+            { & $script:Expand $path $work } | Should -Throw "*not safe to extract: '..\..\evil.txt'*"
+
+            @(Get-ChildItem -LiteralPath (Join-Path $work 'expanded') -Recurse -Force -File -ErrorAction SilentlyContinue) | Should -HaveCount 0
+        }
+
+        It 'applies the limit of the number of files to the copy' {
+            $path = & $script:Save (New-TestCabinetBytes -File @(@{ Name = 'a.xml'; Content = [System.Byte[]](1) }))
+            $global:SPSReplacementCabinet = New-TestCabinetBytes -File @(
+                @{ Name = 'a.xml'; Content = [System.Byte[]](1) }
+                @{ Name = 'b.xml'; Content = [System.Byte[]](1) }
+                @{ Name = 'c.xml'; Content = [System.Byte[]](1) }
+            )
+            Mock -ModuleName SPSSiteInventory.Common Copy-Item -MockWith { [System.IO.File]::WriteAllBytes($Destination, $global:SPSReplacementCabinet) }
+
+            { & $script:Expand $path (& $script:NewWork) @{ MaximumFileCount = 2 } } | Should -Throw '*lists 3 files, more than the limit of 2*'
+        }
+
+        It 'applies the limit of the declared size to the copy' {
+            $path = & $script:Save (New-TestCabinetBytes -File @(@{ Name = 'a.bin'; Content = [System.Byte[]](1) }))
+            $global:SPSReplacementCabinet = New-TestCabinetBytes -File @(@{ Name = 'big.bin'; Content = [System.Byte[]](1); Size = 600MB })
+            Mock -ModuleName SPSSiteInventory.Common Copy-Item -MockWith { [System.IO.File]::WriteAllBytes($Destination, $global:SPSReplacementCabinet) }
+
+            { & $script:Expand $path (& $script:NewWork) @{ MaximumMegabyte = 512 } } | Should -Throw '*expands to 600 MB, more than the limit of 512 MB*'
+        }
+
+        It 'reports the size and the SHA-256 of the copy that was read, which is the package that was read' {
+            $original = New-TestCabinetBytes -File @(@{ Name = 'manifest.xml'; Content = [System.Text.Encoding]::UTF8.GetBytes('<Solution />') })
+            $path = & $script:Save $original
+            $global:SPSReplacementCabinet = New-TestCabinetBytes -File @(
+                @{ Name = 'manifest.xml'; Content = [System.Text.Encoding]::UTF8.GetBytes('<Solution />') }
+                @{ Name = 'other.xml'; Content = [System.Text.Encoding]::UTF8.GetBytes('<Other />') }
+            )
+            Mock -ModuleName SPSSiteInventory.Common Copy-Item -MockWith { [System.IO.File]::WriteAllBytes($Destination, $global:SPSReplacementCabinet) }
+
+            try {
+                $result = & $script:Expand $path (& $script:NewWork)
+            }
+            catch {
+                if ($_.Exception.Message -match 'needs expand.exe') {
+                    Set-ItResult -Skipped -Because 'no tool to expand a cabinet is available'
+                    return
+                }
+                throw
+            }
+
+            $result.SizeBytes | Should -Be $global:SPSReplacementCabinet.Length
+            $result.SizeBytes | Should -Not -Be $original.Length
+            $copyHash = [System.BitConverter]::ToString([System.Security.Cryptography.SHA256]::Create().ComputeHash($global:SPSReplacementCabinet)).Replace('-', '').ToLowerInvariant()
+            $result.Sha256 | Should -Be $copyHash
+            $result.FileCount | Should -Be 2
+        }
+
+        It 'reports the size and the SHA-256 of the package when it does not change' {
+            $bytes = New-TestCabinetBytes -File @(@{ Name = 'manifest.xml'; Content = [System.Text.Encoding]::UTF8.GetBytes('<Solution />') })
+            $path = & $script:Save $bytes
+
+            try {
+                $result = & $script:Expand $path (& $script:NewWork)
+            }
+            catch {
+                if ($_.Exception.Message -match 'needs expand.exe') {
+                    Set-ItResult -Skipped -Because 'no tool to expand a cabinet is available'
+                    return
+                }
+                throw
+            }
+
+            $result.SizeBytes | Should -Be (Get-Item -LiteralPath $path).Length
+            $result.Sha256 | Should -Be (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+        }
     }
 
     It 'refuses a file that is not a cabinet' {

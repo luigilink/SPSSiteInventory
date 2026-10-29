@@ -8,7 +8,8 @@ BeforeAll {
     $script:Module = Get-Module -Name SPSSiteInventory.Common
     $script:Dir = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath ('spspkg-' + [guid]::NewGuid().ToString('N'))
     $null = New-Item -Path $script:Dir -ItemType Directory -Force
-    $script:Token = @('71e9bce111e9429c', '31bf3856ad364e35', 'b77a5c561934e089', 'b03f5f7f11d50a3a')
+    # The built-in tokens, and the one of the throwaway key that signs the 'Genuine' fixture (a test cannot sign with a Microsoft key).
+    $script:Token = @('71e9bce111e9429c', '31bf3856ad364e35', 'b77a5c561934e089', 'b03f5f7f11d50a3a', $script:GenuineToken)
 
     $script:Read = {
         param ([System.String] $Root, [System.String[]] $Token = $script:Token)
@@ -22,6 +23,7 @@ BeforeAll {
 }
 
 AfterAll {
+    Remove-TestLink
     if (Test-Path -LiteralPath $script:Dir) {
         Remove-Item -LiteralPath $script:Dir -Recurse -Force -ErrorAction SilentlyContinue
     }
@@ -99,10 +101,78 @@ Describe 'Get-SPSExpandedPackageInfo' {
     }
 
     Context 'the classification of an assembly' {
-        It 'treats a token that is added to the list as Microsoft' {
+        It 'treats a token that is added to the list as Microsoft when the signature is valid' {
+            $info = & $script:Read (& $script:NewPackage) @($script:GenuineToken.ToUpperInvariant())
+
+            $genuine = @($info.Assemblies) | Where-Object { $_.Location -eq 'Fixture.Signed.dll' }
+            $genuine.SignatureStatus | Should -Be 'Valid'
+            $genuine.IsMicrosoft | Should -BeTrue
+            $genuine.IsCustom | Should -BeFalse
+        }
+
+        It 'does not take a token for a proof: a key that is added to the list does not make an unsigned assembly Microsoft' {
             $info = & $script:Read (& $script:NewPackage) ($script:Token + '30AD4FE6B2A6AEED')
 
-            @($info.Assemblies | Where-Object { $_.IsCustom }) | Should -HaveCount 0
+            $custom = @($info.Assemblies) | Where-Object { $_.Location -eq 'Contoso.Fixture.Custom.dll' }
+            $custom.HasMicrosoftToken | Should -BeTrue
+            $custom.SignatureStatus | Should -Be 'NotSigned'
+            $custom.IsMicrosoft | Should -BeFalse
+            $custom.IsCustom | Should -BeTrue
+        }
+
+        It 'counts as custom an assembly that has the public key of a Microsoft key and is not signed with it, and says so' {
+            $path = & $script:NewPackage
+            [System.IO.File]::WriteAllBytes((Join-Path $path 'Fixture.Signed.dll'), (Get-TestAssemblyByte 'Microsoft'))
+
+            $info = & $script:Read $path
+
+            $spoof = @($info.Assemblies) | Where-Object { $_.Location -eq 'Fixture.Signed.dll' }
+            $spoof.PublicKeyToken | Should -Be '31bf3856ad364e35'
+            $spoof.HasMicrosoftToken | Should -BeTrue
+            $spoof.SignatureStatus | Should -Be 'NotSigned'
+            $spoof.IsMicrosoft | Should -BeFalse
+            $spoof.IsCustom | Should -BeTrue
+            $info.Problems | Should -HaveCount 1
+            $info.Problems[0] | Should -Match "Assembly 'Fixture.Signed.dll' has the public key token of a Microsoft key \(31bf3856ad364e35\) but is not signed with it \(NotSigned\), so it counts as custom"
+        }
+
+        It 'counts as custom an assembly that was altered after it was signed, and says so' {
+            $path = & $script:NewPackage
+            $bytes = Get-TestAssemblyByte 'Genuine'
+            $bytes[$bytes.Length - 40] = $bytes[$bytes.Length - 40] -bxor 0xFF
+            [System.IO.File]::WriteAllBytes((Join-Path $path 'Fixture.Signed.dll'), $bytes)
+
+            $info = & $script:Read $path
+
+            $altered = @($info.Assemblies) | Where-Object { $_.Location -eq 'Fixture.Signed.dll' }
+            $altered.SignatureStatus | Should -Be 'Invalid'
+            $altered.IsMicrosoft | Should -BeFalse
+            $altered.IsCustom | Should -BeTrue
+            $info.Problems | Should -HaveCount 1
+            $info.Problems[0] | Should -Match '\(Invalid\)'
+        }
+
+        It 'accepts a signature that uses SHA-256 and a longer key' {
+            $path = & $script:NewPackage
+            [System.IO.File]::WriteAllBytes((Join-Path $path 'Fixture.Signed.dll'), (Get-TestAssemblyByte 'GenuineSha256'))
+
+            $info = & $script:Read $path @($script:GenuineSha256Token)
+
+            $signed = @($info.Assemblies) | Where-Object { $_.Location -eq 'Fixture.Signed.dll' }
+            $signed.SignatureStatus | Should -Be 'Valid'
+            $signed.IsMicrosoft | Should -BeTrue
+        }
+
+        It 'does not report a satellite assembly that has a Microsoft token and no signature' {
+            $path = & $script:NewPackage
+            [System.IO.File]::WriteAllBytes((Join-Path $path 'Contoso.Fixture.Custom.resources.dll'), (Get-TestAssemblyByte 'Satellite'))
+
+            $info = & $script:Read $path ($script:Token + '30ad4fe6b2a6aeed')
+
+            $satellite = @($info.Assemblies) | Where-Object { $_.Location -eq 'Contoso.Fixture.Custom.resources.dll' }
+            $satellite.IsSatellite | Should -BeTrue
+            $satellite.IsCustom | Should -BeFalse
+            @($info.Problems | Where-Object { $_ -like "*resources.dll*" }) | Should -HaveCount 0
         }
 
         It 'treats an assembly that is not signed as custom' {
@@ -137,16 +207,72 @@ Describe 'Get-SPSExpandedPackageInfo' {
             @($info.Assemblies | Where-Object { $_.Location -eq 'TEMPLATE\tool.dll' -and $_.DeploymentTarget -eq 'Other' }) | Should -HaveCount 1
         }
 
-        It 'reports a DLL that is not a .NET assembly without failing' {
+        It 'reports a genuine native DLL as such, without a problem' {
             $path = & $script:NewPackage
-            [System.IO.File]::WriteAllText((Join-Path $path 'native.dll'), 'MZ this is not an assembly but has the extension of one, to be read as bytes')
+            [System.IO.File]::WriteAllBytes((Join-Path $path 'native.dll'), (New-TestNativeDll))
 
             $info = & $script:Read $path
 
             $native = @($info.Assemblies) | Where-Object { $_.Location -eq 'native.dll' }
             $native.Status | Should -Be 'NotManaged'
             $native.IsManaged | Should -BeFalse
+            $native.IsCustom | Should -BeTrue
             $info.Problems | Should -HaveCount 0
+        }
+
+        It 'reports a DLL that is not a valid image as not assessed, and counts it as custom' {
+            $path = & $script:NewPackage
+            [System.IO.File]::WriteAllText((Join-Path $path 'broken.dll'), 'MZ this is not an assembly but has the extension of one, to be read as bytes')
+
+            $info = & $script:Read $path
+
+            $broken = @($info.Assemblies) | Where-Object { $_.Location -eq 'broken.dll' }
+            $broken.Status | Should -Be 'Failed'
+            $broken.IsCustom | Should -BeTrue
+            $info.Problems | Should -HaveCount 1
+            $info.Problems[0] | Should -Match "Assembly 'broken.dll':"
+        }
+
+        It 'reports a DLL that is above the size limit as not assessed, and counts it as custom' {
+            $path = & $script:NewPackage
+            [System.IO.File]::WriteAllBytes((Join-Path $path 'big.dll'), (New-Object -TypeName System.Byte[] -ArgumentList (2MB)))
+
+            $info = & $script:Module { param ($r, $t) Get-SPSExpandedPackageInfo -Root $r -MicrosoftPublicKeyToken $t -MaximumMegabyte 1 } $path $script:Token
+
+            $big = @($info.Assemblies) | Where-Object { $_.Location -eq 'big.dll' }
+            $big.Status | Should -Be 'Skipped'
+            $big.IsCustom | Should -BeTrue
+            $info.Problems | Should -HaveCount 1
+            $info.Problems[0] | Should -Match "Assembly 'big.dll': The file is larger than 1 MB and was not read"
+        }
+
+        It 'reports an assembly whose name cannot be read as partial, and counts it as custom' {
+            $path = & $script:NewPackage
+            [System.IO.File]::WriteAllBytes((Join-Path $path 'damaged.dll'), (Get-TestDamagedMetadataByte))
+
+            $info = & $script:Read $path
+
+            $damaged = @($info.Assemblies) | Where-Object { $_.Location -eq 'damaged.dll' }
+            $damaged.Status | Should -Be 'Partial'
+            $damaged.IsManaged | Should -BeTrue
+            $damaged.IsCustom | Should -BeTrue
+            $info.Problems | Should -HaveCount 1
+            $info.Problems[0] | Should -Match "Assembly 'damaged.dll': The assembly name could not be read"
+        }
+
+        It 'lists a hidden DLL, which is still a DLL of the package' {
+            $path = & $script:NewPackage
+            $hidden = Join-Path -Path (Join-Path $path 'TEMPLATE') -ChildPath '.hidden.dll'
+            [System.IO.File]::WriteAllBytes($hidden, (Get-TestAssemblyByte 'Unsigned'))
+            [System.IO.File]::SetAttributes($hidden, ([System.IO.File]::GetAttributes($hidden) -bor [System.IO.FileAttributes]::Hidden))
+
+            $info = & $script:Read $path
+
+            $found = @($info.Assemblies) | Where-Object { $_.Location -eq 'TEMPLATE\.hidden.dll' }
+            @($found) | Should -HaveCount 1
+            $found.Name | Should -Be 'Contoso.Fixture.Unsigned'
+            $found.IsCustom | Should -BeTrue
+            $info.FileCount | Should -Be 10
         }
     }
 
@@ -210,6 +336,104 @@ Describe 'Get-SPSExpandedPackageInfo' {
             @($info.Assemblies | Where-Object { $_.Name -eq 'Contoso.Fixture.Unsigned' }) | Should -HaveCount 0
             @($info.Features | Where-Object { $_.Status -eq 'Missing' }) | Should -HaveCount 1
             $info.Problems | Should -HaveCount 2
+        }
+
+        It 'does not follow a folder that is a link to somewhere else, and reads nothing through it' {
+            $path = & $script:NewPackage
+            $outside = Join-Path -Path $script:Dir -ChildPath ('outside-' + [guid]::NewGuid().ToString('N'))
+            Write-TestFile -Path (Join-Path $outside 'Feature.xml') -Text '<Feature xmlns="http://schemas.microsoft.com/sharepoint/" Id="{FFFFFFFF-0000-4000-8000-000000000001}" Title="Outside" Scope="Site" />'
+            [System.IO.File]::WriteAllBytes((Join-Path $outside 'Outside.Fixture.dll'), (Get-TestAssemblyByte 'Unsigned'))
+            Remove-Item -LiteralPath (Join-Path $path 'FeatureFields') -Recurse -Force
+            if (-not (New-TestLink -Path (Join-Path $path 'FeatureFields') -Target $outside)) {
+                Set-ItResult -Skipped -Because 'a link cannot be created here'
+                return
+            }
+
+            $info = & $script:Read $path
+
+            $info.FeatureIds | Should -Not -Contain 'ffffffff-0000-4000-8000-000000000001'
+            @($info.Features | Where-Object { $_.Status -eq 'Missing' }) | Should -HaveCount 1
+            @($info.Assemblies | Where-Object { $_.Name -eq 'Outside.Fixture' -or $_.Location -like '*Outside.Fixture.dll' }) | Should -HaveCount 0
+            ($info.Problems -join ' | ') | Should -Match "Feature manifest 'FeatureFields.Feature.xml' goes through a link, which is not followed"
+            ($info.Problems -join ' | ') | Should -Match 'The package has 1 link\(s\)'
+        }
+
+        It 'does not read a feature manifest that is a link to a file outside of the package' {
+            $path = & $script:NewPackage
+            $outside = Join-Path -Path $script:Dir -ChildPath ('outside-' + [guid]::NewGuid().ToString('N') + '.xml')
+            Write-TestFile -Path $outside -Text '<Feature xmlns="http://schemas.microsoft.com/sharepoint/" Id="{FFFFFFFF-0000-4000-8000-000000000002}" Title="Outside" Scope="Site" />'
+            Remove-Item -LiteralPath (Join-Path (Join-Path $path 'FeatureFields') 'Feature.xml')
+            if (-not (New-TestLink -Path (Join-Path (Join-Path $path 'FeatureFields') 'Feature.xml') -Target $outside)) {
+                Set-ItResult -Skipped -Because 'a link to a file cannot be created here'
+                return
+            }
+
+            $info = & $script:Read $path
+
+            $info.FeatureIds | Should -Not -Contain 'ffffffff-0000-4000-8000-000000000002'
+            ($info.Problems -join ' | ') | Should -Match "Feature manifest 'FeatureFields.Feature.xml' goes through a link"
+        }
+
+        It 'does not load a DLL that is a link to a file outside of the package' {
+            $path = & $script:NewPackage
+            $outside = Join-Path -Path $script:Dir -ChildPath ('outside-' + [guid]::NewGuid().ToString('N') + '.dll')
+            [System.IO.File]::WriteAllBytes($outside, (Get-TestAssemblyByte 'Unsigned'))
+            if (-not (New-TestLink -Path (Join-Path (Join-Path $path 'TEMPLATE') 'linked.dll') -Target $outside)) {
+                Set-ItResult -Skipped -Because 'a link to a file cannot be created here'
+                return
+            }
+
+            $info = & $script:Read $path
+
+            @($info.Assemblies | Where-Object { $_.Name -eq 'Contoso.Fixture.Unsigned' }) | Should -HaveCount 0
+            @($info.Assemblies | Where-Object { $_.Location -like '*linked.dll' }) | Should -HaveCount 0
+            $info.AssemblyCount | Should -Be $null
+            ($info.Problems -join ' | ') | Should -Match 'The package has 1 link\(s\).*TEMPLATE.linked.dll'
+        }
+
+        It 'reports an assembly of the manifest that is a link, and does not count it as deployed' {
+            $path = & $script:NewPackage
+            $outside = Join-Path -Path $script:Dir -ChildPath ('outside-' + [guid]::NewGuid().ToString('N') + '.dll')
+            [System.IO.File]::WriteAllBytes($outside, (Get-TestAssemblyByte 'Unsigned'))
+            Remove-Item -LiteralPath (Join-Path $path 'Contoso.Fixture.Legacy.dll')
+            if (-not (New-TestLink -Path (Join-Path $path 'Contoso.Fixture.Legacy.dll') -Target $outside)) {
+                Set-ItResult -Skipped -Because 'a link to a file cannot be created here'
+                return
+            }
+
+            $info = & $script:Read $path
+
+            $linked = @($info.Assemblies) | Where-Object { $_.Location -eq 'Contoso.Fixture.Legacy.dll' }
+            $linked.Status | Should -Be 'Link'
+            $linked.IsCustom | Should -BeFalse
+            $info.ContainsWebApplicationAssembly | Should -BeFalse
+            ($info.Problems -join ' | ') | Should -Match "Assembly 'Contoso.Fixture.Legacy.dll': The location goes through a link"
+        }
+
+        It 'refuses a manifest.xml that is a link' {
+            $path = & $script:NewPackage
+            $outside = Join-Path -Path $script:Dir -ChildPath ('outside-' + [guid]::NewGuid().ToString('N') + '.xml')
+            Write-TestFile -Path $outside -Text '<Solution xmlns="http://schemas.microsoft.com/sharepoint/" SolutionId="{99999999-9999-9999-9999-999999999999}" />'
+            Remove-Item -LiteralPath (Join-Path $path 'manifest.xml')
+            if (-not (New-TestLink -Path (Join-Path $path 'manifest.xml') -Target $outside)) {
+                Set-ItResult -Skipped -Because 'a link to a file cannot be created here'
+                return
+            }
+
+            { & $script:Read $path } | Should -Throw '*manifest.xml is a link*'
+        }
+
+        It 'does not loop on a link that points back into the package' {
+            $path = & $script:NewPackage
+            if (-not (New-TestLink -Path (Join-Path (Join-Path $path 'TEMPLATE') 'loop') -Target $path)) {
+                Set-ItResult -Skipped -Because 'a link to a folder cannot be created here'
+                return
+            }
+
+            $info = & $script:Read $path
+
+            $info.FileCount | Should -Be 9
+            ($info.Problems -join ' | ') | Should -Match 'The package has 1 link\(s\)'
         }
 
         It 'throws when there is no manifest.xml' {

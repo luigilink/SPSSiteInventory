@@ -8,7 +8,7 @@ BeforeAll {
     $script:Work = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath ('spspkgexp-' + [guid]::NewGuid().ToString('N'))
     $script:Source = Join-Path -Path $script:Work -ChildPath 'Contoso.Intranet'
     New-TestPackageFolder -Path $script:Source
-    $script:Package = @(Get-SPSSolutionPackageInfo -Path $script:Source)
+    $script:Package = @(Get-SPSSolutionPackageInfo -Path $script:Source -KnownMicrosoftPublicKeyToken $script:GenuineToken)
 }
 
 AfterAll {
@@ -64,7 +64,12 @@ Describe 'Export-SPSSolutionPackageReport' {
         $custom.IsCustom | Should -Be 'True'
         $custom.DeploymentTarget | Should -Be 'GlobalAssemblyCache'
         $custom.TargetFramework | Should -Be '.NETFramework,Version=v4.8'
-        ($row | Where-Object { $_.Location -eq 'Fixture.Signed.dll' }).IsMicrosoft | Should -Be 'True'
+        $genuine = $row | Where-Object { $_.Location -eq 'Fixture.Signed.dll' }
+        $genuine.IsMicrosoft | Should -Be 'True'
+        $genuine.HasMicrosoftToken | Should -Be 'True'
+        $genuine.SignatureStatus | Should -Be 'Valid'
+        $custom.SignatureStatus | Should -Be 'NotSigned'
+        $custom.HasMicrosoftToken | Should -Be 'False'
     }
 
     It 'keeps the full structure in the JSON file' {

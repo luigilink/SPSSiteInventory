@@ -136,6 +136,8 @@
                     Culture                 = $assembly.Culture
                     PublicKeyToken          = $assembly.PublicKeyToken
                     IsSigned                = $assembly.IsSigned
+                    SignatureStatus         = $assembly.SignatureStatus
+                    HasMicrosoftToken       = $assembly.HasMicrosoftToken
                     IsManaged               = $assembly.IsManaged
                     IsMicrosoft             = $assembly.IsMicrosoft
                     IsSatellite             = $assembly.IsSatellite

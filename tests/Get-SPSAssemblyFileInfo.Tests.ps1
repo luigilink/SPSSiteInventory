@@ -32,6 +32,7 @@ Describe 'Get-SPSAssemblyFileInfo' {
         $info = & $script:Info (& $script:Save 'custom.dll' (Get-TestAssemblyByte 'Custom'))
 
         $info.IsManaged | Should -BeTrue
+        $info.ReadStatus | Should -Be 'Read'
         $info.Name | Should -Be 'Contoso.Fixture.Custom'
         $info.Version | Should -Be '1.2.3.4'
         $info.Culture | Should -BeNullOrEmpty
@@ -60,11 +61,40 @@ Describe 'Get-SPSAssemblyFileInfo' {
         $info.TargetFramework | Should -Be '.NETFramework,Version=v4.5.2'
     }
 
-    It 'reads the token that Microsoft signs with' {
+    It 'reads the token of the public key that an assembly declares, and says that the assembly is not signed with it' {
         $info = & $script:Info (& $script:Save 'microsoft.dll' (Get-TestAssemblyByte 'Microsoft'))
 
         $info.Name | Should -Be 'Fixture.Signed'
         $info.PublicKeyToken | Should -Be '31bf3856ad364e35'
+        $info.IsSigned | Should -BeTrue
+        $info.SignatureStatus | Should -Be 'NotSigned'
+        $info.SignatureDetail | Should -Match 'no strong-name signature'
+    }
+
+    It 'checks the signature of an assembly that is signed' {
+        $info = & $script:Info (& $script:Save 'genuine.dll' (Get-TestAssemblyByte 'Genuine'))
+
+        $info.PublicKeyToken | Should -Be '8a90a76982b61a21'
+        $info.SignatureStatus | Should -Be 'Valid'
+        $info.SignatureDetail | Should -BeNullOrEmpty
+        $info.ReadStatus | Should -Be 'Read'
+    }
+
+    It 'says that an assembly that was altered after it was signed has an invalid signature' {
+        $bytes = Get-TestAssemblyByte 'Genuine'
+        $bytes[$bytes.Length - 40] = $bytes[$bytes.Length - 40] -bxor 0xFF
+
+        $info = & $script:Info (& $script:Save 'altered.dll' $bytes)
+
+        $info.PublicKeyToken | Should -Be '8a90a76982b61a21'
+        $info.SignatureStatus | Should -Be 'Invalid'
+        $info.ReadStatus | Should -Be 'Read'
+    }
+
+    It 'has no signature to check for an assembly that has no strong name' {
+        $info = & $script:Info (& $script:Save 'nosn.dll' (Get-TestAssemblyByte 'Unsigned'))
+
+        $info.SignatureStatus | Should -Be 'NoStrongName'
     }
 
     It 'reads the culture of a satellite assembly' {
@@ -98,6 +128,7 @@ Describe 'Get-SPSAssemblyFileInfo' {
         $info = & $script:Info (& $script:Save 'text.dll' ([System.Text.Encoding]::ASCII.GetBytes('This is a text file with a dll extension and enough bytes to have a header.')))
 
         $info.IsManaged | Should -BeFalse
+        $info.ReadStatus | Should -Be 'Failed'
         $info.Detail | Should -Match 'not a Windows executable'
     }
 
@@ -116,7 +147,35 @@ Describe 'Get-SPSAssemblyFileInfo' {
         $info = & $script:Info (& $script:Save 'native.dll' $bytes)
 
         $info.IsManaged | Should -BeFalse
+        $info.ReadStatus | Should -Be 'Native'
         $info.Detail | Should -Match 'native DLL'
+    }
+
+    It 'tells a genuine native DLL from a file that was not assessed' {
+        $native = & $script:Info (& $script:Save 'native2.dll' (New-TestNativeDll))
+        $text = & $script:Info (& $script:Save 'text2.dll' ([System.Text.Encoding]::ASCII.GetBytes('MZ this is not an assembly but has the extension of one, to be read as bytes')))
+
+        $native.ReadStatus | Should -Be 'Native'
+        $text.ReadStatus | Should -Be 'Failed'
+    }
+
+    It 'says that an assembly whose name cannot be read is partial, and keeps what it could read' {
+        $info = & $script:Info (& $script:Save 'damaged.dll' (Get-TestDamagedMetadataByte))
+
+        $info.IsManaged | Should -BeTrue
+        $info.ReadStatus | Should -Be 'Partial'
+        $info.RuntimeVersion | Should -Be 'v4.0.30319'
+        $info.Detail | Should -Match 'assembly name could not be read'
+    }
+
+    It 'reads a hidden file' {
+        $path = & $script:Save '.hidden-assembly.dll' (Get-TestAssemblyByte 'Custom')
+        [System.IO.File]::SetAttributes($path, ([System.IO.File]::GetAttributes($path) -bor [System.IO.FileAttributes]::Hidden))
+
+        $info = & $script:Info $path
+
+        $info.ReadStatus | Should -Be 'Read'
+        $info.Name | Should -Be 'Contoso.Fixture.Custom'
     }
 
     It 'does not throw for a truncated assembly' {
@@ -126,6 +185,7 @@ Describe 'Get-SPSAssemblyFileInfo' {
         $info = & $script:Info (& $script:Save 'cut.dll' $cut)
 
         $info.IsManaged | Should -BeFalse
+        $info.ReadStatus | Should -Be 'Failed'
         $info.Detail | Should -Not -BeNullOrEmpty
     }
 
@@ -135,6 +195,7 @@ Describe 'Get-SPSAssemblyFileInfo' {
         $info = & $script:Info $path 1
 
         $info.IsManaged | Should -BeFalse
+        $info.ReadStatus | Should -Be 'Skipped'
         $info.Detail | Should -Match 'larger than 1 MB'
     }
 }

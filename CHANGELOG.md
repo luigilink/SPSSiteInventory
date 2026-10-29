@@ -25,16 +25,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Get-SPSSolutionPackageInfo` expands a WSP (a cabinet) with `expand.exe` (or `cabextract` off
   Windows), or reads a package that is already expanded, and reports what the farm solution only
   shows as booleans. It reads the strong name and the public key token of every assembly, so a
-  package is custom or Microsoft on its assemblies and not on the name of the solution, the
+  package is custom or Microsoft on its assemblies and not on the name of the solution. A token
+  only counts when the strong-name signature of the assembly is valid (`SignatureStatus`): the
+  token is a hash of the public key that the assembly declares, and an assembly that is
+  delay-signed with the public key of Microsoft, or altered after it was signed, carries it too,
+  so it is custom and the package says why. It also reads the
   feature ids and scopes even when the solution is not deployed (the farm reports no feature for
   it), the features that have a receiver, where the assemblies are deployed, the safe controls, the
   code access security policy, the kind of elements that the features provision, and the .NET
   framework that the DLLs were built for (custom assemblies built for .NET 3.5 or before are
-  counted). With `-FarmSolutionMap` it matches each package to the farm solution and lists the
-  differences. `Export-SPSSolutionPackageReport` writes a CSV per package, a CSV per assembly and
-  a JSON file. The package is checked before it is expanded (a file name that goes up with `..`,
-  too many files, too large a size), its DLLs are read as bytes and never loaded, and its XML is
-  read with the DTD switched off. See the wiki page "Inspecting WSP packages (offline)". (#21)
+  counted). A DLL that was not assessed (above the size limit, not a valid image, a name that
+  could not be read) makes the package `Partial` and counts as custom, and a hidden DLL is
+  assessed like the others. With `-FarmSolutionMap` it matches each package to the farm solution
+  and lists the differences. `Export-SPSSolutionPackageReport` writes a CSV per package, a CSV per
+  assembly and a JSON file. The package is not trusted: the cabinet is copied to a folder of its
+  own and that copy is what is checked (a file name that goes up with `..`, too many files, too
+  large a size) and expanded, so that what is checked is what is expanded whatever happens to the
+  original meanwhile, and `Sha256` is that of the copy. A location in a manifest, `manifest.xml`
+  and the DLLs that are found in a folder must stay in the package: the case counts except on
+  Windows, and a symbolic link or a junction is never followed. The DLLs are read as bytes and
+  never loaded, and the XML is read with the DTD switched off. See the wiki page "Inspecting WSP
+  packages (offline)". (#21)
 
 ### Changed
 
