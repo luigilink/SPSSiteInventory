@@ -93,7 +93,8 @@ signals are still collected, and they still raise their alerts and appear in the
 nothing disappears from the inventory: they just do not move a site collection to a worse
 category. Subsites, in particular, are not penalised: a site collection with 100 subsites is
 *Modern-ready* in the preset, and the restructuring that modern SharePoint favors (one site
-collection per unit of work, connected by hub sites) is a topic of the report, not of the score.
+collection per unit of work; hub sites, which connect them, exist in SharePoint Online but not in
+SharePoint Server) is a topic of the report, not of the score.
 
 This version scores the signals that the toolkit already collects. It does not yet collect what
 only matters for the modern experience (an alternate CSS URL, XSLT list views, classic-only web
