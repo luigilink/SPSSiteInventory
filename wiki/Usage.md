@@ -200,6 +200,8 @@ Each row in the `*-solutions-*` CSV/JSON describes one farm solution (WSP):
 | `DeployedWebApplicationCount` / `DeployedServerCount` | Deployment reach |
 | `FeatureCount` / `FeatureScopes` / `FeatureIds` | Features the solution registers |
 
+The farm only gives booleans and, for a solution that is not deployed, no feature. To read the package itself (strong names and public key tokens of its assemblies, the features and scopes, the framework it was built for), with no farm, see [Inspecting WSP packages (offline)](Solution-Packages).
+
 ## Reading the results
 
 ### Reading the HTML report
