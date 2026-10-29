@@ -85,13 +85,18 @@ Describe 'The inventory record' {
         $script:Settings.LargeContentThresholds.MaxItemsForExcelFileScanPerLibrary | Should -Be 2000
     }
 
-    It 'has a field for the audience targeting and the site notebooks, in both records, documents them and keeps them out of the score of both examples' {
+    It 'has a field for the audience targeting, the site notebooks and the customized profile page, in both records, documents them and keeps them out of the score of both examples' {
         foreach ($signal in @('AudienceTargetedListCount', 'AudienceTargetedItemCount', 'AudienceTargetedExamples', 'SiteNotebookCount', 'SiteNotebookExamples')) {
             $script:Record[0] | Should -Contain $signal
             $script:Record[1] | Should -Contain $signal
             $script:Usage | Should -Match ('(?m)^\| [^|]*`{0}`' -f $signal)
         }
-        foreach ($weight in @('AudienceTargetedItemCount', 'SiteNotebookCount')) {
+        foreach ($signal in @('CustomizedProfilePageCount', 'CustomizedProfilePageExamples')) {
+            $script:Record[0] | Should -Contain $signal
+            $script:Record[1] | Should -Contain $signal
+            $script:Usage | Should -Match ('(?m)^\| [^|]*`{0}`' -f $signal)
+        }
+        foreach ($weight in @('AudienceTargetedItemCount', 'SiteNotebookCount', 'CustomizedProfilePageCount')) {
             $script:Settings.Scoring.Weights[$weight] | Should -Be 0 -Because $weight
             $script:OnPremSettings.Scoring.Weights[$weight] | Should -Be 0 -Because $weight
         }

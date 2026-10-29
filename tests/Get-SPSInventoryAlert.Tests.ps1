@@ -40,6 +40,7 @@ BeforeDiscovery {
         @{ Type = 'CheckedOutFiles'; Severity = 'Medium'; Signals = @{ CheckedOutFileCount = 9 }; Value = 9 }
         @{ Type = 'AudienceTargeting'; Severity = 'Medium'; Signals = @{ AudienceTargetedItemCount = 12 }; Value = 12 }
         @{ Type = 'SiteNotebook'; Severity = 'Low'; Signals = @{ SiteNotebookCount = 1 }; Value = 1 }
+        @{ Type = 'CustomizedProfilePage'; Severity = 'Low'; Signals = @{ CustomizedProfilePageCount = 1 }; Value = 1 }
         @{ Type = 'FileVersions'; Severity = 'Medium'; Signals = @{ FileVersionCount = 3 }; Value = 3 }
         @{ Type = 'LargeExcelFiles'; Severity = 'Low'; Signals = @{ LargeExcelFileCount = 2 }; Value = 2 }
         @{ Type = 'Subsites'; Severity = 'Low'; Signals = @{ SubsiteCount = 4 }; Value = 4 }
@@ -304,6 +305,39 @@ Describe 'Get-SPSInventoryAlert' {
         $alert.Message | Should -Match '^Migration to SharePoint Online only\. '
     }
 
+    It 'raises one profile property mapping alert per connection that has custom mappings, with their number and its first web application' {
+        $rows = @(
+            [PSCustomObject]@{ WebApplicationUrls = 'https://intranet; https://extranet'; UserProfileProxyId = 'p1'; ConnectionName = 'contoso-local'; PropertyName = 'CostCenter'; SynchronizedInSharePointOnline = $false; BuiltInProperty = $false }
+            [PSCustomObject]@{ WebApplicationUrls = 'https://intranet; https://extranet'; UserProfileProxyId = 'p1'; ConnectionName = 'contoso-local'; PropertyName = 'Badge'; SynchronizedInSharePointOnline = $false; BuiltInProperty = $null }
+            [PSCustomObject]@{ WebApplicationUrls = 'https://intranet; https://extranet'; UserProfileProxyId = 'p1'; ConnectionName = 'contoso-local'; PropertyName = 'FirstName'; SynchronizedInSharePointOnline = $true; BuiltInProperty = $true }
+            [PSCustomObject]@{ WebApplicationUrls = 'https://intranet; https://extranet'; UserProfileProxyId = 'p1'; ConnectionName = 'contoso-local'; PropertyName = 'PhoneticFirstName'; SynchronizedInSharePointOnline = $false; BuiltInProperty = $true }
+            [PSCustomObject]@{ WebApplicationUrls = 'https://intranet; https://extranet'; UserProfileProxyId = 'p1'; ConnectionName = 'hr-feed'; PropertyName = 'Grade'; SynchronizedInSharePointOnline = $false; BuiltInProperty = $false }
+            [PSCustomObject]@{ WebApplicationUrls = 'https://extranet'; UserProfileProxyId = 'p2'; ConnectionName = 'contoso-local'; PropertyName = 'Region'; SynchronizedInSharePointOnline = $false; BuiltInProperty = $false }
+        )
+
+        $alerts = Get-Alert -Record @() -Parameters @{ ProfilePropertyMapping = $rows }
+
+        $alerts | Should -HaveCount 3
+        $alerts[0].AlertType | Should -Be 'ProfilePropertyMapping'
+        $alerts[0].Severity | Should -Be 'Low'
+        $alerts[0].Url | Should -Be 'https://intranet'
+        $alerts[0].Value | Should -Be 'contoso-local: 2 mapping(s)'
+        $alerts[1].Url | Should -Be 'https://intranet'
+        $alerts[1].Value | Should -Be 'hr-feed: 1 mapping(s)'
+        $alerts[2].Url | Should -Be 'https://extranet'
+        $alerts[2].Value | Should -Be 'contoso-local: 1 mapping(s)'
+        Get-Alert -Record @() -Parameters @{ ProfilePropertyMapping = @() } | Should -HaveCount 0
+    }
+
+    It 'raises the partial profile inventory alert only when rows were supplied and the inventory is not complete' {
+        $alert = Get-Alert -Record @() -Parameters @{ ProfilePropertyMapping = @(); ProfileInventoryComplete = $false }
+
+        $alert.AlertType | Should -Be 'ProfilePropertyMappingInventoryPartial'
+        $alert.Severity | Should -Be 'Medium'
+        Get-Alert -Record @() -Parameters @{ ProfilePropertyMapping = @(); ProfileInventoryComplete = $true } | Should -HaveCount 0
+        Get-Alert -Record @() -Parameters @{ ProfileInventoryComplete = $false } | Should -HaveCount 0
+    }
+
     It 'keeps the order of the alerts: site collections first, then web applications, then BCS, then Secure Store' {
         $site = New-Site -Signals @{ InfoPathFormCount = 1; WebAppPolicyCount = 1 }
         $applications = @([PSCustomObject]@{ WebApplicationUrls = 'https://intranet'; LobSystemName = 'CrmSystem' })
@@ -321,7 +355,9 @@ Describe 'Get-SPSInventoryAlert' {
         $applications = @([PSCustomObject]@{ WebApplicationUrls = 'https://intranet'; LobSystemName = 'CrmSystem' })
         $targets = @([PSCustomObject]@{ WebApplicationUrls = 'https://intranet'; Name = 'SapTarget' })
 
-        $alerts = Get-Alert -Record $records -Parameters @{ BcsApplication = $applications; BcsInventoryComplete = $false; SecureStoreApplication = $targets; SecureStoreInventoryComplete = $false }
+        $mappings = @([PSCustomObject]@{ WebApplicationUrls = 'https://intranet'; UserProfileProxyId = 'p'; ConnectionName = 'Contoso'; SynchronizedInSharePointOnline = $false; BuiltInProperty = $false })
+
+        $alerts = Get-Alert -Record $records -Parameters @{ BcsApplication = $applications; BcsInventoryComplete = $false; SecureStoreApplication = $targets; SecureStoreInventoryComplete = $false; ProfilePropertyMapping = $mappings; ProfileInventoryComplete = $false }
         $raised = @($alerts.AlertType | Sort-Object -Unique)
         $cataloged = @($script:Catalog.Keys | Sort-Object)
 

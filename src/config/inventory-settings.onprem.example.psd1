@@ -292,6 +292,9 @@
             # move a site collection to a worse category.
             AudienceTargetedItemCount = 0
             SiteNotebookCount        = 0
+            # The customized profile page of a My Site host does not migrate either: the signal says whom to
+            # warn, it does not move a site collection to a worse category.
+            CustomizedProfilePageCount = 0
             FileVersionCount         = 0
             # Code that runs in the farm is not a blocker here but a modernization project: the
             # sandboxed solutions are retired, and the full-trust code, the custom master pages

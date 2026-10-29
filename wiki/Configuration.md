@@ -305,6 +305,17 @@ example configuration, because the content itself migrates:
   language gives its notebook another name is not found. At most
   `LargeContentThresholds.MaxItemsForNotebookScanPerLibrary` folders of the library are read; when it is
   reached, the count is a lower bound and the assessment is marked partial with a warning.
+- `CustomizedProfilePageCount` — 1 when the site collection is a My Site host (the template
+  `SPSMSITEHOST`) and its profile page, `Person.aspx` at the root of its root web, is customized
+  (unghosted), the case that the SMAT Customized Profile Pages scan starts from;
+  `CustomizedProfilePageExamples` gives the page. SharePoint Online has a profile experience of its own,
+  which cannot be customized, so the customization does not migrate. The page is also counted in
+  `CustomizedPageCount`, with the same rule: a file last modified by the System Account is ignored. The
+  SMAT scan also reports the web parts that were added, moved or removed, by comparing the page with a
+  default that is not published: a change of the web parts that a browser makes does not customize the
+  page, so it is not seen, and neither are the web parts that a user added or moved for himself (the
+  personalization of a page is read for the user who asks). The `CustomizedProfilePage` alert says what
+  to do.
 
 Publishing and customized-page signals describe classic publishing dependencies:
 

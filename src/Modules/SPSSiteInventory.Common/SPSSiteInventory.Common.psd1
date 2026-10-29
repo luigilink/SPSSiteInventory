@@ -19,6 +19,7 @@
         'Get-SPSFarmSolutionMap'
         'Get-SPSInstalledProductVersion'
         'Get-SPSInventorySetting'
+        'Get-SPSProfilePropertyMapping'
         'Get-SPSReadinessCheck'
         'Get-SPSSecureStoreApplication'
         'Get-SPSWebApplicationAuthentication'

@@ -360,6 +360,49 @@ Describe 'The scenarios of the collaboration signals' {
     }
 }
 
+Describe 'The scenario of the customized profile page' {
+    BeforeAll {
+        $script:ProfilePage = $script:Scenario | Where-Object { $_.Name -eq 'customized-profile-page' }
+    }
+
+    It 'builds a My Site host and edits its Person.aspx, as the customized page scenario edits the default page' {
+        $script:ProfilePage | Should -Not -BeNullOrEmpty
+        $script:ProfilePage.Template | Should -Be 'SPSMSITEHOST#0'
+        $source = $script:ProfilePage.Provision.ToString()
+
+        $source | Should -Match "GetFile\('Person\.aspx'\)"
+        $source | Should -Match 'SaveBinary'
+        $source | Should -Match 'SKIP: the My Site host has no Person\.aspx page'
+        $source | Should -Not -Match 'catch'
+    }
+
+    It 'only informs, like the scenario of the customized page: the edits of the System Account, which the lab may run as, are ignored' {
+        @($script:ProfilePage.Expect | Where-Object { -not $_.Info }).Count | Should -Be 0
+        $count = @($script:ProfilePage.Expect | Where-Object { $_.Property -eq 'CustomizedProfilePageCount' })
+        $count | Should -HaveCount 1
+        $count[0].Operator | Should -Be 'ge'
+        $count[0].Value | Should -Be 1
+        @($script:ProfilePage.Expect | Where-Object { $_.Alert -eq 'CustomizedProfilePage' }) | Should -HaveCount 1
+    }
+
+    It 'meets its expectations with the values that the inventory writes' {
+        $record = [PSCustomObject]@{ CustomizedProfilePageCount = 1; CustomizedProfilePageExamples = '/sites/spslab-customized-profile-page/Person.aspx' }
+        foreach ($expectation in @($script:ProfilePage.Expect)) {
+            (Test-SPSLabExpectation -Expectation $expectation -Record $record -Alert @('CustomizedProfilePage')).Status | Should -Be 'PASS' -Because "it expects $($expectation.Property)$($expectation.Alert)"
+        }
+    }
+
+    It 'is expected to leave the baseline site alone: a team site is no My Site host' {
+        $baseline = $script:Scenario | Where-Object { $_.Name -eq 'baseline' }
+        $expectation = @($baseline.Expect | Where-Object { $_.Property -eq 'CustomizedProfilePageCount' })
+
+        $expectation | Should -HaveCount 1
+        $expectation[0].Operator | Should -Be 'eq'
+        $expectation[0].Value | Should -Be 0
+        $expectation[0].Info | Should -BeFalse
+    }
+}
+
 Describe 'The scenarios of the modern-readiness signals' {
     BeforeAll {
         $script:ModernScenario = @('alternate-css', 'xslt-view', 'script-web-part', 'modern-opt-out', 'forced-classic')

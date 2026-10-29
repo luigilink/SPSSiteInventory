@@ -10,7 +10,7 @@ BeforeAll {
 }
 
 Describe 'Invoke-SPSiteAssessment and the collaboration signals' {
-    It 'carries the audience targeting and site notebook signals of the collector into the record, and leaves them empty for a site that failed' {
+    It 'carries the audience targeting, site notebook and customized profile page signals of the collector into the record, and leaves them empty for a site that failed' {
         InModuleScope SPSSiteInventory.Common {
             Mock Get-SPSite {
                 if ($Identity -match '/denied$') { throw 'Access denied' }
@@ -28,6 +28,8 @@ Describe 'Invoke-SPSiteAssessment and the collaboration signals' {
                     AudienceTargetedExamples = '/sites/a/Lists/News (7 item(s): Sales)'
                     SiteNotebookCount = 1
                     SiteNotebookExamples = '/sites/a/SiteAssets/Team Notebook'
+                    CustomizedProfilePageCount = 1
+                    CustomizedProfilePageExamples = '/Person.aspx'
                 }
             }
             Mock Add-SPSInventoryEvent { }
@@ -48,8 +50,10 @@ Describe 'Invoke-SPSiteAssessment and the collaboration signals' {
             $assessed.AudienceTargetedExamples | Should -Be '/sites/a/Lists/News (7 item(s): Sales)'
             $assessed.SiteNotebookCount | Should -Be 1
             $assessed.SiteNotebookExamples | Should -Be '/sites/a/SiteAssets/Team Notebook'
+            $assessed.CustomizedProfilePageCount | Should -Be 1
+            $assessed.CustomizedProfilePageExamples | Should -Be '/Person.aspx'
             $failed.AssessmentStatus | Should -Be 'Failed'
-            foreach ($field in 'AudienceTargetedListCount', 'AudienceTargetedItemCount', 'AudienceTargetedExamples', 'SiteNotebookCount', 'SiteNotebookExamples') {
+            foreach ($field in 'AudienceTargetedListCount', 'AudienceTargetedItemCount', 'AudienceTargetedExamples', 'SiteNotebookCount', 'SiteNotebookExamples', 'CustomizedProfilePageCount', 'CustomizedProfilePageExamples') {
                 $failed.PSObject.Properties.Name | Should -Contain $field
                 $failed.$field | Should -BeNullOrEmpty -Because $field
             }

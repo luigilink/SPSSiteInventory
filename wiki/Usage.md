@@ -46,7 +46,7 @@ report pack, plus a dedicated farm-solution report, to the output folder:
 | `*-publishing-*.json` | Publishing and customized-page dataset (`PublishingInfrastructureEnabled`, `PublishingWebCount`, `PublishingPageCount`, `PublishingPageLayoutCount`/`PublishingPageLayoutExamples`, `CustomizedPageCount`/`CustomizedPageExamples`, status, category). |
 | `*-irm-locks-*.json` | Security/lock dataset (`IrmEnabledListCount`, `SiteLockState`, `IsLockedSite`, `HasNoAccessLock`). |
 | `*-large-content-*.json` | Large-content risk dataset (`IsLargeSite`, large lists/views, checked-out files, high file-version counts, large Excel files, plus examples). |
-| `*-collaboration-*.json` | Collaboration dataset (`AudienceTargetedListCount`, `AudienceTargetedItemCount`, `AudienceTargetedExamples`, `SiteNotebookCount`, `SiteNotebookExamples`, status, category). |
+| `*-collaboration-*.json` | Collaboration dataset (`AudienceTargetedListCount`, `AudienceTargetedItemCount`, `AudienceTargetedExamples`, `SiteNotebookCount`, `SiteNotebookExamples`, `CustomizedProfilePageCount`, `CustomizedProfilePageExamples`, status, category). |
 | `*-alerts-*.csv` / `*-alerts-*.json` | Normalized risk alerts extracted from the site signals, each with its severity, an explanation and a remediation hint (and the Microsoft Learn page behind it). The `SharePointOnPrem` mode has its own severity and words for them. One alert per site collection and signal; web application and BCS alerts are written once per web application and per LOB system. The CSV is for Excel, the JSON for automation. The alert types and their advice are listed in [Alerts and remediation](Alerts). |
 | `*-solutions-*.csv` | Farm-solution (WSP) inventory for Excel; one row per solution, with the feature scopes/ids flattened. |
 | `*-solutions-*.json` | Farm-solution (WSP) inventory for automation, with the feature scopes/ids kept as arrays. |
@@ -55,6 +55,7 @@ report pack, plus a dedicated farm-solution report, to the output folder:
 | `*-externallists-*.csv` / `*-externallists-*.json` | External lists by list, following the SMAT External List report. One row per list backed by a Business Connectivity Services (BCS) external content type, with its BCS binding. |
 | `*-bcs-*.csv` / `*-bcs-*.json` | BCS LOB systems of the farm, following the SMAT BCS report. One row per LOB system, with its type, instances and entities. |
 | `*-securestore-*.csv` / `*-securestore-*.json` | Secure Store target applications of the farm, following the SMAT Secure Store report. One row per target application, with its name, display name, contact e-mail address, type, credential management URL and ticket time-out. The contact e-mail address is personal data, so it is not part of the HTML report. |
+| `*-profilemappings-*.csv` / `*-profilemappings-*.json` | Profile property mappings of the User Profile service applications, following the SMAT Custom Profile Property Mappings report. One row per mapping, with its connection, property, attribute, direction, length and number of profiles, and whether SharePoint Online fills the property. |
 | `*-sharepointalerts-*.csv` / `*-sharepointalerts-*.json` | SharePoint alerts ("Alert Me" subscriptions) by alert, following the SMAT Alerts report. One row per alert, with where it applies, what triggers it, how often it is sent and who owns it. Not the risk alerts of `*-alerts-*`. They contain the login names of the owners, unless `SharePointAlerts.IncludeUserLogin` is `$false`, so they are not part of the HTML report. |
 
 ### Site collections left out of the inventory
@@ -106,8 +107,8 @@ OWASP states that no CSV sanitization is safe for every spreadsheet. Two things 
 
 The HTML report also includes configured authentication by web application/zone,
 an alerts section that groups the alerts by type with what to do about each, a content-type
-summary, a managed metadata section, an external list section, a BCS application section
-and a Secure Store section. Authentication errors stop the scan rather than silently
+summary, a managed metadata section, an external list section, a BCS application section,
+a Secure Store section and a profile property mapping section. Authentication errors stop the scan rather than silently
 producing Windows-only results. Unrecognized/federated providers are flagged for identity
 review; a missing provider identity leaves `HasFbaZone` unknown unless FBA was positively
 detected in another provider or zone.
@@ -169,6 +170,7 @@ CSV/JSON rows describe site collections and any web-application enumeration fail
 | `LargeExcelFileCount` / `LargeExcelFileExamples` | Excel workbooks (`.xlsx`) in document libraries of at least `LargeContentThresholds.LargeExcelFileSizeMB` (10 MB by default) and up to five of them with their size. SharePoint Online does not open a workbook above 10 MB in the browser: it asks the user to open it in Excel. The workbooks are migrated, so the signal says whom to warn. System catalogs are skipped, and at most `MaxItemsForExcelFileScanPerLibrary` workbooks are checked in each library (2000 by default) |
 | `AudienceTargetedListCount` / `AudienceTargetedItemCount` / `AudienceTargetedExamples` | List items that target an audience (the Target Audiences column is not empty), the lists that hold them, and up to five of those lists with the number of items and the audiences, for example `/sites/team/Lists/Announcements (3 item(s): Sales, Marketing)`. An audience of the User Profile service is shown by its name, or by its ID when it cannot be resolved. The audience data does not migrate: the items are shown to every reader afterwards. Hidden lists and the system catalogs are skipped, and at most `LargeContentThresholds.MaxItemsForAudienceTargetingScanPerList` items are read in each list |
 | `SiteNotebookCount` / `SiteNotebookExamples` | Site notebooks (the OneNote notebooks of the Site Assets library whose name ends in `Notebook`) and up to five of them. The notebook is migrated under another name, so the links to it break. A notebook with no section is listed too, which SMAT leaves out. At most `LargeContentThresholds.MaxItemsForNotebookScanPerLibrary` folders of the library are read |
+| `CustomizedProfilePageCount` / `CustomizedProfilePageExamples` | 1 when the site collection is a My Site host and its profile page, `Person.aspx` at the root of its root web, is customized (unghosted), and the page. SharePoint Online has a profile experience of its own, which cannot be customized, so the customization does not migrate. The page is also counted in `CustomizedPageCount`; a file last modified by the System Account is ignored. A change that does not customize the page, such as web parts that a browser adds or moves, is not seen |
 | `SiteLockState` / `IsLockedSite` / `HasNoAccessLock` | Site collection lock state (`Unlock`, `ReadOnly`, `NoAdditions`, `NoAccess`, `Unknown`), whether the site has any lock, and whether the lock is `NoAccess`, the only one that makes the site unreadable (and blocking in the example configuration). SharePoint refuses to read a `NoAccess` site collection at all, even its lock flags, so the lock is recognized from that error and the site collection stays `Partial`. `Unknown` means that the flags could not be read for another reason, and comes with a warning |
 | `UsesFullTrustCode` | Site activates a feature from a custom full-trust WSP (GAC assembly) |
 | `UsesCustomFarmFeature` | Site activates a feature from a custom farm solution (WSP), as identified by the farm-solution map |
@@ -261,9 +263,10 @@ folder can be moved, zipped and sent. The manifest lists the pages in `Files.Inv
   type in the search box to find a site collection by name, URL, template or signal; the count
   next to them says how many site collections are shown.
 - **Farm solutions, authentication, web application policies, content types, managed
-  metadata, external lists, BCS applications and Secure Store applications** follow. The
-  managed metadata, external list, BCS, Secure Store, farm solution and full-trust site tables
-  show at most 200 rows and say how many are not shown and which files hold all of them. The content types are not listed in the report,
+  metadata, external lists, BCS applications, Secure Store applications and profile property
+  mappings** follow. The managed metadata, external list, BCS, Secure Store, profile property
+  mapping, farm solution and full-trust site tables show at most 200 rows and say how many are
+  not shown and which files hold all of them. The content types are not listed in the report,
   because there are thousands of them: it shows how many definitions and list bindings there
   are, and the `*-contenttypes-*` files hold every row.
 
@@ -416,6 +419,75 @@ The member names of the object that `Get-SPSecureStoreApplication` returns are n
 the inventory reads the ones of the contract of the service and of the parameters of
 `New-SPSecureStoreTargetApplication`. If a farm names them differently, the warning of the run
 lists the members that the object has.
+
+### User profile property mappings
+
+In the source farm, a profile property of the User Profile service can be mapped to an attribute of a
+data source, Active Directory or a Business Connectivity Services connection, to be filled in or
+exported. SharePoint Online fills a fixed set of properties from Microsoft Entra ID, which cannot be
+configured with other mappings: a value that the default properties do not carry has to be pushed into
+the profiles by a program of your own (see
+[SharePoint user profile properties now writable with CSOM](https://learn.microsoft.com/en-us/archive/blogs/vesku/sharepoint-user-profile-properties-now-writable-with-csom)).
+The `*-profilemappings-*` files hold one row per mapping, like the SMAT Custom Profile Property Mappings
+report:
+
+| Field | Description |
+| --- | --- |
+| `WebApplicationUrls` | The web applications that use the User Profile service, separated by `; ` |
+| `UserProfileProxyName` / `UserProfileProxyId` | The User Profile proxy that those web applications use. A service is identified by its proxy, so web applications that share one report its mappings once |
+| `ConnectionName` / `ConnectionType` | The synchronization connection, and its type (`ActiveDirectoryImport`, `BusinessDataCatalog`, `ActiveDirectory` and the other values of the connection type) |
+| `PropertyName` / `PropertyDisplayName` | The profile property, by its name (the one that cannot change) and its display name |
+| `PropertyMapping` | The attribute of the data source that the property is mapped to |
+| `Direction` | `Import` when the value is pulled from the data source, `Export` when it is pushed to it. An Active Directory import connection only imports |
+| `PropertyLength` | The length of the property |
+| `PropertyUsage` | The number of profiles that have the property, as the User Profile service reports it. The documentation does not say whether a profile with an empty value counts; it is empty when it cannot be read |
+| `SynchronizedInSharePointOnline` | `True` when SharePoint Online fills the property: it is one of the properties of the fixed list that Microsoft documents (see below) |
+| `BuiltInProperty` | `True` when SharePoint ships the property (its name is one of the `PropertyConstants` of the User Profile service), `False` for a property that an administrator added, empty when that list could not be read |
+
+Every mapping is listed, as the default mappings of SharePoint that SharePoint Online does not fill are
+in the SMAT report (the Phonetic Search properties, for example): they need nothing unless something
+relies on them. A mapping is a **custom** one, and raises the `ProfilePropertyMapping` alert (once per
+connection, with the number of its mappings), when `SynchronizedInSharePointOnline` is `False` and
+`BuiltInProperty` is not `True`. The properties that SharePoint Online fills are those of this fixed list
+([User profile synchronization](https://learn.microsoft.com/en-us/sharepoint/user-profile-sync)):
+`AccountName`, `UserName` and `SPS-UserPrincipalName` (from UserPrincipalName), `PreferredName`
+(DisplayName), `FirstName` (GivenName), `LastName` (sn), `WorkPhone` (telephoneNumber), `WorkEmail` and
+`SPS-SipAddress` (proxyAddresses), `Office` (PhysicalDeliveryOfficeName), `Title` and `SPS-JobTitle`
+(Title), `Department` and `SPS-Department` (Department), `PublicSiteRedirect` (WWWHomePage),
+`SPS-MUILanguages` (PreferredLanguage), `SPS-HideFromAddressLists` (msExchHideFromAddressList) and
+`Manager`. The page gives the display names, so a property is matched by its name or by its display
+name, ignoring the case and the characters that are not letters or digits.
+
+The User Profile service application of each web application is found through the service application
+proxy group of the web application, and read with the configuration manager of the service through the
+service context of that group, for the default (non-tenant) partition. Web applications that share a User
+Profile proxy report its mappings once, with every web application that sees it. A service context binds
+the default User Profile proxy of its group, so a group that holds more than one makes the report partial.
+The mappings of a connection are read from its `PropertyMapping`; an Active Directory import connection,
+which is the default of SharePoint Server 2016 and later, has none, and its mappings are read from the
+method that SharePoint itself uses for them, which is not public. No profile is read and no connection is
+contacted. A web application, a connection or a mapping that cannot be read is reported as a warning in the
+run log and marks the report partial: the `ProfilePropertyMappingInventoryPartial` alert,
+`Summary.ProfileInventoryComplete` in the manifest and a note in the HTML report say that mappings may be
+missing.
+
+**Run the inventory as an administrator of the User Profile service application** (the farm account is one):
+without the permission the connections cannot be read, and the report is partial.
+
+To plan the work:
+
+1. List the custom mappings in `*-profilemappings-*` and find out with the owners which of them something
+   relies on: a SharePoint add-in, a company portal, a search scope. `PropertyUsage` tells whether the
+   property has values.
+2. For each value that is still needed, plan the program that pushes it into the profiles of the target
+   after the migration, and test it.
+3. If the Secure Store report has target applications that are related to the user profile, look at the
+   mappings of the Business Connectivity Services connections of this report to see whether they are in
+   use, as the SMAT page of the Secure Store says.
+
+The member names of the objects that the User Profile service returns are those of its documentation,
+except for the mappings of an Active Directory import connection, which are read by reflection. If a farm
+names them differently, the warning of the run says which connection could not be read and why.
 
 ### SharePoint alerts
 

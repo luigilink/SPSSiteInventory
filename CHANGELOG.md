@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- SMAT profile-migration parity. The new `Get-SPSProfilePropertyMapping` reads the profile property
+  mappings of the User Profile service applications once for the farm, as the SMAT Custom Profile
+  Property Mappings report does: one row per mapping, with the connection and its type, the profile
+  property with its display name and length, the attribute it is mapped to, the direction (import or
+  export) and the number of profiles that have the property. The service is found through the service
+  application proxy group of each web application and read with the configuration manager of the User
+  Profile service through the service context of that group (web applications that share a User Profile
+  proxy report it once, a group with several makes the report partial). The mappings of a connection are
+  read from its `PropertyMapping`, and those of an Active Directory import connection, which is the default
+  of SharePoint Server 2016 and later and has none, from the non-public method that SharePoint uses for
+  them. Every mapping is listed, and each row says whether SharePoint Online fills the property
+  (`SynchronizedInSharePointOnline`, from the fixed list that Microsoft documents) and whether SharePoint
+  ships it (`BuiltInProperty`, from `PropertyConstants`): a mapping of a property that is neither is a
+  custom one, and raises the new `ProfilePropertyMapping` alert (Low, once per connection, with the
+  number of its mappings). The report reaches a `-profilemappings-` CSV and JSON, the manifest
+  (`Summary.ProfileInventoryComplete`, `Files.ProfileMappingsCsv` and `Files.ProfileMappingsJson`) and a
+  profile property mapping section of the HTML report, which lists the custom mappings first. A web
+  application, a connection or a mapping that cannot be read, which includes a missing permission on the
+  User Profile service application, marks the report partial: the new
+  `ProfilePropertyMappingInventoryPartial` alert, the manifest and a note in the HTML report say so. The
+  profile property names that SharePoint Online fills, the members of the objects of the service and the
+  meaning of the number of profiles are checked on the first run on a farm. (#46)
+- The customized profile page of a My Site host is now a signal of its own: `CustomizedProfilePageCount`
+  (1 when the `Person.aspx` of the root web of a site collection of the template `SPSMSITEHOST` is
+  customized, ignoring the edits of the System Account like the customized pages do) and
+  `CustomizedProfilePageExamples`. It reaches the CSV, the JSON, the `-collaboration-` dataset, a risk
+  indicator and the details of the HTML report, weighs nothing in either example configuration, and raises
+  the new `CustomizedProfilePage` alert (Low), which is only about a migration in the `SharePointOnPrem`
+  mode: SharePoint Online has a profile experience of its own that cannot be customized. The web parts
+  that a browser adds or moves, and the personalization of a user, do not customize the page and are not
+  seen: SMAT compares the page with a default that is not published. The lab has a scenario for it. (#46)
 - SMAT parity for the collaboration features that migrate without the data that makes them work. The
   inventory counts the list items that target an audience (`AudienceTargetedItemCount`, with
   `AudienceTargetedListCount` and `AudienceTargetedExamples`): the Target Audiences column, which a

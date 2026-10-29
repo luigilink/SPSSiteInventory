@@ -6,7 +6,8 @@
         .DESCRIPTION
         Turns the signals of each scored record into alerts: one per site collection and
         signal, one per web application for the policy and browser file handling signals, and
-        one per BCS LOB system and per Secure Store target application. A failed or partial
+        one per BCS LOB system, per Secure Store target application and per profile synchronization
+        connection that has mappings that SharePoint Online does not have. A failed or partial
         assessment and a failed web application enumeration are alerts too, so a gap in the
         inventory is never silent.
 
@@ -36,6 +37,16 @@
         .PARAMETER SecureStoreInventoryComplete
         Whether the Secure Store inventory could be read in full. It only matters when
         SecureStoreApplication is supplied: when false, a SecureStoreInventoryPartial alert is
+        raised.
+
+        .PARAMETER ProfilePropertyMapping
+        Optional profile property mapping rows from Get-SPSProfilePropertyMapping. One alert is raised
+        per connection that has a mapping of a property that SharePoint Online does not fill and that
+        SharePoint does not ship (SynchronizedInSharePointOnline false and BuiltInProperty not true).
+
+        .PARAMETER ProfileInventoryComplete
+        Whether the profile property mappings could be read in full. It only matters when
+        ProfilePropertyMapping is supplied: when false, a ProfilePropertyMappingInventoryPartial alert is
         raised.
 
         .PARAMETER TargetMode
@@ -71,6 +82,15 @@
         [Parameter()]
         [System.Boolean]
         $SecureStoreInventoryComplete = $true,
+
+        [Parameter()]
+        [AllowEmptyCollection()]
+        [System.Object[]]
+        $ProfilePropertyMapping = @(),
+
+        [Parameter()]
+        [System.Boolean]
+        $ProfileInventoryComplete = $true,
 
         [Parameter()]
         [System.String]
@@ -201,6 +221,9 @@
         if ($scope -eq 'SiteCollection' -and [int]$record.SiteNotebookCount -gt 0) {
             $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'SiteNotebook' -Url $($record.Url) -Value $([int]$record.SiteNotebookCount)))
         }
+        if ($scope -eq 'SiteCollection' -and [int]$record.CustomizedProfilePageCount -gt 0) {
+            $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'CustomizedProfilePage' -Url $($record.Url) -Value $([int]$record.CustomizedProfilePageCount)))
+        }
         if ($scope -eq 'SiteCollection' -and [int]$record.SubsiteCount -gt 0) {
             $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'Subsites' -Url $($record.Url) -Value $([int]$record.SubsiteCount)))
         }
@@ -231,6 +254,23 @@
     }
     if ($PSBoundParameters.ContainsKey('SecureStoreApplication') -and -not $SecureStoreInventoryComplete) {
         $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'SecureStoreInventoryPartial' -Url $('') -Value $($false)))
+    }
+
+    # Profile property mappings belong to the farm too: one alert per connection that has mappings that the target does not have.
+    # The connections are told apart by their service as well as by their name, and listed in the order of the rows.
+    $mappingGroups = [ordered]@{}
+    foreach ($customMapping in @($ProfilePropertyMapping | Where-Object { $null -ne $_ -and -not [bool]$_.SynchronizedInSharePointOnline -and $_.BuiltInProperty -ne $true })) {
+        $groupKey = '{0}|{1}|{2}' -f [string]$customMapping.WebApplicationUrls, [string]$customMapping.UserProfileProxyId, [string]$customMapping.ConnectionName
+        if (-not $mappingGroups.Contains($groupKey)) {
+            $mappingGroups[$groupKey] = [PSCustomObject]@{ First = $customMapping; Count = 0 }
+        }
+        $mappingGroups[$groupKey].Count++
+    }
+    foreach ($mappingGroup in $mappingGroups.Values) {
+        $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'ProfilePropertyMapping' -Url $(([string]$mappingGroup.First.WebApplicationUrls -split '; ')[0]) -Value $('{0}: {1} mapping(s)' -f [string]$mappingGroup.First.ConnectionName, $mappingGroup.Count)))
+    }
+    if ($PSBoundParameters.ContainsKey('ProfilePropertyMapping') -and -not $ProfileInventoryComplete) {
+        $alerts.Add((ConvertTo-SPSInventoryAlert -TargetMode $TargetMode -AlertType 'ProfilePropertyMappingInventoryPartial' -Url $('') -Value $($false)))
     }
 
     return $alerts.ToArray()

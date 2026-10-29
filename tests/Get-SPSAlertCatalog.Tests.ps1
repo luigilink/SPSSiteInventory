@@ -260,7 +260,7 @@ Describe 'Get-SPSAlertCatalog for the SharePointOnPrem mode' {
     }
 
     It 'makes the alerts that are only about a migration to SharePoint Online Low, and says so before the original text' {
-        $script:MigrationOnly.Count | Should -Be 21
+        $script:MigrationOnly.Count | Should -Be 23
         foreach ($key in $script:MigrationOnly) {
             $entry = $script:OnPrem[$key]
 
@@ -269,7 +269,7 @@ Describe 'Get-SPSAlertCatalog for the SharePointOnPrem mode' {
             $entry.Remediation | Should -Be ('Nothing to do to modernize this farm. If you migrate to SharePoint Online, this applies. ' + $script:Catalog[$key].Remediation) -Because $key
             $entry.Reference | Should -Be $script:Catalog[$key].Reference -Because $key
         }
-        foreach ($key in @('ExternalLists', 'FbaConfigured', 'IrmEnabledLists', 'BcsApplication', 'SecureStoreApplication', 'UnsupportedSiteTemplate', 'AlertSubscriptions', 'LargeExcelFiles', 'AudienceTargeting', 'SiteNotebook')) {
+        foreach ($key in @('ExternalLists', 'FbaConfigured', 'IrmEnabledLists', 'BcsApplication', 'SecureStoreApplication', 'UnsupportedSiteTemplate', 'AlertSubscriptions', 'LargeExcelFiles', 'AudienceTargeting', 'SiteNotebook', 'ProfilePropertyMapping', 'CustomizedProfilePage')) {
             $script:MigrationOnly | Should -Contain $key
         }
     }
@@ -324,7 +324,7 @@ Describe 'Get-SPSAlertCatalog for the SharePointOnPrem mode' {
             PublishingSite = 'Medium'; PublishingPages = 'Medium'; CustomizedPages = 'Medium'; AppInstances = 'Medium'; AppWebs = 'Medium'
             LargeLists = 'Medium'; LargeListViews = 'Medium'; AssessmentPartial = 'Medium'
             LockedSite = 'Low'; ClassicExperienceLists = 'Low'; Subsites = 'Low'
-            AssessmentFailed = 'High'; WebApplicationEnumerationFailed = 'High'; BcsInventoryPartial = 'Medium'; SecureStoreInventoryPartial = 'Medium'
+            AssessmentFailed = 'High'; WebApplicationEnumerationFailed = 'High'; BcsInventoryPartial = 'Medium'; SecureStoreInventoryPartial = 'Medium'; ProfilePropertyMappingInventoryPartial = 'Medium'
         }
         foreach ($key in $expected.Keys) {
             $script:OnPrem[$key].Severity | Should -Be $expected[$key] -Because $key

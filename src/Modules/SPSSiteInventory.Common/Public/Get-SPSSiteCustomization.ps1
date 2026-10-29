@@ -137,6 +137,16 @@
         the name changes with the migration, so the links to it break. SiteNotebookExamples lists up to
         five of them. At most MaxItemsForNotebookScanPerLibrary folders of the library are read.
 
+        CustomizedProfilePageCount is 1 when the site collection is a My Site host (the template
+        SPSMSITEHOST) and its profile page, Person.aspx at the root of its root web, is customized
+        (unghosted), which is where the SMAT Customized Profile Pages scan starts from.
+        CustomizedProfilePageExamples gives the page. SharePoint Online has a profile experience of its
+        own, which cannot be customized, so the customization does not migrate. The page is a customized
+        page too: it is counted in CustomizedPageCount as well, with the same rule (a file last modified
+        by the System Account is ignored). A change that does not customize the page, such as web parts
+        that a browser adds or moves, and the web parts that a user changed for himself, is not seen: SMAT
+        compares the page with a default that is not published.
+
         The modern-readiness signals say what keeps a site collection in the classic experience.
         AlternateCssUrlCount counts the webs that set an alternate CSS URL. XsltListViewCount counts
         the list views that render with a customized XSLT (an XslLink other than main.xsl, or an
@@ -302,6 +312,8 @@
         AudienceTargetedExamples = ''
         SiteNotebookCount        = 0
         SiteNotebookExamples     = ''
+        CustomizedProfilePageCount = 0
+        CustomizedProfilePageExamples = ''
         IsLockedSite             = $false
         HasNoAccessLock          = $false
         SiteLockState            = 'Unknown'
@@ -340,6 +352,7 @@
     $largeExcelFileExamples = [System.Collections.Generic.List[string]]::new()
     $audienceTargetedLists = [System.Collections.Generic.List[object]]::new()
     $siteNotebookExamples = [System.Collections.Generic.List[string]]::new()
+    $customizedProfilePageExamples = [System.Collections.Generic.List[string]]::new()
     $appInstanceExamples = [System.Collections.Generic.List[string]]::new()
     $customizedPageExamples = [System.Collections.Generic.List[string]]::new()
     $customPermissionLevels = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
@@ -719,6 +732,11 @@
                     if ($null -eq $rootFiles) {
                         throw "The root file collection is unavailable on '$($web.Url)'."
                     }
+                    # A My Site host is told by its template, and only its root web has the profile page.
+                    $isMySiteHostRoot = $false
+                    if ([bool](Get-SPSPropertyValue -InputObject $web -Name 'IsRootWeb')) {
+                        $isMySiteHostRoot = [string](Get-SPSPropertyValue -InputObject $web -Name 'WebTemplate') -eq 'SPSMSITEHOST'
+                    }
                     foreach ($rootFile in $rootFiles) {
                         try {
                             if (-not (Test-SPSCustomizedPageFile -File $rootFile)) {
@@ -729,6 +747,12 @@
                             $pageIdentity = [string](& $getFileIdentity $rootFile $null)
                             if (-not [string]::IsNullOrWhiteSpace($pageIdentity) -and $customizedPageExamples.Count -lt 5) {
                                 $customizedPageExamples.Add($pageIdentity)
+                            }
+
+                            # The profile page of a My Site host: SharePoint Online cannot customize its own.
+                            if ($isMySiteHostRoot -and ($pageIdentity -split '/')[-1] -eq 'Person.aspx') {
+                                $signals.CustomizedProfilePageCount++
+                                $customizedProfilePageExamples.Add($pageIdentity)
                             }
                         }
                         catch {
@@ -1700,6 +1724,7 @@
     $signals.FileVersionExamples = $fileVersionExamples -join '; '
     $signals.LargeExcelFileExamples = $largeExcelFileExamples -join '; '
     $signals.SiteNotebookExamples = $siteNotebookExamples -join '; '
+    $signals.CustomizedProfilePageExamples = $customizedProfilePageExamples -join '; '
     if ($audienceTargetedLists.Count -gt 0) {
         # The names are read once for the lists that are shown; an audience that has none is shown by its ID.
         $audienceNames = Resolve-SPSAudienceName -Site $Site -AudienceId @($audienceTargetedLists | ForEach-Object { $_.AudienceId } | Select-Object -Unique)
