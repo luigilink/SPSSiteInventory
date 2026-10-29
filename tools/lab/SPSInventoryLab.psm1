@@ -378,6 +378,7 @@ function Get-SPSLabScenario {
                 (Get-SPSLabExpectation ClassicExperienceOptOutCount eq 0)
                 (Get-SPSLabExpectation ClassicExperienceListCount eq 0)
                 (Get-SPSLabExpectation ModernBlockerCount eq 0)
+                (Get-SPSLabExpectation AudienceTargetedItemCount eq 0)
                 (Get-SPSLabExpectation Category eq 1)
             )
         })
@@ -506,6 +507,85 @@ function Get-SPSLabScenario {
                 (Get-SPSLabExpectation LargeExcelFileCount eq 1)
                 (Get-SPSLabExpectation LargeExcelFileExamples like '*lab-large.xlsx*')
                 (Get-SPSLabExpectation -Alert 'LargeExcelFiles')
+            )
+        })
+
+    $scenario.Add([PSCustomObject]@{
+            Name        = 'audience-targeting'
+            Description = 'A list with audience targeting and three items: two target an audience and a group, one does not. Only the two must be reported.'
+            Template    = 'STS#0'
+            Provision   = {
+                param ($Context)
+                # The column is a field type of SharePoint Server: a SharePoint without it cannot have audience targeting.
+                $fieldType = 'Microsoft.Office.Server.WebControls.FieldTypes.SPFieldTargetTo' -as [System.Type]
+                if ($null -eq $fieldType) {
+                    $null = [System.Reflection.Assembly]::LoadWithPartialName('Microsoft.Office.Server.UserProfiles')
+                    $fieldType = 'Microsoft.Office.Server.WebControls.FieldTypes.SPFieldTargetTo' -as [System.Type]
+                }
+                if ($null -eq $fieldType) {
+                    throw 'SKIP: the audience targeting column (the field type TargetTo) is not available on this SharePoint.'
+                }
+
+                $list = Add-SPSLabList -Web $Context.Web -Title 'LabAudience' -Template 'Announcements'
+                $columnXml = '<Field ID="{61cbb965-1e04-4273-b658-eedaa662f48d}" Type="TargetTo" Name="Target_x0020_Audiences" StaticName="Target_x0020_Audiences" DisplayName="Target Audiences" Required="FALSE" Version="2">' +
+                '<Customization><ArrayOfProperty>' +
+                '<Property><Name>AllowGlobalAudience</Name><Value xmlns:q1="http://www.w3.org/2001/XMLSchema" p4:type="q1:boolean" xmlns:p4="http://www.w3.org/2001/XMLSchema-instance">true</Value></Property>' +
+                '<Property><Name>AllowDL</Name><Value xmlns:q2="http://www.w3.org/2001/XMLSchema" p4:type="q2:boolean" xmlns:p4="http://www.w3.org/2001/XMLSchema-instance">true</Value></Property>' +
+                '<Property><Name>AllowSPGroup</Name><Value xmlns:q3="http://www.w3.org/2001/XMLSchema" p4:type="q3:boolean" xmlns:p4="http://www.w3.org/2001/XMLSchema-instance">true</Value></Property>' +
+                '</ArrayOfProperty></Customization></Field>'
+                $options = [Microsoft.SharePoint.SPAddFieldOptions]::AddFieldInternalNameHint -bor [Microsoft.SharePoint.SPAddFieldOptions]::AddToDefaultContentType
+                $null = $list.Fields.AddFieldAsXml($columnXml, $false, $options)
+
+                # An audience that does not exist, to see an ID; a group, to see a name; an item that targets nothing.
+                foreach ($entry in @(
+                        @{ Title = 'Targets an audience'; Value = 'aaaaaaaa-aaaa-aaaa-aaaa-00000000000a;;;;' }
+                        @{ Title = 'Targets a group'; Value = ';;;;Lab Readers' }
+                        @{ Title = 'Targets nobody'; Value = $null }
+                    )) {
+                    $item = $list.Items.Add()
+                    $item['Title'] = $entry.Title
+                    if ($null -ne $entry.Value) {
+                        $item['Target_x0020_Audiences'] = $entry.Value
+                    }
+                    $item.Update()
+                }
+            }
+            Expect      = @(
+                (Get-SPSLabExpectation AudienceTargetedItemCount eq 2)
+                (Get-SPSLabExpectation AudienceTargetedListCount eq 1)
+                (Get-SPSLabExpectation AudienceTargetedExamples like '*LabAudience*')
+                (Get-SPSLabExpectation AudienceTargetedExamples like '*Lab Readers*')
+                (Get-SPSLabExpectation -Alert 'AudienceTargeting')
+            )
+        })
+
+    $scenario.Add([PSCustomObject]@{
+            Name        = 'site-notebook'
+            Description = 'The Site Notebook feature of a team site: the notebook that it creates in the Site Assets library must be reported.'
+            Template    = 'STS#0'
+            Provision   = {
+                param ($Context)
+                # Only a farm that does not have the feature, or that does not create the notebook, is a skip.
+                $featureId = 'F151BB39-7C3B-414F-BB36-6BF18872052F'
+                if ($null -eq (Get-SPFeature -Identity $featureId -ErrorAction SilentlyContinue)) {
+                    throw "SKIP: the Site Notebook feature ($featureId) is not installed on this SharePoint."
+                }
+                if ($null -eq $Context.Web.Features[[System.Guid]$featureId]) {
+                    $null = $Context.Web.Features.Add([System.Guid]$featureId, $true)
+                }
+                $assets = @($Context.Web.Lists | Where-Object { $_.RootFolder.Name -eq 'SiteAssets' })
+                $notebooks = @()
+                if ($assets.Count -gt 0) {
+                    $notebooks = @($assets[0].RootFolder.SubFolders | Where-Object { $_.Name -like '*Notebook' })
+                }
+                if ($notebooks.Count -eq 0) {
+                    throw 'SKIP: the Site Notebook feature is active, but it did not create the notebook (it may need the OneNote web application): open the Site Notebook link of the site, then run the scenario again.'
+                }
+            }
+            Expect      = @(
+                (Get-SPSLabExpectation SiteNotebookCount ge 1)
+                (Get-SPSLabExpectation SiteNotebookExamples like '*Notebook*')
+                (Get-SPSLabExpectation -Alert 'SiteNotebook')
             )
         })
 

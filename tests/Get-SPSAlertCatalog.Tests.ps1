@@ -260,7 +260,7 @@ Describe 'Get-SPSAlertCatalog for the SharePointOnPrem mode' {
     }
 
     It 'makes the alerts that are only about a migration to SharePoint Online Low, and says so before the original text' {
-        $script:MigrationOnly.Count | Should -Be 19
+        $script:MigrationOnly.Count | Should -Be 21
         foreach ($key in $script:MigrationOnly) {
             $entry = $script:OnPrem[$key]
 
@@ -269,7 +269,7 @@ Describe 'Get-SPSAlertCatalog for the SharePointOnPrem mode' {
             $entry.Remediation | Should -Be ('Nothing to do to modernize this farm. If you migrate to SharePoint Online, this applies. ' + $script:Catalog[$key].Remediation) -Because $key
             $entry.Reference | Should -Be $script:Catalog[$key].Reference -Because $key
         }
-        foreach ($key in @('ExternalLists', 'FbaConfigured', 'IrmEnabledLists', 'BcsApplication', 'SecureStoreApplication', 'UnsupportedSiteTemplate', 'AlertSubscriptions', 'LargeExcelFiles')) {
+        foreach ($key in @('ExternalLists', 'FbaConfigured', 'IrmEnabledLists', 'BcsApplication', 'SecureStoreApplication', 'UnsupportedSiteTemplate', 'AlertSubscriptions', 'LargeExcelFiles', 'AudienceTargeting', 'SiteNotebook')) {
             $script:MigrationOnly | Should -Contain $key
         }
     }

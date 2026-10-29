@@ -119,6 +119,24 @@
         of them with their size. System catalogs (/_catalogs/) are skipped, and at most
         MaxItemsForExcelFileScanPerLibrary workbooks are checked in each library.
 
+        AudienceTargetedItemCount counts the list items that target an audience (the Target
+        Audiences column, which a list has once the audience targeting was enabled on it, and a Pages
+        library has from the start), AudienceTargetedListCount the lists that hold them, and
+        AudienceTargetedExamples lists up to five of those lists with the number of items and the
+        audiences that they target. The audience data does not migrate to SharePoint Online: the
+        items are shown to every reader afterwards, until the targeting is rebuilt. An audience is
+        shown by its name when the User Profile service can give it, and by its ID when it cannot (the
+        audience may have been deleted); a distribution list by its common name and a SharePoint group
+        by its name. Hidden lists and the system catalogs are left out, and at most
+        MaxItemsForAudienceTargetingScanPerList items are read in each list: a list above it makes the
+        collection partial, and its counts are lower bounds.
+
+        SiteNotebookCount counts the site notebooks: the OneNote notebooks of the Site Assets library
+        (a folder that SharePoint marks as a notebook) whose name ends in Notebook, as the SMAT scan
+        reads them. The notebook that the Site Notebook feature creates is named after the site, and
+        the name changes with the migration, so the links to it break. SiteNotebookExamples lists up to
+        five of them. At most MaxItemsForNotebookScanPerLibrary folders of the library are read.
+
         The modern-readiness signals say what keeps a site collection in the classic experience.
         AlternateCssUrlCount counts the webs that set an alternate CSS URL. XsltListViewCount counts
         the list views that render with a customized XSLT (an XslLink other than main.xsl, or an
@@ -176,7 +194,9 @@
         LargeExcelFileSizeMB (10 by default), the size from which a workbook is large,
         MaxItemsForExcelFileScanPerLibrary, which caps how many workbooks are checked per library, and
         MaxItemsForWebPartScanPerLibrary, which caps how many pages of each Site Pages or Pages
-        library have their web parts read.
+        library have their web parts read, MaxItemsForAudienceTargetingScanPerList, which caps
+        how many items of a list with audience targeting are read, and MaxItemsForNotebookScanPerLibrary,
+        which caps how many folders of the Site Assets library are read to find the site notebooks.
         MaxAlertRowsPerSite caps how many alert rows are exported per site collection.
 
         .PARAMETER PermissionLevels
@@ -277,6 +297,11 @@
         FileVersionExamples      = ''
         LargeExcelFileCount      = 0
         LargeExcelFileExamples   = ''
+        AudienceTargetedListCount = 0
+        AudienceTargetedItemCount = 0
+        AudienceTargetedExamples = ''
+        SiteNotebookCount        = 0
+        SiteNotebookExamples     = ''
         IsLockedSite             = $false
         HasNoAccessLock          = $false
         SiteLockState            = 'Unknown'
@@ -313,6 +338,8 @@
     $checkedOutFileExamples = [System.Collections.Generic.List[string]]::new()
     $fileVersionExamples = [System.Collections.Generic.List[string]]::new()
     $largeExcelFileExamples = [System.Collections.Generic.List[string]]::new()
+    $audienceTargetedLists = [System.Collections.Generic.List[object]]::new()
+    $siteNotebookExamples = [System.Collections.Generic.List[string]]::new()
     $appInstanceExamples = [System.Collections.Generic.List[string]]::new()
     $customizedPageExamples = [System.Collections.Generic.List[string]]::new()
     $customPermissionLevels = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
@@ -361,6 +388,8 @@
     # Above this size SharePoint Online does not open a workbook in the browser (10 MB by default, as in the SMAT scan).
     $largeExcelFileBytes = [double](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'LargeExcelFileSizeMB' -DefaultValue 10 -MinimumValue 0.001) * 1MB
     $maxExcelFileScan = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'MaxItemsForExcelFileScanPerLibrary' -DefaultValue 2000 -MinimumValue 1)
+    $maxAudienceScan = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'MaxItemsForAudienceTargetingScanPerList' -DefaultValue 2000 -MinimumValue 1)
+    $maxNotebookScan = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'MaxItemsForNotebookScanPerLibrary' -DefaultValue 2000 -MinimumValue 1)
     $maxHtmlFileScan = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'MaxItemsForHtmlFileScanPerLibrary' -DefaultValue 2000 -MinimumValue 1)
     $maxAlertRows = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'MaxAlertRowsPerSite' -DefaultValue 5000 -MinimumValue 1)
     # Names SharePoint provisions with a None type, in English; PermissionLevels.BuiltInNames adds localized ones.
@@ -1361,6 +1390,140 @@
                                 Write-Warning -Message "Could not scan the Excel files on '$listTitle' in web '$($web.Url)': $($_.Exception.Message)"
                             }
                         }
+
+                        # Audience targeting: the Target Audiences column says which audiences an item is shown to. That data does not
+                        # migrate, so the item is shown to everybody afterwards. Hidden lists and the system catalogs are left out.
+                        if (-not $isHiddenList -and $null -ne $list.PSObject.Methods['GetItems'] -and [string]$list.RootFolder.ServerRelativeUrl -notmatch '/_catalogs/') {
+                            try {
+                                $audienceField = Get-SPSAudienceTargetingField -List $list
+                                if ($null -ne $audienceField) {
+                                    $audienceFieldName = [string](Get-SPSPropertyValue -InputObject $audienceField -Name 'InternalName')
+                                    if ([string]::IsNullOrWhiteSpace($audienceFieldName)) {
+                                        throw "The internal name of the audience targeting column of '$listTitle' could not be read."
+                                    }
+                                    # The column is not filtered on, because its behavior in a query is not documented: the pages are read
+                                    # in order of ID and the value is tested here. The override lets farm administrators pass the threshold.
+                                    $audienceQuery = & $newPagedQuery -RowLimit 200
+                                    & $setQueryProperty $audienceQuery 'ViewFields' ('<FieldRef Name="{0}" />' -f $audienceFieldName)
+                                    & $setQueryProperty $audienceQuery 'ViewFieldsOnly' $true
+                                    & $setQueryProperty $audienceQuery 'QueryThrottleMode' 'Override'
+                                    $audienceScanCount = 0
+                                    $hasUnscannedAudienceItems = $false
+                                    $audiencePosition = $null
+                                    $targetedItemCount = 0
+                                    $listAudienceIds = [System.Collections.Generic.List[string]]::new()
+                                    $listDistributionLists = [System.Collections.Generic.List[string]]::new()
+                                    $listSharePointGroups = [System.Collections.Generic.List[string]]::new()
+                                    $listUnrecognized = [System.Collections.Generic.List[string]]::new()
+                                    do {
+                                        & $setQueryProperty $audienceQuery 'ListItemCollectionPosition' $audiencePosition
+                                        $audienceBatch = $list.GetItems($audienceQuery)
+                                        foreach ($audienceItem in (& $getBatchItems $audienceBatch)) {
+                                            if ($audienceScanCount -ge $maxAudienceScan) {
+                                                $hasUnscannedAudienceItems = $true
+                                                break
+                                            }
+                                            $audienceScanCount++
+                                            $audienceValue = [string]$audienceItem[$audienceFieldName]
+                                            if ([string]::IsNullOrWhiteSpace($audienceValue)) {
+                                                continue
+                                            }
+                                            $audienceTarget = ConvertFrom-SPSAudienceTarget -Value $audienceValue
+                                            if ($audienceTarget.IsEmpty) {
+                                                continue
+                                            }
+                                            $targetedItemCount++
+                                            foreach ($audienceId in $audienceTarget.AudienceId) { if (-not $listAudienceIds.Contains($audienceId)) { $listAudienceIds.Add($audienceId) } }
+                                            foreach ($distributionList in $audienceTarget.DistributionList) { if (-not $listDistributionLists.Contains($distributionList)) { $listDistributionLists.Add($distributionList) } }
+                                            foreach ($sharePointGroup in $audienceTarget.SharePointGroup) { if (-not $listSharePointGroups.Contains($sharePointGroup)) { $listSharePointGroups.Add($sharePointGroup) } }
+                                            foreach ($otherToken in $audienceTarget.Unrecognized) { if (-not $listUnrecognized.Contains($otherToken)) { $listUnrecognized.Add($otherToken) } }
+                                        }
+                                        $audiencePosition = & $getBatchPosition $audienceBatch
+                                        if ($audienceScanCount -ge $maxAudienceScan -and $null -ne $audiencePosition) {
+                                            $hasUnscannedAudienceItems = $true
+                                        }
+                                    } while ($null -ne $audiencePosition -and $audienceScanCount -lt $maxAudienceScan)
+
+                                    if ($targetedItemCount -gt 0) {
+                                        $signals.AudienceTargetedListCount++
+                                        $signals.AudienceTargetedItemCount += $targetedItemCount
+                                        if ($audienceTargetedLists.Count -lt 5) {
+                                            $audienceTargetedLists.Add([PSCustomObject]@{
+                                                    ListUrl          = [string]$list.RootFolder.ServerRelativeUrl
+                                                    ItemCount        = $targetedItemCount
+                                                    AudienceId       = $listAudienceIds.ToArray()
+                                                    DistributionList = $listDistributionLists.ToArray()
+                                                    SharePointGroup  = $listSharePointGroups.ToArray()
+                                                    Unrecognized     = $listUnrecognized.ToArray()
+                                                })
+                                        }
+                                    }
+                                    if ($hasUnscannedAudienceItems) {
+                                        $signals.CustomizationInventoryComplete = $false
+                                        Write-Warning -Message "Audience targeting scan stopped on '$listTitle' in web '$($web.Url)' after $maxAudienceScan item(s). Increase LargeContentThresholds.MaxItemsForAudienceTargetingScanPerList to check more items; the counts are lower bounds."
+                                    }
+                                }
+                            }
+                            catch {
+                                $signals.CustomizationInventoryComplete = $false
+                                Write-Warning -Message "Could not scan the audience targeting on '$listTitle' in web '$($web.Url)': $($_.Exception.Message)"
+                            }
+                        }
+
+                        # Site notebook: the Site Notebook feature creates a OneNote notebook, a folder named after the site, in the Site
+                        # Assets library. Its name changes with the migration, so the links to it break. A notebook is a folder that SharePoint
+                        # marks with the HTML file type OneNote.Notebook; the folders are listed and the mark is tested here.
+                        if ($isDocumentLibrary -and $null -ne $list.PSObject.Methods['GetItems'] -and [string]$list.RootFolder.ServerRelativeUrl -match '(?i)/SiteAssets$') {
+                            try {
+                                $notebookQuery = & $newPagedQuery -RowLimit 200 -QueryText '<Where><Eq><FieldRef Name="FSObjType" /><Value Type="Integer">1</Value></Eq></Where>'
+                                & $setQueryProperty $notebookQuery 'QueryThrottleMode' 'Override'
+                                $notebookScanCount = 0
+                                $hasUnscannedNotebookFolders = $false
+                                $notebookPosition = $null
+                                do {
+                                    & $setQueryProperty $notebookQuery 'ListItemCollectionPosition' $notebookPosition
+                                    $notebookBatch = $list.GetItems($notebookQuery)
+                                    foreach ($notebookItem in (& $getBatchItems $notebookBatch)) {
+                                        if ($notebookScanCount -ge $maxNotebookScan) {
+                                            $hasUnscannedNotebookFolders = $true
+                                            break
+                                        }
+                                        $notebookScanCount++
+                                        if ([string]$notebookItem['HTML_x0020_File_x0020_Type'] -ne 'OneNote.Notebook') {
+                                            continue
+                                        }
+                                        $notebookName = [string]$notebookItem['FileLeafRef']
+                                        if ([string]::IsNullOrWhiteSpace($notebookName)) {
+                                            throw "The name of a notebook could not be read on '$listTitle'."
+                                        }
+                                        if (-not $notebookName.EndsWith('Notebook', [System.StringComparison]::OrdinalIgnoreCase)) {
+                                            continue
+                                        }
+                                        $signals.SiteNotebookCount++
+                                        if ($siteNotebookExamples.Count -lt 5) {
+                                            $notebookPath = [string]$notebookItem['FileRef']
+                                            if ([string]::IsNullOrWhiteSpace($notebookPath)) {
+                                                $notebookPath = '{0}/{1}' -f [string]$list.RootFolder.ServerRelativeUrl, $notebookName
+                                            }
+                                            $siteNotebookExamples.Add($notebookPath)
+                                        }
+                                    }
+                                    $notebookPosition = & $getBatchPosition $notebookBatch
+                                    if ($notebookScanCount -ge $maxNotebookScan -and $null -ne $notebookPosition) {
+                                        $hasUnscannedNotebookFolders = $true
+                                    }
+                                } while ($null -ne $notebookPosition -and $notebookScanCount -lt $maxNotebookScan)
+
+                                if ($hasUnscannedNotebookFolders) {
+                                    $signals.CustomizationInventoryComplete = $false
+                                    Write-Warning -Message "Site notebook scan stopped on '$listTitle' in web '$($web.Url)' after $maxNotebookScan folder(s). Increase LargeContentThresholds.MaxItemsForNotebookScanPerLibrary to check more folders; the count is a lower bound."
+                                }
+                            }
+                            catch {
+                                $signals.CustomizationInventoryComplete = $false
+                                Write-Warning -Message "Could not scan the site notebooks on '$listTitle' in web '$($web.Url)': $($_.Exception.Message)"
+                            }
+                        }
                     }
                 }
                 catch {
@@ -1533,6 +1696,31 @@
     $signals.CheckedOutFileExamples = $checkedOutFileExamples -join '; '
     $signals.FileVersionExamples = $fileVersionExamples -join '; '
     $signals.LargeExcelFileExamples = $largeExcelFileExamples -join '; '
+    $signals.SiteNotebookExamples = $siteNotebookExamples -join '; '
+    if ($audienceTargetedLists.Count -gt 0) {
+        # The names are read once for the lists that are shown; an audience that has none is shown by its ID.
+        $audienceNames = Resolve-SPSAudienceName -Site $Site -AudienceId @($audienceTargetedLists | ForEach-Object { $_.AudienceId } | Select-Object -Unique)
+        $audienceExamples = [System.Collections.Generic.List[string]]::new()
+        foreach ($targetedList in $audienceTargetedLists) {
+            $targetLabels = [System.Collections.Generic.List[string]]::new()
+            foreach ($audienceId in $targetedList.AudienceId) {
+                $targetLabels.Add($(if ($audienceNames.ContainsKey($audienceId)) { [string]$audienceNames[$audienceId] } else { $audienceId }))
+            }
+            foreach ($distributionList in $targetedList.DistributionList) {
+                # A distribution list is a distinguished name; its common name is what a reader knows it by.
+                $targetLabels.Add($(if ($distributionList -match '(?i)^cn=((?:\\.|[^,\\])+)') { $Matches[1] } else { $distributionList }))
+            }
+            foreach ($sharePointGroup in $targetedList.SharePointGroup) { $targetLabels.Add($sharePointGroup) }
+            foreach ($otherToken in $targetedList.Unrecognized) { $targetLabels.Add($otherToken) }
+            $shownLabels = $targetLabels.ToArray() | Select-Object -First 5
+            $labelText = $shownLabels -join ', '
+            if ($targetLabels.Count -gt 5) {
+                $labelText += ' (+{0} more)' -f ($targetLabels.Count - 5)
+            }
+            $audienceExamples.Add(('{0} ({1} item(s): {2})' -f $targetedList.ListUrl, $targetedList.ItemCount, $labelText))
+        }
+        $signals.AudienceTargetedExamples = $audienceExamples -join '; '
+    }
     $signals.AppInstanceExamples = $appInstanceExamples -join '; '
     $signals.CustomizedPageExamples = $customizedPageExamples -join '; '
     $signals.CustomPermissionLevelCount = $customPermissionLevels.Count

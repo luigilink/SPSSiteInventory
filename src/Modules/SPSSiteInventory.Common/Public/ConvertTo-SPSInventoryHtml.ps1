@@ -359,6 +359,8 @@
         @{ Key = 'checked-out-files'; Label = 'Sites with checked-out files'; Short = 'checked-out files'; Alert = 'CheckedOutFiles'; Test = { param($r) [int]$r.CheckedOutFileCount -gt 0 } }
         @{ Key = 'file-versions'; Label = 'Sites with high file-version counts'; Short = 'high file-version counts'; Alert = 'FileVersions'; Test = { param($r) [int]$r.FileVersionCount -gt 0 } }
         @{ Key = 'large-excel'; Label = 'Sites with large Excel files'; Short = 'large Excel files'; Alert = 'LargeExcelFiles'; Test = { param($r) [int]$r.LargeExcelFileCount -gt 0 } }
+        @{ Key = 'audience-targeting'; Label = 'Sites with audience-targeted items'; Short = 'audience-targeted items'; Alert = 'AudienceTargeting'; Test = { param($r) [int]$r.AudienceTargetedItemCount -gt 0 } }
+        @{ Key = 'site-notebook'; Label = 'Sites with a site notebook'; Short = 'a site notebook'; Alert = 'SiteNotebook'; Test = { param($r) [int]$r.SiteNotebookCount -gt 0 } }
     )
     $riskCounts = @{}
     foreach ($indicator in $riskIndicators) { $riskCounts[$indicator.Key] = 0 }

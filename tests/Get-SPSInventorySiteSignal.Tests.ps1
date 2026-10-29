@@ -94,6 +94,8 @@ Describe 'Get-SPSInventorySiteSignal' {
         @{ Field = 'CheckedOutFileCount'; Value = 3; Label = 'Checked-out files'; Expected = '3' }
         @{ Field = 'FileVersionCount'; Value = 2; Label = 'High-version files'; Expected = '2' }
         @{ Field = 'LargeExcelFileCount'; Value = 3; Label = 'Large Excel files'; Expected = '3' }
+        @{ Field = 'AudienceTargetedItemCount'; Value = 12; Label = 'Audience-targeted items'; Expected = '12' }
+        @{ Field = 'SiteNotebookCount'; Value = 1; Label = 'Site notebooks'; Expected = '1' }
         @{ Field = 'BrowserFileHandling'; Value = 'Permissive'; Label = 'Browser file handling'; Expected = 'Permissive' }
     ) {
         $signal = @(Get-Signal -Record (New-RecordWith @{ $Field = $Value }))
@@ -136,6 +138,8 @@ Describe 'Get-SPSInventorySiteSignal' {
         @{ Count = 'CheckedOutFileCount'; Examples = 'CheckedOutFileExamples'; Label = 'Checked-out files' }
         @{ Count = 'FileVersionCount'; Examples = 'FileVersionExamples'; Label = 'High-version files' }
         @{ Count = 'LargeExcelFileCount'; Examples = 'LargeExcelFileExamples'; Label = 'Large Excel files' }
+        @{ Count = 'AudienceTargetedItemCount'; Examples = 'AudienceTargetedExamples'; Label = 'Audience-targeted items' }
+        @{ Count = 'SiteNotebookCount'; Examples = 'SiteNotebookExamples'; Label = 'Site notebooks' }
     ) {
         $signal = @(Get-Signal -Record (New-RecordWith @{ $Count = 2; $Examples = 'first (1); second (2)' }))
 

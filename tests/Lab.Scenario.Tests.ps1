@@ -272,6 +272,91 @@ Describe 'The large-excel scenario' {
     }
 }
 
+Describe 'The scenarios of the collaboration signals' {
+    BeforeAll {
+        $script:Audience = $script:Scenario | Where-Object { $_.Name -eq 'audience-targeting' }
+        $script:Notebook = $script:Scenario | Where-Object { $_.Name -eq 'site-notebook' }
+        $script:AudienceRecord = [PSCustomObject]@{
+            AudienceTargetedItemCount = 2; AudienceTargetedListCount = 1
+            AudienceTargetedExamples = '/sites/spslab-audience-targeting/Lists/LabAudience (2 item(s): aaaaaaaa-aaaa-aaaa-aaaa-00000000000a, Lab Readers)'
+        }
+        $script:NotebookRecord = [PSCustomObject]@{ SiteNotebookCount = 1; SiteNotebookExamples = '/sites/spslab-site-notebook/SiteAssets/Lab Notebook' }
+    }
+
+    It 'exist, and are all expected to be met, none only informational' {
+        foreach ($scenario in @($script:Audience, $script:Notebook)) {
+            $scenario | Should -Not -BeNullOrEmpty
+            @($scenario.Expect | Where-Object { $_.Info }).Count | Should -Be 0 -Because $scenario.Name
+        }
+    }
+
+    It 'build the column and the items that the audience targeting expects' {
+        $source = $script:Audience.Provision.ToString()
+
+        $source | Should -Match '61cbb965-1e04-4273-b658-eedaa662f48d'
+        $source | Should -Match 'Target_x0020_Audiences'
+        $source | Should -Match 'Type="TargetTo"'
+        $source | Should -Match 'AddFieldAsXml'
+        $source | Should -Match 'LabAudience'
+        $source | Should -Match 'Lab Readers'
+        $source | Should -Match "'Announcements'"
+    }
+
+    It 'build what the site notebook expects: the feature of the site, and the check that the notebook exists' {
+        $source = $script:Notebook.Provision.ToString()
+
+        $source | Should -Match 'F151BB39-7C3B-414F-BB36-6BF18872052F'
+        $source | Should -Match 'Features\.Add'
+        $source | Should -Match "RootFolder\.Name -eq 'SiteAssets'"
+        $source | Should -Match 'SubFolders'
+    }
+
+    It 'are skipped, not failed, when the farm lacks what they need, and only then' {
+        $audience = $script:Audience.Provision.ToString()
+        $notebook = $script:Notebook.Provision.ToString()
+
+        $audience | Should -Match 'SKIP: the audience targeting column'
+        $audience | Should -Not -Match 'catch'
+        $notebook | Should -Match 'SKIP: the Site Notebook feature \('
+        $notebook | Should -Match 'SKIP: the Site Notebook feature is active, but it did not create the notebook'
+        $notebook | Should -Match 'Get-SPFeature -Identity \$featureId'
+        $notebook | Should -Not -Match 'catch'
+    }
+
+    It 'meet their expectations with the values that the inventory writes' {
+        foreach ($expectation in @($script:Audience.Expect)) {
+            (Test-SPSLabExpectation -Expectation $expectation -Record $script:AudienceRecord -Alert @('AudienceTargeting')).Status | Should -Be 'PASS' -Because "audience-targeting expects $($expectation.Property)$($expectation.Alert)"
+        }
+        foreach ($expectation in @($script:Notebook.Expect)) {
+            (Test-SPSLabExpectation -Expectation $expectation -Record $script:NotebookRecord -Alert @('SiteNotebook')).Status | Should -Be 'PASS' -Because "site-notebook expects $($expectation.Property)$($expectation.Alert)"
+        }
+    }
+
+    It 'expect the alert of the signal, and fail without it or when the inventory reports nothing' {
+        $empty = [PSCustomObject]@{ AudienceTargetedItemCount = 0; AudienceTargetedListCount = 0; AudienceTargetedExamples = ''; SiteNotebookCount = 0; SiteNotebookExamples = '' }
+        foreach ($case in @(@{ Scenario = $script:Audience; Alert = 'AudienceTargeting'; Record = $script:AudienceRecord }, @{ Scenario = $script:Notebook; Alert = 'SiteNotebook'; Record = $script:NotebookRecord })) {
+            $alert = @($case.Scenario.Expect | Where-Object { $_.ContainsKey('Alert') -and -not $_.Absent })
+
+            $alert | Should -HaveCount 1
+            $alert[0].Alert | Should -Be $case.Alert
+            (Test-SPSLabExpectation -Expectation $alert[0] -Record $case.Record -Alert @()).Status | Should -Be 'FAIL'
+            $statuses = @($case.Scenario.Expect | ForEach-Object { (Test-SPSLabExpectation -Expectation $_ -Record $empty -Alert @()).Status })
+            $statuses | Should -Not -Contain 'PASS'
+        }
+    }
+
+    It 'expect no item that targets an audience on the baseline site, and none about the notebook, which a team site may or may not have created' {
+        $baseline = $script:Scenario | Where-Object { $_.Name -eq 'baseline' }
+        $items = @($baseline.Expect | Where-Object { $_.Property -eq 'AudienceTargetedItemCount' })
+
+        $items | Should -HaveCount 1
+        $items[0].Operator | Should -Be 'eq'
+        $items[0].Value | Should -Be 0
+        $items[0].Info | Should -BeFalse
+        @($baseline.Expect | Where-Object { $_.Property -eq 'SiteNotebookCount' }) | Should -HaveCount 0
+    }
+}
+
 Describe 'The scenarios of the modern-readiness signals' {
     BeforeAll {
         $script:ModernScenario = @('alternate-css', 'xslt-view', 'script-web-part', 'modern-opt-out', 'forced-classic')

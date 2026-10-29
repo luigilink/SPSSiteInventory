@@ -285,6 +285,18 @@
             Remediation = 'Tell the users which workbooks are concerned before the migration (LargeExcelFileExamples in the inventory shows where to start): the workbooks are migrated, but SharePoint Online asks them to open a workbook larger than 10 MB in the Excel client instead of the browser. Where a workbook is large for no good reason, reducing its size keeps it in the browser.'
             Reference   = 'https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-large-excel-files'
         }
+        AudienceTargeting = @{
+            Severity    = 'Medium'
+            Message     = 'List items that target audiences were detected: the audience data does not migrate to SharePoint Online, so the items are shown to every reader afterwards.'
+            Remediation = 'Use AudienceTargetedExamples in the inventory to see which lists are concerned and which audiences they target, and decide with the site owners whether the targeting is still needed. If it is, create equivalent Microsoft 365 or security groups in the target (the audiences of the User Profile service, the distribution lists and the SharePoint groups do not exist there as they are) and target the items again after the migration, because until then every reader sees every item. An audience that shows as an ID could not be resolved: it may have been deleted, or the account that ran the inventory cannot read the audiences of the User Profile service.'
+            Reference   = 'https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-list-items-audience-targeting'
+        }
+        SiteNotebook = @{
+            Severity    = 'Low'
+            Message     = 'Site notebooks were detected: the notebook that the Site Notebook feature created is migrated under another name, so the links to it break.'
+            Remediation = 'Prepare the answers for the users who ask where the site notebook went, and tell the owners of the sites listed in SiteNotebookExamples that the notebook has a new name after the migration, so that they update the links that point to the old name.'
+            Reference   = 'https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-site-notebook'
+        }
         Subsites = @{
             Severity    = 'Low'
             Message     = 'This site collection has subsites. SharePoint Online supports them, but modern SharePoint favors one site collection per unit of work, connected by hub sites.'

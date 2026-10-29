@@ -81,6 +81,12 @@
     # the size above which SharePoint Online asks the user to open a workbook in Excel instead of the
     # browser); MaxItemsForExcelFileScanPerLibrary caps how many workbooks are checked in a library.
     #
+    # AudienceTargetedItemCount counts the list items that target an audience (the Target Audiences
+    # column); MaxItemsForAudienceTargetingScanPerList caps how many items are read in each list that
+    # has the column, and a list above it makes the site marked partial. SiteNotebookCount counts the
+    # site notebooks of the Site Assets library; MaxItemsForNotebookScanPerLibrary caps how many
+    # folders of that library are read.
+    #
     # MaxAlertRowsPerSite caps how many SharePoint alert rows are exported per site
     # collection; SharePointAlertCount stays exact. When the cap is hit, the site is
     # marked partial and a warning is emitted.
@@ -97,6 +103,8 @@
         MaxItemsForWebPartScanPerLibrary = 200
         LargeExcelFileSizeMB = 10
         MaxItemsForExcelFileScanPerLibrary = 2000
+        MaxItemsForAudienceTargetingScanPerList = 2000
+        MaxItemsForNotebookScanPerLibrary = 2000
         MaxAlertRowsPerSite = 5000
     }
 
@@ -279,6 +287,11 @@
             # Excel workbooks that SharePoint Online does not open in the browser are migrated: the
             # signal says whom to warn, it does not move a site collection to a worse category.
             LargeExcelFileCount      = 0
+            # Audience-targeted items and site notebooks are migrated, with another name for the notebook
+            # and without the targeting: the signals say whom to warn and what to rebuild, they do not
+            # move a site collection to a worse category.
+            AudienceTargetedItemCount = 0
+            SiteNotebookCount        = 0
             FileVersionCount         = 0
             # Code that runs in the farm is not a blocker here but a modernization project: the
             # sandboxed solutions are retired, and the full-trust code, the custom master pages
