@@ -223,6 +223,8 @@
                     AudienceTargetedExamples = $signals['AudienceTargetedExamples']
                     SiteNotebookCount = $signals['SiteNotebookCount']
                     SiteNotebookExamples = $signals['SiteNotebookExamples']
+                    CustomizedProfilePageCount = $signals['CustomizedProfilePageCount']
+                    CustomizedProfilePageExamples = $signals['CustomizedProfilePageExamples']
                     IsLockedSite = $signals['IsLockedSite']
                     HasNoAccessLock = $signals['HasNoAccessLock']
                     SiteLockState = $signals['SiteLockState']
@@ -339,6 +341,8 @@
                     AudienceTargetedExamples = $null
                     SiteNotebookCount = $null
                     SiteNotebookExamples = $null
+                    CustomizedProfilePageCount = $null
+                    CustomizedProfilePageExamples = $null
                     IsLockedSite = $null
                     HasNoAccessLock = $null
                     SiteLockState = $null

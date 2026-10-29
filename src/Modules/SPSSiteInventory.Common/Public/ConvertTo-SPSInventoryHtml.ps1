@@ -106,6 +106,15 @@
         Whether the Secure Store inventory could be read in full. When false, the Secure Store
         section says that Secure Store applications may be missing.
 
+        .PARAMETER ProfilePropertyMappings
+        Optional profile property mapping rows from Get-SPSProfilePropertyMapping. When supplied,
+        renders a profile property mapping section, the mappings that SharePoint Online does not have
+        first.
+
+        .PARAMETER ProfileInventoryComplete
+        Whether the profile property mappings could be read in full. When false, the section says that
+        mappings may be missing.
+
         .PARAMETER ExcludedPersonalSiteCount
         Number of personal sites that the scan left out. When above 0, the summary box says so.
 
@@ -137,8 +146,8 @@
 
         .PARAMETER MaxDetailRow
         Maximum number of rows that each detail table shows (farm solutions, sites bound to
-        full-trust code, managed metadata lists, external lists, BCS applications and Secure Store
-        applications). A table
+        full-trust code, managed metadata lists, external lists, BCS applications, Secure Store
+        applications and profile property mappings). A table
         with more rows says how many are not shown and which files hold all of them. Defaults
         to 200. The content types are never listed in the report: it shows a summary, and the
         CSV and JSON files hold every row.
@@ -219,6 +228,15 @@
         [Parameter()]
         [System.Boolean]
         $SecureStoreInventoryComplete = $true,
+
+        [Parameter()]
+        [AllowEmptyCollection()]
+        [System.Object[]]
+        $ProfilePropertyMappings = @(),
+
+        [Parameter()]
+        [System.Boolean]
+        $ProfileInventoryComplete = $true,
 
         [Parameter()]
         [System.Int32]
@@ -361,6 +379,7 @@
         @{ Key = 'large-excel'; Label = 'Sites with large Excel files'; Short = 'large Excel files'; Alert = 'LargeExcelFiles'; Test = { param($r) [int]$r.LargeExcelFileCount -gt 0 } }
         @{ Key = 'audience-targeting'; Label = 'Sites with audience-targeted items'; Short = 'audience-targeted items'; Alert = 'AudienceTargeting'; Test = { param($r) [int]$r.AudienceTargetedItemCount -gt 0 } }
         @{ Key = 'site-notebook'; Label = 'Sites with a site notebook'; Short = 'a site notebook'; Alert = 'SiteNotebook'; Test = { param($r) [int]$r.SiteNotebookCount -gt 0 } }
+        @{ Key = 'profile-page'; Label = 'Sites with a customized profile page'; Short = 'a customized profile page'; Alert = 'CustomizedProfilePage'; Test = { param($r) [int]$r.CustomizedProfilePageCount -gt 0 } }
     )
     $riskCounts = @{}
     foreach ($indicator in $riskIndicators) { $riskCounts[$indicator.Key] = 0 }
@@ -416,6 +435,7 @@
     $hasExternalListSection = $PSBoundParameters.ContainsKey('ExternalLists')
     $hasBcsSection = $PSBoundParameters.ContainsKey('BcsApplications')
     $hasSecureStoreSection = $PSBoundParameters.ContainsKey('SecureStoreApplications')
+    $hasProfileMappingSection = $PSBoundParameters.ContainsKey('ProfilePropertyMappings')
     $hasReadinessSection = $isOnPrem -and $total -gt 0
     $readiness = if ($hasReadinessSection) { Get-SPSModernReadiness -InputObject $siteRecords } else { $null }
 
@@ -724,6 +744,9 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
     }
     if ($hasSecureStoreSection) {
         [void]$navigation.AppendLine('<a href="#secure-store-applications">Secure Store</a>')
+    }
+    if ($hasProfileMappingSection) {
+        [void]$navigation.AppendLine('<a href="#profile-property-mappings">Profile property mappings</a>')
     }
 
     $sb = [System.Text.StringBuilder]::new()
@@ -1458,6 +1481,52 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
         }
         [void]$sb.AppendLine('</tbody></table></div>')
         [void]$sb.AppendLine((& $limitNote $SecureStoreApplications.Count 'The Secure Store CSV and JSON files'))
+    }
+
+    if ($hasProfileMappingSection) {
+        $customMappingCount = @($ProfilePropertyMappings | Where-Object { $null -ne $_ -and -not [bool]$_.SynchronizedInSharePointOnline -and $_.BuiltInProperty -ne $true }).Count
+        # A row with no BuiltInProperty comes from a run that could not read the properties that SharePoint ships: it is not known to be custom.
+        $unknownShippedCount = @($ProfilePropertyMappings | Where-Object { $null -ne $_ -and -not [bool]$_.SynchronizedInSharePointOnline -and $null -eq $_.BuiltInProperty }).Count
+        $shippedWording = if ($unknownShippedCount -gt 0) { 'that is not known to be one that SharePoint ships (the list of those could not be read)' } else { 'that SharePoint does not ship' }
+        [void]$sb.AppendLine('<h2 id="profile-property-mappings">User profile property mappings</h2>')
+        [void]$sb.AppendLine(('<p><strong>{0}</strong> profile property mapping(s), <strong>{1}</strong> of them for a property that SharePoint Online does not fill and {2}. A profile property mapping ties a property to an attribute of a data source, such as Active Directory, to fill it in or to export it. SharePoint Online fills a fixed set of properties from Microsoft Entra ID and cannot be given other mappings: a value that is still needed has to be pushed into the profiles by a program of your own, for example with CSOM. The mappings of the properties that SharePoint ships and SharePoint Online does not fill, such as the Phonetic Search properties, are listed too and need nothing unless something relies on them. The custom mappings come first; the number of profiles is what the User Profile service reports for the property.</p>' -f $ProfilePropertyMappings.Count, $customMappingCount, $shippedWording))
+        if (-not $ProfileInventoryComplete) {
+            [void]$sb.AppendLine('<p><strong>Partial collection:</strong> some web applications, connections, mappings or property lists could not be read, so mappings may be missing or called custom by mistake. Consult the run warnings.</p>')
+        }
+        [void]$sb.AppendLine('<div class="table-scroll"><table class="profilemappings">')
+        $profileMappingColumns = @(
+            @{ Key = 'ConnectionName'; Label = 'Connection' }
+            @{ Key = 'ConnectionType'; Label = 'Type' }
+            @{ Key = 'PropertyName'; Label = 'Property' }
+            @{ Key = 'PropertyDisplayName'; Label = 'Display name' }
+            @{ Key = 'PropertyMapping'; Label = 'Mapped to' }
+            @{ Key = 'Direction'; Label = 'Direction' }
+            @{ Key = 'PropertyLength'; Label = 'Length' }
+            @{ Key = 'PropertyUsage'; Label = 'Profiles' }
+            @{ Key = 'SynchronizedInSharePointOnline'; Label = 'Filled by SharePoint Online' }
+            @{ Key = 'BuiltInProperty'; Label = 'Shipped by SharePoint' }
+        )
+        [void]$sb.AppendLine('<thead><tr>')
+        foreach ($column in $profileMappingColumns) {
+            [void]$sb.AppendLine(('<th>{0}</th>' -f $column.Label))
+        }
+        [void]$sb.AppendLine('</tr></thead><tbody>')
+        # The mappings that need a decision come first, and the order of each group is the one of the files.
+        $shownMappings = @($ProfilePropertyMappings | Where-Object { $null -ne $_ -and -not [bool]$_.SynchronizedInSharePointOnline -and $_.BuiltInProperty -ne $true }) +
+        @($ProfilePropertyMappings | Where-Object { $null -ne $_ -and ([bool]$_.SynchronizedInSharePointOnline -or $_.BuiltInProperty -eq $true) })
+        foreach ($profileMapping in @($shownMappings | Select-Object -First $MaxDetailRow)) {
+            [void]$sb.AppendLine('<tr>')
+            foreach ($column in $profileMappingColumns) {
+                $cellValue = $profileMapping.($column.Key)
+                if ($column.Key -in @('SynchronizedInSharePointOnline', 'BuiltInProperty')) {
+                    $cellValue = if ($null -eq $cellValue -or [string]$cellValue -eq '') { '' } elseif ([bool]$cellValue) { 'Yes' } else { 'No' }
+                }
+                [void]$sb.AppendLine(('<td>{0}</td>' -f (ConvertTo-SPSHtmlText -Value $cellValue)))
+            }
+            [void]$sb.AppendLine('</tr>')
+        }
+        [void]$sb.AppendLine('</tbody></table></div>')
+        [void]$sb.AppendLine((& $limitNote $ProfilePropertyMappings.Count 'The profile property mappings CSV and JSON files'))
     }
 
     $script = @'

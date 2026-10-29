@@ -379,6 +379,7 @@ function Get-SPSLabScenario {
                 (Get-SPSLabExpectation ClassicExperienceListCount eq 0)
                 (Get-SPSLabExpectation ModernBlockerCount eq 0)
                 (Get-SPSLabExpectation AudienceTargetedItemCount eq 0)
+                (Get-SPSLabExpectation CustomizedProfilePageCount eq 0)
                 (Get-SPSLabExpectation Category eq 1)
             )
         })
@@ -775,6 +776,26 @@ function Get-SPSLabScenario {
             Expect      = @(
                 (Get-SPSLabExpectation CustomizedPageCount ge 1 -Info)
                 (Get-SPSLabExpectation -Alert 'CustomizedPages' -Info)
+            )
+        })
+
+    $scenario.Add([PSCustomObject]@{
+            Name        = 'customized-profile-page'
+            Description = 'A My Site host whose profile page, Person.aspx, is edited. The inventory ignores edits of the System Account, which is the farm account: run the lab with another account for this one.'
+            Template    = 'SPSMSITEHOST#0'
+            Provision   = {
+                param ($Context)
+                $file = $Context.Web.GetFile('Person.aspx')
+                if (-not $file.Exists) {
+                    throw 'SKIP: the My Site host has no Person.aspx page.'
+                }
+                $text = [System.Text.Encoding]::UTF8.GetString($file.OpenBinary()) + [System.Environment]::NewLine + '<!-- SPSSiteInventory lab -->'
+                $file.SaveBinary([System.Text.Encoding]::UTF8.GetBytes($text))
+            }
+            Expect      = @(
+                (Get-SPSLabExpectation CustomizedProfilePageCount ge 1 -Info)
+                (Get-SPSLabExpectation CustomizedProfilePageExamples like '*Person.aspx*' -Info)
+                (Get-SPSLabExpectation -Alert 'CustomizedProfilePage' -Info)
             )
         })
 

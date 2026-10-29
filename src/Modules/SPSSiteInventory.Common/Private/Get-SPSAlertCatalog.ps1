@@ -297,6 +297,12 @@
             Remediation = 'Prepare the answers for the users who ask where the site notebook went, and tell the owners of the sites listed in SiteNotebookExamples that the notebook has a new name after the migration, so that they update the links that point to the old name.'
             Reference   = 'https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-site-notebook'
         }
+        CustomizedProfilePage = @{
+            Severity    = 'Low'
+            Message     = 'The profile page of this My Site host was customized: SharePoint Online has a profile experience of its own, which cannot be customized, so the changes do not migrate.'
+            Remediation = 'Find out with the owners what the changes of Person.aspx were for (CustomizedProfilePageExamples gives the page) and check whether the profile experience of the target covers it, since the new profile page cannot be modified. Validate the profile experience after the migration. The inventory sees a page that was edited, not the web parts that a browser added or moved: compare the page with the default one of a farm that was not customized.'
+            Reference   = 'https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-customized-profile-pages'
+        }
         Subsites = @{
             Severity    = 'Low'
             Message     = 'This site collection has subsites. SharePoint Online supports them, but modern SharePoint favors one site collection per unit of work, connected by hub sites.'
@@ -337,6 +343,18 @@
             Severity    = 'Medium'
             Message     = 'The Secure Store inventory is partial: some web applications or target applications could not be read, so Secure Store applications may be missing.'
             Remediation = 'Fix the web application or Secure Store service application named in the run warnings and run the inventory again before relying on the Secure Store report.'
+            Reference   = ''
+        }
+        ProfilePropertyMapping = @{
+            Severity    = 'Low'
+            Message     = 'Profile property mappings that SharePoint Online does not have were detected: it fills a fixed set of properties from Microsoft Entra ID and cannot be given other mappings.'
+            Remediation = 'List the mappings of this connection in the profile property mappings report (the ones whose property SharePoint Online does not fill and SharePoint does not ship) and find out with the owners which of them something relies on: PropertyUsage tells how many profiles have a value. For the values that are still needed, write a program that pushes them into the profiles of the target, for example with CSOM, and run it after the migration. The mappings of the properties that SharePoint ships and SharePoint Online does not fill, such as the Phonetic Search properties, are in the report too and need nothing unless something relies on them.'
+            Reference   = 'https://learn.microsoft.com/en-us/sharepointmigration/migration-assessment-scan-custom-profile-property-mappings'
+        }
+        ProfilePropertyMappingInventoryPartial = @{
+            Severity    = 'Medium'
+            Message     = 'The profile property mapping inventory is partial: some web applications, connections, mappings or property lists could not be read, so mappings may be missing or reported as custom by mistake.'
+            Remediation = 'Fix what the run warnings name (the account that runs the inventory has to administer the User Profile service application) and run the inventory again before relying on the profile property mappings report.'
             Reference   = ''
         }
     }

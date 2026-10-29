@@ -53,7 +53,7 @@
         'AlertSubscriptions', 'UnsupportedSiteTemplate', 'TemplateCompatibilityReview', 'TemplateLanguageReview',
         'FbaConfigured', 'IrmEnabledLists', 'LargeSite', 'CheckedOutFiles', 'FileVersions', 'LargeExcelFiles',
         'WebApplicationPolicies', 'PermissiveBrowserFileHandling', 'BcsApplication', 'SecureStoreApplication',
-        'AudienceTargeting', 'SiteNotebook'
+        'AudienceTargeting', 'SiteNotebook', 'ProfilePropertyMapping', 'CustomizedProfilePage'
     )
 
     $override = [ordered]@{
