@@ -96,13 +96,18 @@ category. Subsites, in particular, are not penalised: a site collection with 100
 collection per unit of work; hub sites, which connect them, exist in SharePoint Online but not in
 SharePoint Server) is a topic of the report, not of the score.
 
-This version scores the signals that the toolkit already collects. It does not yet collect what
-only matters for the modern experience (an alternate CSS URL, XSLT list views, classic-only web
-parts, a site or a list that forces the classic experience); those signals are planned, and a
-site collection that depends only on them reads *Modern-ready* until then. The alerts, their
-severity and the texts of the alert catalog are still those of a migration to SharePoint Online
-in this version, whatever the mode: a signal that the preset does not weigh still raises its
-alert, with its migration wording.
+The preset weighs the signals that only matter for the modern experience, which the toolkit
+collects in both modes (see [Modern-readiness signals](#modern-readiness-signals)): an alternate
+CSS URL (`AlternateCssUrlCount = 1.5` a web), a list view that renders with XSLT
+(`XsltListViewCount = 1.0`), a Script Editor or Content Editor web part that holds script
+(`ScriptWebPartCount = 1.5`), an opt-out of the modern list experience
+(`ClassicExperienceOptOutCount = 1.0`) and a list forced to the classic experience
+(`ClassicExperienceListCount = 0.5`), next to the custom master page and the publishing
+features that it already weighs. They are columns of the CSV and JSON reports. The HTML report has
+no section for them yet, and they raise no alert yet. The alerts, their severity and the texts of
+the alert catalog are still those of a migration to SharePoint Online in this version, whatever
+the mode: a signal that the preset does not weigh still raises its alert, with its migration
+wording.
 
 ## Custom solution detection
 
@@ -379,6 +384,64 @@ own name, so that you can filter and sort on them:
   permissions. The root web always has its own, so the value is never 0, and a subsite with
   unique permissions adds its own: it is not a count of webs.
 
+### Modern-readiness signals
+
+These signals say what makes a page, a list or a web fall back to the classic experience, and what
+has to be rebuilt to leave it. They are collected in both target modes, and they are columns of
+the CSV, JSON and `*-sites-*` reports under their own name. With `CustomMasterPage` (above) and
+the publishing signals, they answer the question of the `SharePointOnPrem` mode: why is this site
+collection not in the modern experience, and what does it take?
+
+- `AlternateCssUrlCount` — the webs that set an alternate CSS URL (`SPWeb.AlternateCssUrl`).
+  Modern pages do not use it, so the branding it carries is redone, with a site theme for
+  example. `AlternateCssUrlExamples` lists up to five webs with their CSS file.
+- `XsltListViewCount` — the list views that render with XSLT: a view whose `XslLink` is not the
+  default `main.xsl`, or that keeps an `Xsl` of its own. Personal views and the views of hidden
+  lists are not counted. The modern list view ignores XSLT, and SharePoint shows a list with a
+  customized view in the classic experience (see
+  [when SharePoint falls back to classic](https://learn.microsoft.com/en-us/sharepoint/dev/solution-guidance/modern-experience-customizations-customize-lists-and-libraries)).
+  `XsltListViewExamples` lists up to five views as `list/view`.
+- `ScriptWebPartCount` — the Script Editor web parts, and the Content Editor web parts that
+  embed a `<script>` tag or link to a file (`ContentLink`, which is usually a script or an HTML
+  page), on the home page of each web and on the pages of its Site Pages and Pages libraries.
+  A Content Editor web part that holds only formatted text is not counted: a Text web part
+  replaces it. Neither web part exists on a modern page, so the script is rebuilt, with the
+  SharePoint Framework (SPFx). `ScriptWebPartExamples` lists up to five of them as
+  `page URL (Script Editor)` or `page URL (Content Editor)`. At most
+  `LargeContentThresholds.MaxItemsForWebPartScanPerLibrary` pages are read in each library (200
+  by default); a library with more makes the site collection partial, with a warning that names
+  the setting. The web parts of the list view and form pages are not read.
+- `ClassicExperienceOptOutCount` — the site collection and the webs that opted out of the modern
+  list and library experience: the site collection feature
+  `E3540C7D-6BEA-403C-A224-1A12EAFEE4C4` and the web feature
+  `52E14B6F-B1BB-4969-B89B-C4FAA56745EF` (see
+  [Opting out of the modern list and library experience](https://learn.microsoft.com/en-us/sharepoint/dev/transform/modernize-userinterface-lists-and-libraries-optout)).
+  Each active feature counts for 1, and `ClassicExperienceOptOutExamples` lists up to five as
+  `URL (site collection)` or `URL (web)`.
+- `ClassicExperienceListCount` — the lists whose "List experience" setting is *Classic
+  experience* (`ListExperienceOptions`). That setting overrides the opt-outs above, and a list
+  that is hidden is not counted. A SharePoint that has no modern list experience, such as
+  SharePoint Server 2016, has no such setting: the count is 0 there and the site collection is
+  not marked partial. `ClassicExperienceListExamples` lists up to five lists as `title (URL)`.
+- `ModernBlockerCount` and `ModernBlockers` — the kinds of blocker that the site collection has,
+  out of seven: a custom master page, an alternate CSS URL, publishing features, XSLT list views,
+  script web parts, an opt-out of the modern list experience and lists forced to classic.
+  `ModernBlockerCount` is the number of kinds (0 to 7), not the number of items behind them, and
+  `ModernBlockers` is one text for the reports, such as `Custom master page; XSLT list views (3);
+  Script web parts (1)`. It brings the other signals together and is not weighed in either example
+  configuration: each blocker already weighs through its own signal, and weighing the aggregate
+  would count it twice.
+
+A signal that cannot be read is not taken for a site without it: the site collection is marked
+partial, with a warning that names the web, the list or the page. The example for the default
+mode weighs the first three lightly (`AlternateCssUrlCount = 0.5`, `XsltListViewCount = 0.25`,
+`ScriptWebPartCount = 0.5`), because a migration redoes them, and the other two not at all; the
+`SharePointOnPrem` example weighs them as the work of modernizing the farm (see
+[the on-premises preset](#the-on-premises-preset)).
+
+What is not collected yet: the `JSLink` of the views and of the fields (the client-side rendering
+that the modern list also ignores), and the web parts of the list view and form pages.
+
 ### Thresholds
 
 - `Moderate` — a score at or above this value promotes the site from **Simple (1)** to **Moderate (2)**.
@@ -613,6 +676,7 @@ LargeContentThresholds = @{
     MaxItemsForVersionScanPerLibrary = 2000
     MaxItemsForPublishingPageScanPerLibrary = 2000
     MaxItemsForHtmlFileScanPerLibrary = 2000
+    MaxItemsForWebPartScanPerLibrary = 200
     MaxAlertRowsPerSite = 5000
 }
 ```
@@ -633,6 +697,12 @@ LargeContentThresholds = @{
   lower bound and the assessment is marked partial with a warning. The query filters on
   the file type column, which is not indexed, so it asks SharePoint to override the list
   view threshold; run the scan as the farm account.
+- `MaxItemsForWebPartScanPerLibrary` — cap for the pages whose web parts are read, in each Site
+  Pages and Pages library, to count `ScriptWebPartCount` (the home page of each web is always
+  read). Reading the web parts of a page is the costliest of the scans, so the default is 200
+  pages. When a library has more, the count is a lower bound and the assessment is marked
+  partial with a warning. The query filters on the file type column, which is not indexed, so it
+  asks SharePoint to override the list view threshold; run the scan as the farm account.
 - `MaxAlertRowsPerSite` — cap for the SharePoint alert rows exported per site
   collection. `SharePointAlertCount` stays exact; when the cap is reached the rows are cut,
   the assessment is marked partial and a warning names the setting.

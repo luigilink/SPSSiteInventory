@@ -54,6 +54,10 @@
     # MaxItemsForHtmlFileScanPerLibrary to the .htm/.html file count (collected only in
     # web applications that use Permissive browser file handling).
     #
+    # ScriptWebPartCount reads the web parts of the home page of each web and of the pages of
+    # its Site Pages and Pages libraries: MaxItemsForWebPartScanPerLibrary caps how many pages
+    # of each library are read, and a library above it makes the site marked partial.
+    #
     # MaxAlertRowsPerSite caps how many SharePoint alert rows are exported per site
     # collection; SharePointAlertCount stays exact. When the cap is hit, the site is
     # marked partial and a warning is emitted.
@@ -67,6 +71,7 @@
         MaxItemsForVersionScanPerLibrary = 2000
         MaxItemsForPublishingPageScanPerLibrary = 2000
         MaxItemsForHtmlFileScanPerLibrary = 2000
+        MaxItemsForWebPartScanPerLibrary = 200
         MaxAlertRowsPerSite = 5000
     }
 
@@ -253,6 +258,20 @@
             FileVersionCount         = 0.02
             SandboxSolutions         = 3.0
             CustomMasterPage         = 2.0
+            # Modern pages ignore what makes a classic page look and work like yours, and migration
+            # does not carry it over as such: an alternate CSS URL on a web, a list view that
+            # renders with XSLT and a Script Editor or Content Editor web part that holds script
+            # have to be redone (a site theme, view formatting, an SPFx web part). The opt-outs
+            # of the modern list experience (a site collection or a web) and the lists forced to
+            # the classic experience are settings of the farm, not a migration topic, and
+            # ModernBlockerCount only brings the signals together for the reports, so none of
+            # them weighs here.
+            AlternateCssUrlCount     = 0.5
+            XsltListViewCount        = 0.25
+            ScriptWebPartCount       = 0.5
+            ClassicExperienceOptOutCount = 0
+            ClassicExperienceListCount = 0
+            ModernBlockerCount       = 0
             EventReceivers           = 1.5
             UniquePermissionsCount   = 0.01
             SizeGB                   = 0.02

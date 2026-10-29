@@ -51,8 +51,17 @@ Describe 'The wiki page on the target mode' {
         $script:Section | Should -Match '100 subsites'
     }
 
-    It 'says that the alerts and the signals that are not collected are not yet covered, so that the page does not promise them' {
-        $script:Section | Should -Match 'does not yet collect'
+    It 'documents the weights of the modern-readiness signals that it quotes, as the example file has them' {
+        foreach ($signal in 'AlternateCssUrlCount', 'XsltListViewCount', 'ScriptWebPartCount', 'ClassicExperienceOptOutCount', 'ClassicExperienceListCount') {
+            $weight = $script:OnPrem.Scoring.Weights[$signal].ToString('0.0', $script:Invariant)
+
+            $script:Section | Should -Match ('`{0} = {1}`' -f $signal, [regex]::Escape($weight)) -Because "the wiki quotes $signal"
+        }
+    }
+
+    It 'says that the alerts and the HTML section of the modern-readiness signals are not there yet, so that the page does not promise them' {
+        $script:Section | Should -Match 'no section for them yet'
+        $script:Section | Should -Match 'raise no alert yet'
         $script:Section | Should -Match 'still those of a migration to SharePoint Online'
     }
 

@@ -20,6 +20,11 @@ BeforeAll {
     $script:OnPremSettings = Get-SPSInventorySetting -Path (Join-Path $repoRoot 'src/config/inventory-settings.onprem.example.psd1')
     $script:Usage = Get-Content -Path (Join-Path $repoRoot 'wiki/Usage.md') -Raw
     $script:ClassicSignal = @('UsesCustomFarmFeature', 'SandboxSolutions', 'CustomMasterPage', 'EventReceivers', 'UniquePermissionsCount')
+    $script:ModernReadinessSignal = @(
+        'AlternateCssUrlCount', 'AlternateCssUrlExamples', 'XsltListViewCount', 'XsltListViewExamples',
+        'ScriptWebPartCount', 'ScriptWebPartExamples', 'ClassicExperienceOptOutCount', 'ClassicExperienceOptOutExamples',
+        'ClassicExperienceListCount', 'ClassicExperienceListExamples', 'ModernBlockerCount', 'ModernBlockers'
+    )
 }
 
 Describe 'The inventory record' {
@@ -64,6 +69,37 @@ Describe 'The inventory record' {
     It 'documents each classic customization signal in the usage page' {
         foreach ($signal in $script:ClassicSignal) {
             $script:Usage | Should -Match ('\| `{0}` \|' -f $signal) -Because "$signal must be documented"
+        }
+    }
+
+    It 'has a field for each modern-readiness signal, in both records' {
+        foreach ($signal in $script:ModernReadinessSignal) {
+            $script:Record[0] | Should -Contain $signal
+            $script:Record[1] | Should -Contain $signal
+        }
+    }
+
+    It 'documents each modern-readiness signal in the usage page' {
+        foreach ($signal in $script:ModernReadinessSignal) {
+            $script:Usage | Should -Match ('(?m)^\| [^|]*`{0}`' -f $signal) -Because "$signal must be documented"
+        }
+    }
+
+    It 'weighs the modern-readiness signals in both example configurations, with the same keys' {
+        foreach ($signal in @('AlternateCssUrlCount', 'XsltListViewCount', 'ScriptWebPartCount', 'ClassicExperienceOptOutCount', 'ClassicExperienceListCount', 'ModernBlockerCount')) {
+            $script:Settings.Scoring.Weights.Keys | Should -Contain $signal
+            $script:OnPremSettings.Scoring.Weights.Keys | Should -Contain $signal
+        }
+    }
+
+    It 'does not weigh the aggregate of the modern blockers, which would count every blocker twice' {
+        $script:Settings.Scoring.Weights['ModernBlockerCount'] | Should -Be 0
+        $script:OnPremSettings.Scoring.Weights['ModernBlockerCount'] | Should -Be 0
+    }
+
+    It 'weighs the modern blockers more in the on-premises configuration than in the default one' {
+        foreach ($signal in @('AlternateCssUrlCount', 'XsltListViewCount', 'ScriptWebPartCount')) {
+            $script:OnPremSettings.Scoring.Weights[$signal] | Should -BeGreaterThan $script:Settings.Scoring.Weights[$signal]
         }
     }
 }

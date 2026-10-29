@@ -112,6 +112,23 @@
         A web whose URL cannot be placed below the site collection marks the collection
         partial.
 
+        The modern-readiness signals say what keeps a site collection in the classic experience.
+        AlternateCssUrlCount counts the webs that set an alternate CSS URL. XsltListViewCount counts
+        the list views that render with a customized XSLT (an XslLink other than main.xsl, or an
+        Xsl of their own), leaving out personal views and the views of hidden lists.
+        ScriptWebPartCount counts the Script Editor web parts and the Content Editor web parts that
+        embed a script or link to a file, read on the home page of each web and on the pages of
+        its Site Pages and Pages libraries, up to MaxItemsForWebPartScanPerLibrary pages in each
+        library. ClassicExperienceOptOutCount counts the site collection and the webs that opted out
+        of the modern list and library experience (the site collection feature and the web feature
+        that do it), and ClassicExperienceListCount the lists, hidden ones left out, whose "List
+        experience" setting is classic; a SharePoint without the modern list experience has no such
+        setting, and the count stays 0 without marking the collection partial. Each has an Examples
+        value with up to five of them. ModernBlockerCount and ModernBlockers bring those signals, the
+        custom master page and the publishing features together: the number of kinds of blocker and
+        one text for the reports. A setting that cannot be read marks the collection partial and
+        writes a warning, it is never taken for a site without the signal.
+
         The returned hashtable is designed to be passed straight to
         Measure-SPSSiteComplexity. CustomizationInventoryComplete is false when a signal
         cannot be read; partial results are returned with warnings rather than aborting
@@ -148,7 +165,9 @@
         FileVersionCount, and MaxItemsForVersionScanPerLibrary. Also reads
         MaxItemsForPublishingPageScanPerLibrary, which caps how many pages per Pages
         library are read to count page layouts, and MaxItemsForHtmlFileScanPerLibrary,
-        which caps how many .htm and .html files are counted per library.
+        which caps how many .htm and .html files are counted per library, and
+        MaxItemsForWebPartScanPerLibrary, which caps how many pages of each Site Pages or Pages
+        library have their web parts read.
         MaxAlertRowsPerSite caps how many alert rows are exported per site collection.
 
         .PARAMETER PermissionLevels
@@ -252,6 +271,18 @@
         SiteLockState            = 'Unknown'
         SandboxSolutions         = 0
         CustomMasterPage         = $false
+        AlternateCssUrlCount     = 0
+        AlternateCssUrlExamples  = ''
+        XsltListViewCount        = 0
+        XsltListViewExamples     = ''
+        ScriptWebPartCount       = 0
+        ScriptWebPartExamples    = ''
+        ClassicExperienceOptOutCount = 0
+        ClassicExperienceOptOutExamples = ''
+        ClassicExperienceListCount = 0
+        ClassicExperienceListExamples = ''
+        ModernBlockerCount       = 0
+        ModernBlockers           = ''
         UniquePermissionsCount   = 0
         EventReceivers           = 0
         SubsiteCount             = 0
@@ -289,7 +320,14 @@
     $alertRowsLeftOut = $false
     $unreadableAlertCount = 0
     $maxAlertWarnings = 5
+    $unreadablePageCount = 0
+    $maxPageWarnings = 5
     $publishingLayouts = [System.Collections.Generic.Dictionary[string, object]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $alternateCssExamples = [System.Collections.Generic.List[string]]::new()
+    $xsltListViewExamples = [System.Collections.Generic.List[string]]::new()
+    $scriptWebPartExamples = [System.Collections.Generic.List[string]]::new()
+    $classicOptOutExamples = [System.Collections.Generic.List[string]]::new()
+    $classicExperienceListExamples = [System.Collections.Generic.List[string]]::new()
 
     $largeListItemThreshold = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'LargeListItemCount' -DefaultValue 5000 -MinimumValue 1)
     $largeListViewRowLimitThreshold = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'LargeListViewRowLimit' -DefaultValue 5000 -MinimumValue 1)
@@ -297,11 +335,17 @@
     $fileVersionThreshold = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'FileVersionCount' -DefaultValue 50 -MinimumValue 1)
     $maxItemsForVersionScan = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'MaxItemsForVersionScanPerLibrary' -DefaultValue 2000 -MinimumValue 1)
     $maxPublishingPageScan = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'MaxItemsForPublishingPageScanPerLibrary' -DefaultValue 2000 -MinimumValue 1)
+    $maxWebPartPageScan = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'MaxItemsForWebPartScanPerLibrary' -DefaultValue 200 -MinimumValue 1)
     # Well-known SharePoint Server IDs: Publishing Infrastructure (site feature),
     # Publishing (web feature) and the Pages library list template.
     $publishingInfrastructureFeatureId = 'f6924d36-2fa8-4f0b-b16d-06b7250180fa'
     $publishingWebFeatureId = '94c94ca6-b32f-4da9-a9e3-1f3d343d7ecb'
     $pagesLibraryTemplateId = 850
+    $sitePagesLibraryTemplateId = 119
+    # The features that opt a site collection and a web out of the modern list and library experience: where one
+    # is active, the lists and libraries open in the classic experience unless their own setting says otherwise.
+    $classicOptOutSiteFeatureId = 'e3540c7d-6bea-403c-a224-1a12eafee4c4'
+    $classicOptOutWebFeatureId = '52e14b6f-b1bb-4969-b89b-c4faa56745ef'
     $maxHtmlFileScan = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'MaxItemsForHtmlFileScanPerLibrary' -DefaultValue 2000 -MinimumValue 1)
     $maxAlertRows = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'MaxAlertRowsPerSite' -DefaultValue 5000 -MinimumValue 1)
     # Names SharePoint provisions with a None type, in English; PermissionLevels.BuiltInNames adds localized ones.
@@ -474,6 +518,17 @@
     }
 
     try {
+        if (Test-SPSFeatureActivated -Feature $Site.Features -FeatureId $classicOptOutSiteFeatureId) {
+            $signals.ClassicExperienceOptOutCount++
+            $classicOptOutExamples.Add(('{0} (site collection)' -f $Site.Url))
+        }
+    }
+    catch {
+        $signals.CustomizationInventoryComplete = $false
+        Write-Warning -Message "Could not read the modern experience opt-out feature for site collection '$($Site.Url)': $($_.Exception.Message)"
+    }
+
+    try {
         $siteWebs = $Site.AllWebs
         if ($null -eq $siteWebs) {
             throw "The web collection is unavailable for '$($Site.Url)'."
@@ -576,6 +631,41 @@
                 catch {
                     $signals.CustomizationInventoryComplete = $false
                     Write-Warning -Message "Could not read the publishing feature on '$($web.Url)': $($_.Exception.Message)"
+                }
+
+                try {
+                    if (Test-SPSFeatureActivated -Feature $web.Features -FeatureId $classicOptOutWebFeatureId) {
+                        $signals.ClassicExperienceOptOutCount++
+                        if ($classicOptOutExamples.Count -lt 5) {
+                            $classicOptOutExamples.Add(('{0} (web)' -f $web.Url))
+                        }
+                    }
+                }
+                catch {
+                    $signals.CustomizationInventoryComplete = $false
+                    Write-Warning -Message "Could not read the modern experience opt-out feature on '$($web.Url)': $($_.Exception.Message)"
+                }
+
+                # The pages whose web parts are read for script: the home page, and the pages of the Site Pages and
+                # Pages libraries, each one once.
+                $webPartPages = [System.Collections.Generic.Dictionary[string, object]]::new([System.StringComparer]::OrdinalIgnoreCase)
+                try {
+                    $welcomePage = [string](Get-SPSPropertyValue -InputObject $web.RootFolder -Name 'WelcomePage')
+                    if (-not [string]::IsNullOrWhiteSpace($welcomePage)) {
+                        $welcomeFile = $web.GetFile($welcomePage)
+                        $welcomeUrl = [string](Get-SPSPropertyValue -InputObject $welcomeFile -Name 'ServerRelativeUrl')
+                        $welcomeExists = $true
+                        if ($null -ne $welcomeFile.PSObject.Properties['Exists']) {
+                            $welcomeExists = [bool]$welcomeFile.Exists
+                        }
+                        if ($welcomeExists -and -not [string]::IsNullOrWhiteSpace($welcomeUrl)) {
+                            $webPartPages[$welcomeUrl] = $welcomeFile
+                        }
+                    }
+                }
+                catch {
+                    $signals.CustomizationInventoryComplete = $false
+                    Write-Warning -Message "Could not read the home page of web '$($web.Url)': $($_.Exception.Message)"
                 }
 
                 try {
@@ -781,6 +871,53 @@
                         catch {
                             $signals.CustomizationInventoryComplete = $false
                             Write-Warning -Message "Could not read list views on '$listTitle' in web '$($web.Url)': $($_.Exception.Message)"
+                        }
+
+                        # Two reasons for a list to fall back to the classic experience: it is forced to it, and its views
+                        # render with a customized XSLT. The system lists are left out, nobody browses them.
+                        $isHiddenList = $false
+                        try {
+                            $isHiddenList = [bool](Get-SPSPropertyValue -InputObject $list -Name 'Hidden')
+                            if (-not $isHiddenList) {
+                                # A farm whose SharePoint has no modern experience has no such setting: the list is not forced.
+                                $listExperience = [string](Get-SPSPropertyValue -InputObject $list -Name 'ListExperienceOptions')
+                                if ($listExperience -eq 'ClassicExperience' -or $listExperience -eq '2') {
+                                    $signals.ClassicExperienceListCount++
+                                    if ($classicExperienceListExamples.Count -lt 5) {
+                                        $classicExperienceListExamples.Add(('{0} ({1})' -f $listTitle, $list.RootFolder.ServerRelativeUrl))
+                                    }
+                                }
+                            }
+                        }
+                        catch {
+                            $signals.CustomizationInventoryComplete = $false
+                            Write-Warning -Message "Could not read the list experience on list '$listTitle' in web '$($web.Url)': $($_.Exception.Message)"
+                        }
+
+                        try {
+                            if (-not $isHiddenList) {
+                                $xsltViews = $list.Views
+                                if ($null -eq $xsltViews) {
+                                    throw "List views are unavailable on '$listTitle'."
+                                }
+                                foreach ($xsltView in $xsltViews) {
+                                    # A personal view belongs to one user, not to the design of the list.
+                                    if ([bool](Get-SPSPropertyValue -InputObject $xsltView -Name 'PersonalView')) {
+                                        continue
+                                    }
+                                    if (Test-SPSXsltListView -View $xsltView) {
+                                        $signals.XsltListViewCount++
+                                        if ($xsltListViewExamples.Count -lt 5) {
+                                            $xsltViewTitle = if ($xsltView.PSObject.Properties['Title']) { [string]$xsltView.Title } else { 'Unnamed view' }
+                                            $xsltListViewExamples.Add(('{0}/{1}' -f $listTitle, $xsltViewTitle))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        catch {
+                            $signals.CustomizationInventoryComplete = $false
+                            Write-Warning -Message "Could not read the XSLT of the views on list '$listTitle' in web '$($web.Url)': $($_.Exception.Message)"
                         }
 
                         $isDocumentLibrary = [string]$list.BaseTemplate -eq '101' -or
@@ -999,6 +1136,52 @@
                             }
                         }
 
+                        # The pages of the Site Pages and Pages libraries are read for script, up to the cap of each library.
+                        $listTemplateText = [string]$list.BaseTemplate
+                        if ($isPagesLibrary -or $listTemplateText -eq [string]$sitePagesLibraryTemplateId -or $listTemplateText -eq 'WebPageLibrary') {
+                            try {
+                                # Pages only (an .aspx file): the folders, images and other files of the library are no page.
+                                $webPartPageQuery = & $newPagedQuery -RowLimit 200 -QueryText '<Where><And><Eq><FieldRef Name="FSObjType" /><Value Type="Integer">0</Value></Eq><Eq><FieldRef Name="File_x0020_Type" /><Value Type="Text">aspx</Value></Eq></And></Where>'
+                                & $setQueryProperty $webPartPageQuery 'ViewFields' '<FieldRef Name="FileRef" />'
+                                & $setQueryProperty $webPartPageQuery 'ViewFieldsOnly' $true
+                                # The file type column is not indexed; an override lets farm administrators pass the list view threshold.
+                                & $setQueryProperty $webPartPageQuery 'QueryThrottleMode' 'Override'
+                                $webPartPageScanCount = 0
+                                $hasUnscannedWebParts = $false
+                                $webPartPagePosition = $null
+                                do {
+                                    & $setQueryProperty $webPartPageQuery 'ListItemCollectionPosition' $webPartPagePosition
+                                    $webPartPageBatch = $list.GetItems($webPartPageQuery)
+                                    foreach ($webPartPageItem in (& $getBatchItems $webPartPageBatch)) {
+                                        if ($webPartPageScanCount -ge $maxWebPartPageScan) {
+                                            $hasUnscannedWebParts = $true
+                                            break
+                                        }
+                                        $webPartPageScanCount++
+                                        $webPartPageFile = $webPartPageItem.File
+                                        $webPartPageUrl = [string](& $getFileIdentity $webPartPageFile $webPartPageItem)
+                                        if ($null -ne $webPartPageFile -and -not [string]::IsNullOrWhiteSpace($webPartPageUrl) -and
+                                            -not $webPartPages.ContainsKey($webPartPageUrl)) {
+                                            $webPartPages[$webPartPageUrl] = $webPartPageFile
+                                        }
+                                    }
+                                    $webPartPagePosition = & $getBatchPosition $webPartPageBatch
+                                    if ($webPartPageScanCount -ge $maxWebPartPageScan -and $null -ne $webPartPagePosition) {
+                                        $hasUnscannedWebParts = $true
+                                    }
+                                } while ($null -ne $webPartPagePosition -and $webPartPageScanCount -lt $maxWebPartPageScan)
+
+                                if ($hasUnscannedWebParts) {
+                                    $signals.CustomizationInventoryComplete = $false
+                                    Write-Warning -Message "Web part scan stopped on '$listTitle' in web '$($web.Url)' after $maxWebPartPageScan page(s). Increase LargeContentThresholds.MaxItemsForWebPartScanPerLibrary to read more pages."
+                                }
+                            }
+                            catch {
+                                $signals.CustomizationInventoryComplete = $false
+                                Write-Warning -Message "Could not list the pages of '$listTitle' in web '$($web.Url)': $($_.Exception.Message)"
+                            }
+                        }
+
                         try {
                             # The alias says e-mail is enabled (CanReceiveEmail only says the type supports it).
                             # A null alias is valid, so read it strictly to tell it from a failed read.
@@ -1110,6 +1293,26 @@
                     Write-Warning -Message "Lists could not be fully enumerated on web '$($web.Url)': $($_.Exception.Message)"
                 }
 
+                # The web parts of the pages are read once the lists are, so that a page found in two places is read once.
+                foreach ($webPartPageUrl in @($webPartPages.Keys)) {
+                    try {
+                        foreach ($scriptWebPartKind in @(Get-SPSPageScriptWebPart -File $webPartPages[$webPartPageUrl])) {
+                            $signals.ScriptWebPartCount++
+                            if ($scriptWebPartExamples.Count -lt 5) {
+                                $scriptWebPartExamples.Add(('{0} ({1})' -f $webPartPageUrl, $scriptWebPartKind))
+                            }
+                        }
+                    }
+                    catch {
+                        $signals.CustomizationInventoryComplete = $false
+                        $unreadablePageCount++
+                        # A systematic failure would otherwise warn once per page, and a library can hold hundreds.
+                        if ($unreadablePageCount -le $maxPageWarnings) {
+                            Write-Warning -Message "Could not read the web parts of page '$webPartPageUrl' in web '$($web.Url)': $($_.Exception.Message)"
+                        }
+                    }
+                }
+
                 # SPWeb.Alerts covers every user. The count stays exact; rows stop at the per-site cap.
                 try {
                     $webAlerts = $web.Alerts
@@ -1173,6 +1376,21 @@
                     $signals.CustomMasterPage = $true
                 }
 
+                try {
+                    # A getter that fails raises: an unreadable setting must not look like a web without alternate CSS.
+                    $alternateCssUrl = ([string](Get-SPSPropertyValue -InputObject $web -Name 'AlternateCssUrl')).Trim()
+                    if ($alternateCssUrl) {
+                        $signals.AlternateCssUrlCount++
+                        if ($alternateCssExamples.Count -lt 5) {
+                            $alternateCssExamples.Add(('{0} ({1})' -f $web.Url, $alternateCssUrl))
+                        }
+                    }
+                }
+                catch {
+                    $signals.CustomizationInventoryComplete = $false
+                    Write-Warning -Message "Could not read the alternate CSS URL on web '$($web.Url)': $($_.Exception.Message)"
+                }
+
                 if (($customFeatureSet.Count -gt 0 -or $fullTrustFeatureSet.Count -gt 0) -and
                     -not ($signals.UsesCustomFarmFeature -and $signals.UsesFullTrustCode)) {
                     foreach ($feature in $web.Features) {
@@ -1218,6 +1436,9 @@
     if ($unreadableAlertCount -gt $maxAlertWarnings) {
         Write-Warning -Message "$($unreadableAlertCount - $maxAlertWarnings) more alert(s) could not be read on site '$($Site.Url)'; only the first $maxAlertWarnings are reported."
     }
+    if ($unreadablePageCount -gt $maxPageWarnings) {
+        Write-Warning -Message "$($unreadablePageCount - $maxPageWarnings) more page(s) could not be read on site '$($Site.Url)'; only the first $maxPageWarnings are reported."
+    }
 
     $signals.SubsiteCount = $subsites.Count
     if ($subsites.Count -gt 0) {
@@ -1249,6 +1470,11 @@
     $signals.ExternalListExamples = $externalListExamples -join '; '
     $signals.ExternalLists = $externalLists.ToArray()
     $signals.SharePointAlerts = $sharePointAlerts.ToArray()
+    $signals.AlternateCssUrlExamples = $alternateCssExamples -join '; '
+    $signals.XsltListViewExamples = $xsltListViewExamples -join '; '
+    $signals.ScriptWebPartExamples = $scriptWebPartExamples -join '; '
+    $signals.ClassicExperienceOptOutExamples = $classicOptOutExamples -join '; '
+    $signals.ClassicExperienceListExamples = $classicExperienceListExamples -join '; '
     $signals.PublishingPageLayoutCount = $publishingLayouts.Count
     $signals.PublishingPageLayoutExamples = @(
         $publishingLayouts.Values |
@@ -1256,5 +1482,8 @@
             Select-Object -First 5 |
             ForEach-Object { '{0} ({1})' -f $_.Name, $_.PageCount }
     ) -join '; '
+    $modernBlockers = Get-SPSModernBlocker -Signals $signals
+    $signals.ModernBlockerCount = $modernBlockers.Count
+    $signals.ModernBlockers = $modernBlockers.Summary
     return $signals
 }

@@ -63,8 +63,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   longer block, `InfoPathFormCount` stays the one blocker, and what belongs to a migration (FBA,
   unsupported templates, NoAccess locks, IRM, external lists, the term store, the subsite
   structure) weighs nothing, while it is still collected and reported. The readiness check
-  compares the settings with the example of their mode. See the wiki page "Configuration".
-  The signals that only matter for the modern experience are not collected yet. (#25)
+  compares the settings with the example of their mode. See the wiki page "Configuration". (#25)
+- The inventory collects what keeps a site collection in the classic experience, in both target
+  modes; with the custom master page, which it already collected, and the publishing signals they
+  say why a site collection is not in the modern experience. `AlternateCssUrlCount` counts the webs
+  that set an alternate CSS URL, `XsltListViewCount` the list views that render with a customized
+  XSLT (a `XslLink` other than `main.xsl`, or an `Xsl`), `ScriptWebPartCount` the Script Editor web
+  parts and the Content Editor web parts that embed a script or link to a file, on the home page
+  of each web and on the pages of its Site Pages and Pages libraries (at most
+  `LargeContentThresholds.MaxItemsForWebPartScanPerLibrary` pages per library, 200 by default),
+  `ClassicExperienceOptOutCount` the site collection and the webs that opted out of the modern list
+  and library experience, and `ClassicExperienceListCount` the lists whose experience is set to
+  classic, each with its examples. `ModernBlockerCount` and `ModernBlockers` bring them together:
+  the number of kinds of blocker, out of seven, and one text for the reports. They are columns of
+  the CSV and JSON reports. A setting that cannot be read marks the site collection partial, with
+  a warning, and is never taken for a site without the signal; a SharePoint that has no modern
+  list experience, such as SharePoint Server 2016, has no list experience setting, and the count
+  stays 0 without marking the site collection partial. The two example configurations weigh the
+  signals: lightly for a migration to SharePoint Online, and as the work of modernizing a farm for
+  `SharePointOnPrem`. The aggregate itself weighs nothing, or each blocker would count twice. The
+  lab has five scenarios for them, and the wiki pages "Usage" and "Configuration" document them.
+  The HTML report has no section for them yet, and they raise no alert yet. (#25)
 
 ### Changed
 

@@ -73,6 +73,10 @@
     # MaxItemsForHtmlFileScanPerLibrary to the .htm/.html file count (collected only in
     # web applications that use Permissive browser file handling).
     #
+    # ScriptWebPartCount reads the web parts of the home page of each web and of the pages of
+    # its Site Pages and Pages libraries: MaxItemsForWebPartScanPerLibrary caps how many pages
+    # of each library are read, and a library above it makes the site marked partial.
+    #
     # MaxAlertRowsPerSite caps how many SharePoint alert rows are exported per site
     # collection; SharePointAlertCount stays exact. When the cap is hit, the site is
     # marked partial and a warning is emitted.
@@ -86,6 +90,7 @@
         MaxItemsForVersionScanPerLibrary = 2000
         MaxItemsForPublishingPageScanPerLibrary = 2000
         MaxItemsForHtmlFileScanPerLibrary = 2000
+        MaxItemsForWebPartScanPerLibrary = 200
         MaxAlertRowsPerSite = 5000
     }
 
@@ -276,6 +281,21 @@
             UsesCustomFarmFeature    = 2.0
             CustomMasterPage         = 3.0
             EventReceivers           = 1.5
+            # What makes a page or a list fall back to the classic experience, and is rebuilt for
+            # the modern one: an alternate CSS URL on a web (a site theme replaces it), a list view
+            # that renders with XSLT (view formatting or an SPFx field customizer replaces it), a
+            # Script Editor or Content Editor web part that holds script (an SPFx web part or
+            # extension replaces it), a site collection or a web that opted out of the modern list
+            # and library experience, and a list forced to the classic experience (the opt-out is
+            # removed, and the lists checked). ModernBlockerCount only brings these signals and the
+            # custom master page and the publishing features together for the reports: it does not
+            # weigh, or each blocker would count twice.
+            AlternateCssUrlCount     = 1.5
+            XsltListViewCount        = 1.0
+            ScriptWebPartCount       = 1.5
+            ClassicExperienceOptOutCount = 1.0
+            ClassicExperienceListCount = 0.5
+            ModernBlockerCount       = 0
             UniquePermissionsCount   = 0
             SizeGB                   = 0
         }

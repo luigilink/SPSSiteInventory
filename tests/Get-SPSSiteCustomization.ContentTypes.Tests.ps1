@@ -123,6 +123,8 @@ public sealed class SPSSiteInventoryBrokenAlertCollection : IEnumerable
             HasUniqueRoleDefinitions = $true
             RoleDefinitions = @()
             Alerts = @()
+            AlternateCssUrl = ''
+            RootFolder = [PSCustomObject]@{ WelcomePage = '' }
         }
         $web | Add-Member -MemberType ScriptMethod -Name Dispose -Value { }
         return $web
@@ -193,9 +195,15 @@ public sealed class SPSSiteInventoryBrokenAlertCollection : IEnumerable
             Batches = $Batches
             BatchIndex = 0
             Queries = [System.Collections.Generic.List[object]]::new()
+            WebPartQueries = [System.Collections.Generic.List[object]]::new()
         }
         $list | Add-Member -MemberType ScriptMethod -Name GetItems -Value {
             param ($Query)
+            # The scan of the pages for script lists the .aspx files; the batches are those of the layout scan.
+            if ($Query.PSObject.Properties['Query'] -and [string]$Query.Query -match 'File_x0020_Type') {
+                $this.WebPartQueries.Add($Query)
+                return [PSCustomObject]@{ Items = @(); ListItemCollectionPosition = $null }
+            }
             $this.Queries.Add($Query)
             $batch = $this.Batches[$this.BatchIndex]
             $this.BatchIndex++
