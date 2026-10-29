@@ -30,6 +30,13 @@
         'Comparison with the example' check is Skipped, with the path in its detail. Without
         a path, the settings are not compared and no result is added.
 
+        .PARAMETER OnPremExampleConfigPath
+        Path to the example settings file for the on-premises modernization mode. When the
+        settings file has TargetMode = 'SharePointOnPrem', the settings are compared with this
+        example instead of ExampleConfigPath, since the blocking signals and the weights are not
+        the same in the two modes. Without this path, or in the default mode, ExampleConfigPath
+        is used.
+
         .PARAMETER SkipSharePoint
         Skips the checks that need SharePoint, to check the host and the settings file on a
         machine that is not a farm server.
@@ -48,6 +55,10 @@
         [Parameter()]
         [System.String]
         $ExampleConfigPath,
+
+        [Parameter()]
+        [System.String]
+        $OnPremExampleConfigPath,
 
         [Parameter()]
         [switch]
@@ -156,6 +167,10 @@
             }
         }
 
+        $targetMode = (Get-SPSTargetProfile -TargetMode $(if ($settings.ContainsKey('TargetMode')) { $settings['TargetMode'] } else { 'SharePointOnline' })).TargetMode
+        if ($targetMode -eq 'SharePointOnPrem' -and -not [System.String]::IsNullOrEmpty($OnPremExampleConfigPath)) {
+            $ExampleConfigPath = $OnPremExampleConfigPath
+        }
         if (-not [System.String]::IsNullOrEmpty($ExampleConfigPath) -and (Test-Path -LiteralPath $ExampleConfigPath -PathType Leaf)) {
             $example = $null
             try {

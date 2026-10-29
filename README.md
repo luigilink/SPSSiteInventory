@@ -8,7 +8,7 @@
 
 **SPSSiteInventory** is a PowerShell toolkit that inventories on-premises **SharePoint Server** site collections and **categorizes them by migration complexity** (Simple → Moderate → Complex → Blocking) to prepare a move to **SharePoint Online**.
 
-It is read-only by design and produces a scriptable, diff-friendly CSV/JSON inventory plus a shareable, self-contained HTML report that feed a migration wave plan.
+It is read-only by design and produces a scriptable, diff-friendly CSV/JSON inventory plus a shareable, self-contained HTML report that feed a migration wave plan. With `TargetMode = 'SharePointOnPrem'` in the settings, the same inventory plans the **modernization of the farm** instead (Modern-ready → Light remediation → Rebuild (SPFx) → Blocked), with its own example settings file (see the [Configuration reference](https://github.com/luigilink/SPSSiteInventory/wiki/Configuration#targetmode-section)).
 
 Compatible with **SharePoint Server 2016, 2019 and Subscription Edition**.
 

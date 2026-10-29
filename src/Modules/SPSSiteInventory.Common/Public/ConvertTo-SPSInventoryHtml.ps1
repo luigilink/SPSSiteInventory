@@ -17,6 +17,12 @@
         headings (rgb(31, 56, 100)) and a summary box that breaks the estate down by
         migration-complexity category (1 Simple to 4 Blocking).
 
+        The target mode chooses the framing. By default (SharePointOnline) the report is the
+        migration report described here. With SharePointOnPrem the four categories are called
+        Modern-ready, Light remediation, Rebuild (SPFx) and Blocked, the pages of a split report
+        are named after these names, and the header says that the report is about the
+        modernization of the farm where it runs.
+
         The report is made to be read: the inventory table has one compact row per site
         collection, worst first, and opening a row shows the context of the site collection,
         the signals it raises and its assessment warnings. The content types and the other
@@ -96,6 +102,11 @@
 
         .PARAMETER ExcludedSiteMasterCount
         Number of site masters that the scan left out. When above 0, the summary box says so.
+
+        .PARAMETER TargetMode
+        SharePointOnline (the default) or SharePointOnPrem. It chooses the names of the categories,
+        the names of the table pages of a split report, and the line of the header that says what
+        the report is for. Any other value is rejected.
 
         .PARAMETER FileName
         The file name of the entry page, for example SPSSiteInventory-PROD-20261028-1146.html.
@@ -200,6 +211,10 @@
         [System.Int32]
         $MaxDetailRow = 200,
 
+        [Parameter()]
+        [System.String]
+        $TargetMode = 'SharePointOnline',
+
         [Parameter(ParameterSetName = 'Pages', Mandatory = $true)]
         [ValidateNotNullOrEmpty()]
         [System.String]
@@ -220,11 +235,17 @@
     # hashtable (not [ordered]) is used on purpose: an OrderedDictionary indexed by an
     # integer key resolves by position, not by key, which would mis-map the categories.
     # Order is enforced by iterating 1..4 explicitly.
+    $targetProfile = Get-SPSTargetProfile -TargetMode $TargetMode
+    $isOnPrem = $targetProfile.TargetMode -eq 'SharePointOnPrem'
+    # The words that say what a wave and a high-severity signal are for. The anchor of the wave plan stays wave-plan.
+    $waveNavLabel = if ($isOnPrem) { 'Modernization waves' } else { 'Migration waves' }
+    $waveHeading = if ($isOnPrem) { 'Modernization wave plan' } else { 'Migration wave plan' }
+    $highSeverityMeaning = if ($isOnPrem) { 'block or break the modern experience' } else { 'block or break a migration' }
     $categoryMeta = @{
-        1 = @{ Name = 'Simple'; Color = '#107C10' }
-        2 = @{ Name = 'Moderate'; Color = '#C19C00' }
-        3 = @{ Name = 'Complex'; Color = '#D83B01' }
-        4 = @{ Name = 'Blocking'; Color = '#A4262C' }
+        1 = @{ Name = $targetProfile.CategoryName[1]; Slug = $targetProfile.CategorySlug[1]; Color = '#107C10' }
+        2 = @{ Name = $targetProfile.CategoryName[2]; Slug = $targetProfile.CategorySlug[2]; Color = '#C19C00' }
+        3 = @{ Name = $targetProfile.CategoryName[3]; Slug = $targetProfile.CategorySlug[3]; Color = '#D83B01' }
+        4 = @{ Name = $targetProfile.CategoryName[4]; Slug = $targetProfile.CategorySlug[4]; Color = '#A4262C' }
     }
 
     $records = @($InputObject)
@@ -613,7 +634,8 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
         [void]$page.AppendLine('<div class="header">')
         [void]$page.AppendLine(('<h1>{0}</h1>' -f $encTitle))
         $envPart = if ($encEnv) { ('Environment <strong>{0}</strong> &middot; ' -f $encEnv) } else { '' }
-        [void]$page.AppendLine(('<div class="meta">{0}Generated on <strong>{1}</strong></div>' -f $envPart, $encGenerated))
+        $modePart = if ($targetProfile.TargetMode -eq 'SharePointOnline') { '' } else { ('Target <strong>{0}</strong> &middot; ' -f (ConvertTo-SPSHtmlText -Value $targetProfile.DisplayName)) }
+        [void]$page.AppendLine(('<div class="meta">{0}{1}Generated on <strong>{2}</strong></div>' -f $envPart, $modePart, $encGenerated))
         [void]$page.AppendLine('</div>')
         [void]$page.AppendLine('<div class="nav">')
         [void]$page.Append($Navigation)
@@ -640,7 +662,7 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
         [void]$navigation.AppendLine('<a href="#alerts">Alerts</a>')
     }
     if ($waveKeys.Count -gt 0) {
-        [void]$navigation.AppendLine('<a href="#wave-plan">Migration waves</a>')
+        [void]$navigation.AppendLine(('<a href="#wave-plan">{0}</a>' -f $waveNavLabel))
     }
     [void]$navigation.AppendLine('<a href="#inventory-table">Inventory table</a>')
     if ($solutions.Count -gt 0) {
@@ -672,7 +694,7 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
     [void]$sb.AppendLine('<div class="summary" id="summary">')
     [void]$sb.AppendLine(('<div class="summary-total"><strong>{0}</strong> site collection(s) &middot; <strong>{1} GB</strong> total content &middot; <strong>{2}</strong> partial &middot; <strong>{3}</strong> failed</div>' -f $total, (ConvertTo-SPSHtmlText -Value $totalSizeText), $partialCount, $failedCount))
     if ($needsReviewCount -gt 0) {
-        [void]$sb.AppendLine(('<div class="summary-total"><strong>{0}</strong> Simple site collection(s) with a partial assessment wait in the <strong>Needs review</strong> wave until they are read in full.</div>' -f $needsReviewCount))
+        [void]$sb.AppendLine(('<div class="summary-total"><strong>{0}</strong> {1} site collection(s) with a partial assessment wait in the <strong>Needs review</strong> wave until they are read in full.</div>' -f $needsReviewCount, (ConvertTo-SPSHtmlText -Value $categoryMeta[1].Name)))
     }
     $excludedParts = @()
     if ($ExcludedPersonalSiteCount -gt 0) {
@@ -706,7 +728,7 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
         $riskHint = if ($splitReport) { 'Click an indicator to open the first page of the inventory table that has a site collection that raises it, with the filter on.' } else { 'Click an indicator to filter the inventory table.' }
         [void]$sb.AppendLine(('<p class="muted">The share of the site collections that raise each signal, grouped by the severity of the alert of the signal. {0}</p>' -f $riskHint))
         $severityMeta = [ordered]@{
-            High   = @{ Pill = 'yes'; Meaning = 'block or break a migration' }
+            High   = @{ Pill = 'yes'; Meaning = $highSeverityMeaning }
             Medium = @{ Pill = 'warn'; Meaning = 'need a plan or a check' }
             Low    = @{ Pill = 'no'; Meaning = 'information to pass on' }
         }
@@ -793,7 +815,7 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
 
     # Migration wave plan.
     if ($waveKeys.Count -gt 0) {
-        [void]$sb.AppendLine('<h2 id="wave-plan">Migration wave plan</h2>')
+        [void]$sb.AppendLine(('<h2 id="wave-plan">{0}</h2>' -f $waveHeading))
         [void]$sb.AppendLine('<div class="table-scroll">')
         [void]$sb.AppendLine('<table class="waves">')
         [void]$sb.AppendLine('<thead><tr><th>Wave</th><th>Name</th><th class="num">Sites</th><th class="num">Content (GB)</th><th class="num">Partial</th></tr></thead>')
@@ -1004,7 +1026,7 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
         }
         foreach ($bucketId in $bucketOrder) {
             $rows = $bucketRows[$bucketId]
-            $bucketSlug = if ($bucketId -eq 0) { 'not-assessed' } elseif ($categoryMeta.Contains($bucketId)) { $categoryMeta[$bucketId].Name.ToLowerInvariant() } else { 'category-{0}' -f $bucketId }
+            $bucketSlug = if ($bucketId -eq 0) { 'not-assessed' } elseif ($categoryMeta.Contains($bucketId)) { $categoryMeta[$bucketId].Slug } else { 'category-{0}' -f $bucketId }
             $bucketLabel = if ($bucketId -eq 0) { 'Not assessed' } elseif ($categoryMeta.Contains($bucketId)) { '{0}. {1}' -f $bucketId, $categoryMeta[$bucketId].Name } else { 'Category {0}' -f $bucketId }
             $pageCount = [int][math]::Ceiling($rows.Count / $RowsPerPage)
             $bucketPages = [System.Collections.Generic.List[System.Object]]::new()
@@ -1552,7 +1574,7 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
             [void]$nav.AppendLine(('<a href="{0}#alerts">Alerts</a>' -f $entryLink))
         }
         if ($waveKeys.Count -gt 0) {
-            [void]$nav.AppendLine(('<a href="{0}#wave-plan">Migration waves</a>' -f $entryLink))
+            [void]$nav.AppendLine(('<a href="{0}#wave-plan">{1}</a>' -f $entryLink, $waveNavLabel))
         }
         [void]$nav.AppendLine(('<a href="{0}#inventory-table">Inventory table</a>' -f $entryLink))
         foreach ($bucket in $bucketList) {

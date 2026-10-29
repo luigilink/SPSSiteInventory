@@ -56,8 +56,9 @@ $ErrorActionPreference = 'Stop'
 Import-Module -Name (Join-Path -Path $PSScriptRoot -ChildPath 'Modules\SPSSiteInventory.Common\SPSSiteInventory.Common.psd1') -Force
 
 $exampleConfigPath = Join-Path -Path $PSScriptRoot -ChildPath 'config\inventory-settings.example.psd1'
+$onPremExampleConfigPath = Join-Path -Path $PSScriptRoot -ChildPath 'config\inventory-settings.onprem.example.psd1'
 try {
-    $check = @(Get-SPSReadinessCheck -ConfigPath $ConfigPath -ExampleConfigPath $exampleConfigPath -SkipSharePoint:$SkipSharePoint)
+    $check = @(Get-SPSReadinessCheck -ConfigPath $ConfigPath -ExampleConfigPath $exampleConfigPath -OnPremExampleConfigPath $onPremExampleConfigPath -SkipSharePoint:$SkipSharePoint)
 }
 catch {
     # No check ran: do not show an empty report that says Ready.

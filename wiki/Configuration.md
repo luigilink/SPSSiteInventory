@@ -9,6 +9,7 @@ and adjust it. No client-specific value ships in the repository.
 | Setting | Type | Description |
 | --- | --- | --- |
 | `EnvName` | string | Free-form environment identifier (e.g. `PROD`), used in output file names and the banner. |
+| `TargetMode` | string | Optional. What the inventory prepares: `SharePointOnline` (the default, also when the setting is missing) for a migration to SharePoint Online, or `SharePointOnPrem` for the modernization of the farm where it runs. It names the categories and the waves and frames the report; the `Scoring` section decides what counts as a blocker (see [TargetMode](#targetmode-section)). |
 | `WebApplicationUrl` | string[] | Web application URLs to scan. Leave empty to scan every content web application. |
 | `CustomSolutionPrefix` | string[] | **Optional override.** Case-insensitive name prefixes that force a farm solution (WSP) to be treated as custom. Custom solutions are auto-detected by default (see below), so this is usually left empty. |
 | `AutoDetectCustomSolutions` | bool | Optional (default `$true`). When true, a solution is custom unless its name matches a known Microsoft / out-of-the-box marker. Set `$false` to rely only on `CustomSolutionPrefix`. |
@@ -22,7 +23,85 @@ and adjust it. No client-specific value ships in the repository.
 | `Report` | hashtable | Options of the HTML report: `HtmlSplitThreshold` (default 3000) and `HtmlRowsPerPage` (default 500). Optional. |
 | `SharePointAlerts` | hashtable | Options of the SharePoint alerts report (`IncludeUserLogin`, default `$true`). Optional. |
 | `Scoring` | hashtable | The scoring engine configuration (see below). **Mandatory.** |
-| `MigrationWaves` | hashtable[] | The category-to-wave mapping (see below). Optional; a one-wave-per-category default applies when omitted. |
+| `MigrationWaves` | hashtable[] | The category-to-wave mapping (see below). Optional; a one-wave-per-category default applies when omitted, with the names of the target mode. |
+
+## TargetMode section
+
+The same inventory answers two questions. `TargetMode` says which one is asked:
+
+| `TargetMode` | The question | Example file |
+| --- | --- | --- |
+| `SharePointOnline` (default) | Can each site collection move to SharePoint Online, and what does it take? | `inventory-settings.example.psd1` |
+| `SharePointOnPrem` | Is each site collection ready for the modern experience on the farm where it runs, and what does it take to modernize it? | `inventory-settings.onprem.example.psd1` |
+
+The setting is optional: a settings file without it, such as every file of an earlier version, is
+`SharePointOnline`, and its reports do not change. A value that is not one of the two names is
+refused when the settings are loaded, with the name of the file, because a misspelled mode would
+otherwise run as the default without anybody having chosen it. The case does not matter. The
+log says which mode runs, and the manifest records it (`Summary.TargetMode`).
+
+### What the mode changes
+
+The score and the category **number** (1 to 4) are the same in both modes: a script, a filter or a
+wave mapping that reads `Category` does not change. The mode changes the words:
+
+| Category | `SharePointOnline` | `SharePointOnPrem` |
+| --- | --- | --- |
+| 1 | Simple | Modern-ready |
+| 2 | Moderate | Light remediation |
+| 3 | Complex | Rebuild (SPFx) |
+| 4 | Blocking | Blocked |
+
+- `CategoryName` of every record, in the CSV, the JSON and the HTML report.
+- The pages of a split HTML report, which are named after the category
+  (`...-sites-blocking-1.html`, or `...-sites-rebuild-spfx-1.html`).
+- The default waves, when the settings have no `MigrationWaves`: *Quick wins*, *Light
+  remediation*, *Rebuild* and *Projects / blockers* for a migration; *Ready*, *Light
+  remediation*, *Rebuild (SPFx)* and *Blocked* for the modernization.
+- The HTML report: the header says `Target SharePoint on-premises modernization`, the wave plan
+  is the *Modernization wave plan*, and the summary of the sites that wait in *Needs review* is
+  named after the first category of the mode.
+- The log: the warnings that tell you to add a signal to `Scoring.BlockingSignals` because a
+  migration to SharePoint Online would be blocked by it (FBA, unsupported templates, NoAccess
+  locks, IRM lists, external lists) are not raised in the modernization mode.
+- `Test-SPSSiteInventoryReadiness.ps1` compares your settings with the example of the mode of
+  your file (`inventory-settings.onprem.example.psd1` for `SharePointOnPrem`), not with the
+  migration example.
+
+The mode does **not** change what counts as a blocker or what a signal weighs: that is the
+`Scoring` section, and it is yours. Each example file ships the scoring that fits its question,
+so start from the file of your mode, copy it to `inventory-settings.psd1` and adjust it. Setting
+`TargetMode = 'SharePointOnPrem'` in a file that keeps the migration scoring gives the new names
+to a migration scoring, which is rarely what you want.
+
+### The on-premises preset
+
+On the farm where the site collections run, full-trust code and custom farm features still work:
+they are code to rebuild with the SharePoint Framework (SPFx) to reach the modern experience, so
+the preset **weighs** them (`UsesFullTrustCode = 4.0`, `UsesCustomFarmFeature = 2.0`,
+`CustomMasterPage = 3.0`, `SandboxSolutions = 3.0`) and does **not** block on them. It blocks on
+`InfoPathFormCount` only: InfoPath Forms Services is deprecated in SharePoint Server
+Subscription Edition and its support ended on 14 July 2026, and a form has no modern editor.
+The SharePoint 2010 workflows (their support ended on 14 July 2026 too) weigh heavily, which
+makes a site collection that has them *Rebuild (SPFx)*, not *Blocked*, because they still run.
+
+What belongs to a migration and not to the modernization of a farm weighs nothing in the
+preset: forms-based authentication, unsupported site templates, `NoAccess` locks, IRM-enabled
+lists, external lists (BCS is not retired in SharePoint Server Subscription Edition), the term
+store, incoming e-mail, `.htm` files, template-language review and the subsite structure. The
+signals are still collected, and they still raise their alerts and appear in the reports, so
+nothing disappears from the inventory: they just do not move a site collection to a worse
+category. Subsites, in particular, are not penalised: a site collection with 100 subsites is
+*Modern-ready* in the preset, and the restructuring that modern SharePoint favors (one site
+collection per unit of work, connected by hub sites) is a topic of the report, not of the score.
+
+This version scores the signals that the toolkit already collects. It does not yet collect what
+only matters for the modern experience (an alternate CSS URL, XSLT list views, classic-only web
+parts, a site or a list that forces the classic experience); those signals are planned, and a
+site collection that depends only on them reads *Modern-ready* until then. The alerts, their
+severity and the texts of the alert catalog are still those of a migration to SharePoint Online
+in this version, whatever the mode: a signal that the preset does not weigh still raises its
+alert, with its migration wording.
 
 ## Custom solution detection
 
@@ -586,7 +665,9 @@ MigrationWaves = @(
 
 A site whose category is not listed in any wave lands in an **Unassigned** bucket (wave 0),
 surfaced in the report rather than silently dropped. When `MigrationWaves` is omitted from
-the settings, the one-wave-per-category default is applied.
+the settings, the one-wave-per-category default of the [target mode](#targetmode-section) is
+applied. The on-premises example ships its own waves (*Ready*, *Light remediation*, *Rebuild
+(SPFx)*, *Blocked*), which are also that default.
 
 Two other buckets of wave 0 do not come from the mapping:
 

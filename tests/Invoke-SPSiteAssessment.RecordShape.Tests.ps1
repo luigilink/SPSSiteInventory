@@ -17,6 +17,7 @@ BeforeAll {
     }
 
     $script:Settings = Get-SPSInventorySetting -Path (Join-Path $repoRoot 'src/config/inventory-settings.example.psd1')
+    $script:OnPremSettings = Get-SPSInventorySetting -Path (Join-Path $repoRoot 'src/config/inventory-settings.onprem.example.psd1')
     $script:Usage = Get-Content -Path (Join-Path $repoRoot 'wiki/Usage.md') -Raw
     $script:ClassicSignal = @('UsesCustomFarmFeature', 'SandboxSolutions', 'CustomMasterPage', 'EventReceivers', 'UniquePermissionsCount')
 }
@@ -44,6 +45,12 @@ Describe 'The inventory record' {
     It 'has a field for every blocking signal of the example configuration' {
         foreach ($signal in $script:Settings.Scoring.BlockingSignals) {
             $script:Record[0] | Should -Contain $signal -Because "the example configuration blocks on $signal, so a report must show it"
+        }
+    }
+
+    It 'has a field for every signal that the on-premises example configuration weights or blocks on' {
+        foreach ($signal in @($script:OnPremSettings.Scoring.Weights.Keys) + @($script:OnPremSettings.Scoring.BlockingSignals)) {
+            $script:Record[0] | Should -Contain $signal -Because "the on-premises example configuration scores $signal, so a report must show it"
         }
     }
 

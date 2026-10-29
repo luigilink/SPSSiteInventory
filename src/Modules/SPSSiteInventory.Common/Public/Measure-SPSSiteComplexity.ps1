@@ -21,6 +21,12 @@
         Returns a PSCustomObject with Score, Category (1-4), CategoryName and Reasons
         (the human-readable drivers that pushed the site up).
 
+        The target mode changes the words, not the arithmetic. By default (SharePointOnline) the
+        categories are called Simple, Moderate, Complex and Blocking; with SharePointOnPrem they
+        are called Modern-ready, Light remediation, Rebuild (SPFx) and Blocked. The score and
+        the category number are the same in both modes: what counts as a weight or as a blocker
+        is the Scoring section, which the preset of each mode ships.
+
         .PARAMETER Signals
         Hashtable of signals collected for the site (for example by
         Get-SPSSiteCustomization). Missing keys are treated as 0 / $false.
@@ -28,6 +34,10 @@
         .PARAMETER Scoring
         The Scoring hashtable from the inventory settings (Weights, Thresholds,
         BlockingSignals). See inventory-settings.example.psd1.
+
+        .PARAMETER TargetMode
+        SharePointOnline (the default) or SharePointOnPrem. It only chooses the names of the
+        categories. Any other value is rejected.
 
         .EXAMPLE
         $signals = @{ Workflow2010Count = 2; Workflow2013Count = 1; SandboxSolutions = 1 }
@@ -43,15 +53,14 @@
 
         [Parameter(Mandatory = $true)]
         [System.Collections.IDictionary]
-        $Scoring
+        $Scoring,
+
+        [Parameter()]
+        [System.String]
+        $TargetMode = 'SharePointOnline'
     )
 
-    $categoryNames = @{
-        1 = 'Simple'
-        2 = 'Moderate'
-        3 = 'Complex'
-        4 = 'Blocking'
-    }
+    $categoryNames = (Get-SPSTargetProfile -TargetMode $TargetMode).CategoryName
 
     $weights = if ($Scoring['Weights']) { $Scoring['Weights'] } else { @{} }
     $thresholds = if ($Scoring['Thresholds']) { $Scoring['Thresholds'] } else { @{} }

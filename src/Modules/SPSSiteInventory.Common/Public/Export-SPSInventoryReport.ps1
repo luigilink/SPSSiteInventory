@@ -116,6 +116,11 @@
         The number of site collections that a table page of a split HTML report holds at most,
         from 50 to 5000. Defaults to 500.
 
+        .PARAMETER TargetMode
+        SharePointOnline (the default) or SharePointOnPrem, from the TargetMode setting. The HTML
+        report uses it for the names of the categories and the framing, and the manifest records it
+        (Summary.TargetMode). Any other value is rejected before a file is written.
+
         .EXAMPLE
         Export-SPSInventoryReport -InputObject $scored -OutputFolder C:\Inventory
     #>
@@ -195,8 +200,15 @@
         [Parameter()]
         [ValidateRange(50, 5000)]
         [System.Int32]
-        $HtmlRowsPerPage = 500
+        $HtmlRowsPerPage = 500,
+
+        [Parameter()]
+        [System.String]
+        $TargetMode = 'SharePointOnline'
     )
+
+    # Fail before any file is written when the mode is not one of the two.
+    $targetProfile = Get-SPSTargetProfile -TargetMode $TargetMode
 
     if (-not (Test-Path -Path $OutputFolder)) {
         $null = New-Item -Path $OutputFolder -ItemType Directory -Force
@@ -374,6 +386,7 @@
         Alert = @($alerts)
         ExcludedPersonalSiteCount = $ExcludedPersonalSiteCount
         ExcludedSiteMasterCount = $ExcludedSiteMasterCount
+        TargetMode = $targetProfile.TargetMode
     }
     $contentTypesCsvPath = $null
     $contentTypesJsonPath = $null
@@ -526,6 +539,7 @@
             AlertCount = @($alerts).Count
             ExcludedPersonalSites = $ExcludedPersonalSiteCount
             ExcludedSiteMasters = $ExcludedSiteMasterCount
+            TargetMode = $targetProfile.TargetMode
             BcsInventoryComplete = if ($PSBoundParameters.ContainsKey('BcsApplications')) { $BcsInventoryComplete } else { $null }
         }
         Files = [PSCustomObject]@{

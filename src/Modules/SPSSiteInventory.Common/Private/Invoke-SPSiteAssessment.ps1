@@ -38,11 +38,16 @@
 
         [Parameter()]
         [System.Collections.IDictionary]
-        $SharePointAlertSettings = @{}
+        $SharePointAlertSettings = @{},
+
+        [Parameter()]
+        [System.String]
+        $TargetMode = 'SharePointOnline'
     )
 
-    # Fail before any site is read when the alert settings are invalid.
+    # Fail before any site is read when the alert settings or the target mode are invalid.
     $null = Get-SPSSharePointAlertOption -Settings $SharePointAlertSettings
+    $null = Get-SPSTargetProfile -TargetMode $TargetMode
 
     $contentTypes = [System.Collections.Generic.List[object]]::new()
     $managedMetadataLists = [System.Collections.Generic.List[object]]::new()
@@ -120,7 +125,7 @@
                     $sharePointAlerts.Add($sharePointAlert)
                 }
 
-                $result = Measure-SPSSiteComplexity -Signals $signals -Scoring $Scoring
+                $result = Measure-SPSSiteComplexity -Signals $signals -Scoring $Scoring -TargetMode $TargetMode
                 $customizationComplete = $true
                 if ($null -ne $signals['CustomizationInventoryComplete']) {
                     $customizationComplete = [bool]$signals['CustomizationInventoryComplete']

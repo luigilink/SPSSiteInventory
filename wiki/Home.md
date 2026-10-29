@@ -10,6 +10,8 @@ Use this toolkit when:
 - You want to know which sites are **quick wins** (lift & shift) and which carry **custom code** (full-trust solutions, workflows, event receivers) that requires a project.
 - You need an inventory that is **reproducible, versionable and diff-friendly**, not a one-off GUI export.
 
+The same inventory can also answer another question, with `TargetMode = 'SharePointOnPrem'`: **is each site collection ready for the modern experience on the farm where it runs, and what does it take to modernize it?** The categories then read *Modern-ready*, *Light remediation*, *Rebuild (SPFx)* and *Blocked*, and the scoring does not treat full-trust code as a blocker but as code to rebuild with SPFx. See [TargetMode](Configuration#targetmode-section).
+
 It complements Microsoft's **SPMT scan** (content + migration risks): SPSSiteInventory adds the **business-complexity categorization** and the **WSP↔site correlation** that the built-in tooling does not provide.
 
 ## How it works

@@ -47,6 +47,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   never loaded, and the XML is read with the DTD switched off. See the wiki page "Inspecting WSP
   packages (offline)". (#21)
 
+- A target mode, `TargetMode`, so that the same inventory can plan the modernization of a farm
+  (the classic experience to the modern one, where the site collections run) and not only a
+  migration to SharePoint Online. `SharePointOnline` is the default, also when the setting is
+  missing, and nothing changes for a settings file of an earlier version: its reports are the same
+  as before. `SharePointOnPrem` names the four categories *Modern-ready*, *Light remediation*,
+  *Rebuild (SPFx)* and *Blocked* (their numbers, 1 to 4, and the scores do not change), names the
+  pages of a split HTML report and the default waves after them, words the HTML report as a
+  modernization report (header, wave plan, the meaning of the high-severity signals), and does not
+  raise the log warnings that are about the blockers of a migration. The mode is recorded in the
+  manifest (`Summary.TargetMode`). The mode is validated when the settings are loaded: a value that
+  is not one of the two names stops the run with the name of the file. A new example file,
+  `inventory-settings.onprem.example.psd1`, ships the scoring of that question: full-trust code and
+  custom farm features, which still run on the farm, weigh as code to rebuild with SPFx and no
+  longer block, `InfoPathFormCount` stays the one blocker, and what belongs to a migration (FBA,
+  unsupported templates, NoAccess locks, IRM, external lists, the term store, the subsite
+  structure) weighs nothing, while it is still collected and reported. The readiness check
+  compares the settings with the example of their mode. See the wiki page "Configuration".
+  The signals that only matter for the modern experience are not collected yet. (#25)
+
 ### Changed
 
 - The risk indicators of the HTML report are a ranked list instead of a grid of 33 cards, 16 of
