@@ -14,7 +14,7 @@ and adjust it. No client-specific value ships in the repository.
 | `CustomSolutionPrefix` | string[] | **Optional override.** Case-insensitive name prefixes that force a farm solution (WSP) to be treated as custom. Custom solutions are auto-detected by default (see below), so this is usually left empty. |
 | `AutoDetectCustomSolutions` | bool | Optional (default `$true`). When true, a solution is custom unless its name matches a known Microsoft / out-of-the-box marker. Set `$false` to rely only on `CustomSolutionPrefix`. |
 | `KnownMicrosoftSolutionPrefix` | string[] | Optional extra name prefixes to treat as Microsoft / out-of-the-box during auto-detection (e.g. a known vendor package). |
-| `OutputFolder` | string | Folder where the CSV/JSON reports are written. |
+| `OutputFolder` | string | Optional. Folder where the reports (CSV, JSON and HTML) are written. Empty by default, and when the setting is missing: the reports go to a `Reports` folder next to `Invoke-SPSSiteInventory.ps1`, as the logs go to a `Logs` folder next to it. The folder is created when the run starts, so a folder that cannot be created stops the run before the scan, not when the reports are written. A relative path resolves against the current folder. |
 | `LogRetentionDays` | int | Days of run logs kept under the `Logs` folder. |
 | `LargeContentThresholds` | hashtable | Thresholds for large-content parity signals (large site/list/view, checked-out files, file versions). Optional; defaults apply when omitted. |
 | `TemplateParity` | hashtable | Template compatibility and language rules (supported/unsupported/review mapping, optional language allow-list). Optional; built-in defaults apply when omitted. |

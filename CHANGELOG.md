@@ -5,6 +5,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `OutputFolder` is optional and empty in the example settings files. When it is empty, or missing, the
+  reports go to a `Reports` folder next to `Invoke-SPSSiteInventory.ps1`, as the logs go to a `Logs`
+  folder next to it; a value that is set keeps its behavior, so a settings file of an earlier version
+  is not affected. The orchestrator creates the folder when the run starts and says which one it is, so
+  that a folder that cannot be created stops the run before the scan and not when the reports are
+  written. The readiness check looks at the same folder, and an empty `OutputFolder` is no longer an
+  error. (#126)
+
 ## [2.1.0] - 2026-10-30
 
 ### Added

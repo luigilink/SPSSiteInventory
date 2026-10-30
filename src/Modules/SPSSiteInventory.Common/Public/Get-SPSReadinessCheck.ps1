@@ -37,6 +37,12 @@
         the same in the two modes. Without this path, or in the default mode, ExampleConfigPath
         is used.
 
+        .PARAMETER ScriptRoot
+        The folder of Invoke-SPSSiteInventory.ps1 (typically $PSScriptRoot of the readiness script,
+        which is next to it). When OutputFolder is empty, or missing, the reports go to a Reports
+        folder there, and that is the folder that the 'Output folder' check looks at. The current
+        folder when it is omitted, as for the logs.
+
         .PARAMETER SkipSharePoint
         Skips the checks that need SharePoint, to check the host and the settings file on a
         machine that is not a farm server.
@@ -59,6 +65,10 @@
         [Parameter()]
         [System.String]
         $OnPremExampleConfigPath,
+
+        [Parameter()]
+        [System.String]
+        $ScriptRoot,
 
         [Parameter()]
         [switch]
@@ -138,15 +148,18 @@
     }
 
     if ($null -ne $settings) {
-        $outputFolder = [System.String]$settings['OutputFolder']
-        if ([System.String]::IsNullOrWhiteSpace($outputFolder)) {
-            Add-ReadinessResult -Section 'Settings' -Name 'Output folder' -Status 'Error' -Detail 'OutputFolder is not set, so the reports could not be written at the end of the scan.'
+        # An empty OutputFolder is a choice: the reports go to a Reports folder next to the script.
+        $outputChoice = Resolve-SPSOutputFolder -OutputFolder ([System.String]$settings['OutputFolder']) -ScriptRoot $ScriptRoot
+        $outputFolder = $outputChoice.Path
+        $outputNote = ''
+        if ($outputChoice.IsDefault) {
+            $outputNote = if ([System.String]::IsNullOrWhiteSpace($ScriptRoot)) { ' (OutputFolder is empty: the default Reports folder of the current folder)' } else { ' (OutputFolder is empty: the default Reports folder next to the script)' }
         }
-        elseif (-not (Test-Path -Path $outputFolder -IsValid)) {
+        if (-not (Test-Path -Path $outputFolder -IsValid)) {
             Add-ReadinessResult -Section 'Settings' -Name 'Output folder' -Status 'Error' -Detail ("'{0}' is not a valid path." -f $outputFolder)
         }
         elseif (Test-Path -LiteralPath $outputFolder -PathType Container) {
-            Add-ReadinessResult -Section 'Settings' -Name 'Output folder' -Status 'OK' -Detail $outputFolder
+            Add-ReadinessResult -Section 'Settings' -Name 'Output folder' -Status 'OK' -Detail ($outputFolder + $outputNote)
         }
         elseif (Test-Path -LiteralPath $outputFolder -PathType Leaf) {
             Add-ReadinessResult -Section 'Settings' -Name 'Output folder' -Status 'Error' -Detail ("'{0}' is a file, not a folder." -f $outputFolder)
@@ -163,7 +176,7 @@
                 Add-ReadinessResult -Section 'Settings' -Name 'Output folder' -Status 'Error' -Detail ("'{0}' cannot be created: '{1}' is a file, not a folder." -f $outputFolder, $ancestor)
             }
             else {
-                Add-ReadinessResult -Section 'Settings' -Name 'Output folder' -Status 'OK' -Detail ("'{0}' does not exist yet; the scan creates it." -f $outputFolder)
+                Add-ReadinessResult -Section 'Settings' -Name 'Output folder' -Status 'OK' -Detail (("'{0}' does not exist yet; the scan creates it." -f $outputFolder) + $outputNote)
             }
         }
 

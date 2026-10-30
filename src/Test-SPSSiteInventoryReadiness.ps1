@@ -8,8 +8,9 @@
 
     - the toolkit module, the PowerShell edition and version (Windows PowerShell 5.1 is
       expected) and whether the session is elevated;
-    - the settings file: that it exists and loads, that its output folder is usable, and which
-      blocking signals and weights of the example configuration it does not have yet;
+    - the settings file: that it exists and loads, that its output folder is usable (the Reports
+      folder next to the script when OutputFolder is empty), and which blocking signals and
+      weights of the example configuration it does not have yet;
     - SharePoint: whether it is installed (and its build), whether the SharePoint commands
       load, whether the farm can be reached, whether the account is a farm administrator and
       whether the web applications to scan exist.
@@ -58,7 +59,7 @@ Import-Module -Name (Join-Path -Path $PSScriptRoot -ChildPath 'Modules\SPSSiteIn
 $exampleConfigPath = Join-Path -Path $PSScriptRoot -ChildPath 'config\inventory-settings.example.psd1'
 $onPremExampleConfigPath = Join-Path -Path $PSScriptRoot -ChildPath 'config\inventory-settings.onprem.example.psd1'
 try {
-    $check = @(Get-SPSReadinessCheck -ConfigPath $ConfigPath -ExampleConfigPath $exampleConfigPath -OnPremExampleConfigPath $onPremExampleConfigPath -SkipSharePoint:$SkipSharePoint)
+    $check = @(Get-SPSReadinessCheck -ConfigPath $ConfigPath -ExampleConfigPath $exampleConfigPath -OnPremExampleConfigPath $onPremExampleConfigPath -ScriptRoot $PSScriptRoot -SkipSharePoint:$SkipSharePoint)
 }
 catch {
     # No check ran: do not show an empty report that says Ready.
