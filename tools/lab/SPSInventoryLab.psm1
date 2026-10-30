@@ -657,7 +657,7 @@ function Get-SPSLabScenario {
 
     $scenario.Add([PSCustomObject]@{
             Name        = 'publishing'
-            Description = 'The SharePoint Server Publishing features, and a page when the publishing API allows it.'
+            Description = 'The SharePoint Server Publishing features, and a page when the publishing API allows it. The asset libraries that the features create draw their views with a style sheet of SharePoint, so the site has no XSLT list view.'
             Template    = 'STS#0'
             Provision   = {
                 param ($Context)
@@ -685,6 +685,7 @@ function Get-SPSLabScenario {
             Expect      = @(
                 (Get-SPSLabExpectation PublishingInfrastructureEnabled eq $true)
                 (Get-SPSLabExpectation PublishingWebCount ge 1)
+                (Get-SPSLabExpectation XsltListViewCount eq 0)
                 (Get-SPSLabExpectation PublishingPageCount ge 1 -Info)
                 (Get-SPSLabExpectation -Alert 'PublishingSite')
             )
@@ -692,11 +693,12 @@ function Get-SPSLabScenario {
 
     $scenario.Add([PSCustomObject]@{
             Name        = 'template-blog'
-            Description = 'A blog site: its template is mapped to Review.'
+            Description = 'A blog site: its template is mapped to Review, and the views of its web parts, which SharePoint draws with its own style sheet, are not XSLT list views.'
             Template    = 'BLOG#0'
             Provision   = { param ($Context) $null = $Context }
             Expect      = @(
                 (Get-SPSLabExpectation TemplateCompatibility eq 'Review')
+                (Get-SPSLabExpectation XsltListViewCount eq 0)
                 (Get-SPSLabExpectation -Alert 'TemplateCompatibilityReview')
             )
         })

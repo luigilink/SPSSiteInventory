@@ -41,11 +41,34 @@ Describe 'Test-SPSXsltListView' {
         Test-View -View ([PSCustomObject]@{ XslLink = $Link; Xsl = '' }) | Should -BeFalse
     }
 
+    # SharePoint looks a bare file name up in its own XSL folder: the asset library and the web parts of a
+    # blog name AssetPicker.xsl and blog.xsl without a path, like every view names main.xsl.
+    It 'does not report a view whose XslLink is <Link>, a style sheet that SharePoint ships' -ForEach @(
+        @{ Link = 'blog.xsl' }
+        @{ Link = 'AssetPicker.xsl' }
+        @{ Link = 'groupboard.xsl' }
+        @{ Link = '/_layouts/15/xsl/blog.xsl' }
+        @{ Link = '/_layouts/xsl/main.xsl' }
+        @{ Link = '/_LAYOUTS/15/XSL/Blog.XSL' }
+        @{ Link = '_layouts/15/xsl/main.xsl' }
+        @{ Link = '~site/_layouts/15/xsl/main.xsl' }
+        @{ Link = '/sites/team/_layouts/15/xsl/main.xsl' }
+        @{ Link = '\_layouts\15\xsl\main.xsl' }
+    ) {
+        Test-View -View ([PSCustomObject]@{ XslLink = $Link; Xsl = '' }) | Should -BeFalse
+    }
+
     It 'reports a view whose XslLink is <Link>' -ForEach @(
         @{ Link = '/sites/team/Style Library/XSL Style Sheets/custom.xsl' }
-        @{ Link = 'custom.xsl' }
         @{ Link = '~sitecollection/Style Library/brand.xsl' }
         @{ Link = '/Style Library/main.xsl' }
+        @{ Link = '/_layouts/15/MyProject/custom.xsl' }
+        @{ Link = '/_layouts/15/xsl/sub/custom.xsl' }
+        @{ Link = '/_layouts/15/xslfiles/custom.xsl' }
+        @{ Link = '/layouts/15/xsl/custom.xsl' }
+        @{ Link = '/Style Library/my_layouts/xsl/custom.xsl' }
+        @{ Link = '..\Style Library\custom.xsl' }
+        @{ Link = 'https://cdn.contoso.com/xsl/custom.xsl' }
     ) {
         Test-View -View ([PSCustomObject]@{ XslLink = $Link; Xsl = '' }) | Should -BeTrue
     }
@@ -53,6 +76,7 @@ Describe 'Test-SPSXsltListView' {
     It 'reports a view that keeps its own XSL' {
         Test-View -View ([PSCustomObject]@{ XslLink = 'main.xsl'; Xsl = '<xsl:stylesheet version="1.0"></xsl:stylesheet>' }) | Should -BeTrue
         Test-View -View ([PSCustomObject]@{ XslLink = $null; Xsl = '<xsl:stylesheet />' }) | Should -BeTrue
+        Test-View -View ([PSCustomObject]@{ XslLink = 'blog.xsl'; Xsl = '<xsl:stylesheet />' }) | Should -BeTrue
     }
 
     It 'does not report a view whose XSL is blank' {
@@ -77,7 +101,7 @@ Describe 'Test-SPSXsltListView' {
     }
 
     It 'returns a boolean' {
-        Test-View -View ([PSCustomObject]@{ XslLink = 'custom.xsl' }) | Should -BeOfType [bool]
+        Test-View -View ([PSCustomObject]@{ XslLink = '/Style Library/custom.xsl' }) | Should -BeOfType [bool]
         Test-View -View ([PSCustomObject]@{ XslLink = 'main.xsl' }) | Should -BeOfType [bool]
     }
 }

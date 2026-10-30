@@ -471,6 +471,18 @@ Describe 'The scenarios of the modern-readiness signals' {
         }
     }
 
+    It 'expect no XSLT list view on a blog and on a Publishing site, whose views SharePoint draws with its own style sheets' -ForEach @(
+        @{ Name = 'template-blog' }
+        @{ Name = 'publishing' }
+    ) {
+        $scenario = $script:Scenario | Where-Object { $_.Name -eq $Name }
+        $expectation = @($scenario.Expect | Where-Object { $_.Property -eq 'XsltListViewCount' })
+        $expectation | Should -HaveCount 1
+        $expectation[0].Operator | Should -Be 'eq'
+        $expectation[0].Value | Should -Be 0
+        $expectation[0].Info | Should -BeFalse
+    }
+
     It 'meet their expectations with the values that the inventory writes' {
         foreach ($name in $script:ModernScenario) {
             $scenario = $script:Scenario | Where-Object { $_.Name -eq $name }

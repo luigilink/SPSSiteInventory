@@ -149,8 +149,9 @@
 
         The modern-readiness signals say what keeps a site collection in the classic experience.
         AlternateCssUrlCount counts the webs that set an alternate CSS URL. XsltListViewCount counts
-        the list views that render with a customized XSLT (an XslLink other than main.xsl, or an
-        Xsl of their own), leaving out personal views and the views of hidden lists.
+        the list views that render with a customized XSLT (an XslLink that is not a style sheet that
+        SharePoint ships, such as a file of the Style Library, or an Xsl of their own), leaving out
+        personal views, hidden views and the views of hidden lists.
         ScriptWebPartCount counts the Script Editor web parts and the Content Editor web parts that
         embed a script or link to a file, read on the home page of each web and on the pages of
         its Site Pages and Pages libraries, up to MaxItemsForWebPartScanPerLibrary pages in each
@@ -970,8 +971,9 @@
                                     throw "List views are unavailable on '$listTitle'."
                                 }
                                 foreach ($xsltView in $xsltViews) {
-                                    # A personal view belongs to one user, not to the design of the list.
-                                    if ([bool](Get-SPSPropertyValue -InputObject $xsltView -Name 'PersonalView')) {
+                                    # A personal view belongs to one user, and a hidden view is the one in which a web part keeps its
+                                    # settings (a blog has a dozen): neither is a view that somebody chooses and browses.
+                                    if ([bool](Get-SPSPropertyValue -InputObject $xsltView -Name 'PersonalView') -or [bool](Get-SPSPropertyValue -InputObject $xsltView -Name 'Hidden')) {
                                         continue
                                     }
                                     if (Test-SPSXsltListView -View $xsltView) {

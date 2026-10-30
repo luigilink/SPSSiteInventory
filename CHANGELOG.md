@@ -147,10 +147,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   modes; with the custom master page, which it already collected, and the publishing signals they
   say why a site collection is not in the modern experience. `AlternateCssUrlCount` counts the webs
   that set an alternate CSS URL, `XsltListViewCount` the list views that render with a customized
-  XSLT (a `XslLink` other than `main.xsl`, or an `Xsl`), `ScriptWebPartCount` the Script Editor web
-  parts and the Content Editor web parts that embed a script or link to a file, on the home page
-  of each web and on the pages of its Site Pages and Pages libraries (at most
-  `LargeContentThresholds.MaxItemsForWebPartScanPerLibrary` pages per library, 200 by default),
+  XSLT (a `XslLink` that is not a style sheet that SharePoint ships, or an `Xsl`; the personal views
+  and the hidden views, in which the web parts keep their settings, are left out),
+  `ScriptWebPartCount` the Script Editor web parts and the Content Editor web parts that embed a
+  script or link to a file, on the home page of each web and on the pages of its Site Pages and
+  Pages libraries (at most `LargeContentThresholds.MaxItemsForWebPartScanPerLibrary` pages per
+  library, 200 by default),
   `ClassicExperienceOptOutCount` the site collection and the webs that opted out of the modern list
   and library experience, and `ClassicExperienceListCount` the lists whose experience is set to
   classic, each with its examples. `ModernBlockerCount` and `ModernBlockers` bring them together:
