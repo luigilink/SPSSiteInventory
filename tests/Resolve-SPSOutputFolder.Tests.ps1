@@ -130,7 +130,7 @@ Describe 'Resolve-SPSOutputFolder' {
             $message = $_.Exception.Message
         }
 
-        $message | Should -BeLike ('*cannot be created: ' + $expected + '*')
+        $message | Should -BeLike ("*The report folder '*bad*name' cannot be created: " + $expected + '*')
         $message | Should -Not -Match 'afterwards'
     }
 

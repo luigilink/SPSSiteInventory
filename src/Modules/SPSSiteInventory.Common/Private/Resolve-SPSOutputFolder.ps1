@@ -66,16 +66,22 @@
         $path = $OutputFolder
     }
 
-    if ($Create -and -not (Test-Path -LiteralPath $path -PathType Container -ErrorAction SilentlyContinue)) {
+    if ($Create) {
         $reason = ''
+        $exists = $false
         try {
-            $null = New-Item -Path $path -ItemType Directory -Force -ErrorAction Stop
+            # Windows PowerShell raises its own error for a path that has illegal characters, even for Test-Path: it is caught with the others.
+            $exists = [System.Boolean](Test-Path -LiteralPath $path -PathType Container -ErrorAction SilentlyContinue)
+            if (-not $exists) {
+                $null = New-Item -Path $path -ItemType Directory -Force -ErrorAction Stop
+                # PowerShell does not always say so when it cannot create a folder (under a file, for example): the folder is looked for.
+                $exists = [System.Boolean](Test-Path -LiteralPath $path -PathType Container -ErrorAction SilentlyContinue)
+            }
         }
         catch {
             $reason = $_.Exception.Message
         }
-        # PowerShell does not always say so when it cannot create a folder (under a file, for example): the folder is looked for.
-        if (-not (Test-Path -LiteralPath $path -PathType Container -ErrorAction SilentlyContinue)) {
+        if (-not $exists) {
             if ([System.String]::IsNullOrEmpty($reason)) {
                 $reason = 'the folder does not exist afterwards, so a part of the path is probably a file.'
             }
