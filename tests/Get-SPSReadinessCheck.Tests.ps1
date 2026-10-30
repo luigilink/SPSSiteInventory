@@ -230,13 +230,79 @@ Describe 'Get-SPSReadinessCheck' {
     }
 
     Context 'the output folder' {
-        It 'is an error when OutputFolder is not set, because the scan would fail when it writes the reports' {
+        It 'is OK, and says that it is the default, when OutputFolder is empty and the Reports folder next to the script exists' {
+            $root = Join-Path -Path $TestDrive -ChildPath 'toolkit-a'
+            New-Item -Path (Join-Path -Path $root -ChildPath 'Reports') -ItemType Directory -Force | Out-Null
+            $path = Write-TestSettings -Name 'emptyoutput.psd1' -Body (Get-SettingsBody -OutputFolderLine "OutputFolder = ''")
+
+            $result = Get-TestResult -Check @(Get-SPSReadinessCheck -ConfigPath $path -ScriptRoot $root) -Name 'Output folder'
+
+            $result.Status | Should -Be 'OK'
+            $result.Detail | Should -Be ((Join-Path -Path $root -ChildPath 'Reports') + ' (OutputFolder is empty: the default Reports folder next to the script)')
+        }
+
+        It 'is OK, and creates nothing, when OutputFolder is empty and the Reports folder next to the script does not exist yet' {
+            $root = Join-Path -Path $TestDrive -ChildPath 'toolkit-b'
+            New-Item -Path $root -ItemType Directory -Force | Out-Null
+            $path = Write-TestSettings -Name 'emptyoutput2.psd1' -Body (Get-SettingsBody -OutputFolderLine "OutputFolder = ''")
+
+            $result = Get-TestResult -Check @(Get-SPSReadinessCheck -ConfigPath $path -ScriptRoot $root) -Name 'Output folder'
+
+            $result.Status | Should -Be 'OK'
+            $result.Detail | Should -Match 'does not exist yet; the scan creates it'
+            $result.Detail | Should -Match 'OutputFolder is empty: the default Reports folder next to the script'
+            Test-Path -LiteralPath (Join-Path -Path $root -ChildPath 'Reports') | Should -BeFalse
+        }
+
+        It 'is the same when OutputFolder is missing from the settings file' {
+            $root = Join-Path -Path $TestDrive -ChildPath 'toolkit-c'
+            New-Item -Path $root -ItemType Directory -Force | Out-Null
             $path = Write-TestSettings -Name 'nooutput.psd1' -Body (Get-SettingsBody -OutputFolderLine '')
 
-            $result = Get-TestResult -Check @(Get-SPSReadinessCheck -ConfigPath $path) -Name 'Output folder'
+            $result = Get-TestResult -Check @(Get-SPSReadinessCheck -ConfigPath $path -ScriptRoot $root) -Name 'Output folder'
+
+            $result.Status | Should -Be 'OK'
+            $result.Detail | Should -Match ([regex]::Escape((Join-Path -Path $root -ChildPath 'Reports')))
+            $result.Detail | Should -Match 'OutputFolder is empty'
+        }
+
+        It 'looks at the Reports folder of the current folder when the script root is not given, and says so' {
+            $current = Join-Path -Path $TestDrive -ChildPath 'toolkit-d'
+            New-Item -Path $current -ItemType Directory -Force | Out-Null
+            $path = Write-TestSettings -Name 'nooutput2.psd1' -Body (Get-SettingsBody -OutputFolderLine '')
+
+            Push-Location -Path $current
+            try {
+                $result = Get-TestResult -Check @(Get-SPSReadinessCheck -ConfigPath $path) -Name 'Output folder'
+            }
+            finally {
+                Pop-Location
+            }
+
+            $result.Status | Should -Be 'OK'
+            $result.Detail | Should -Match 'the default Reports folder of the current folder'
+        }
+
+        It 'is an error when the Reports folder next to the script is a file, because the scan could not write the reports' {
+            $root = Join-Path -Path $TestDrive -ChildPath 'toolkit-e'
+            New-Item -Path $root -ItemType Directory -Force | Out-Null
+            Set-Content -Path (Join-Path -Path $root -ChildPath 'Reports') -Value 'x'
+            $path = Write-TestSettings -Name 'emptyoutput3.psd1' -Body (Get-SettingsBody -OutputFolderLine "OutputFolder = ''")
+
+            $result = Get-TestResult -Check @(Get-SPSReadinessCheck -ConfigPath $path -ScriptRoot $root) -Name 'Output folder'
 
             $result.Status | Should -Be 'Error'
-            $result.Detail | Should -Match 'OutputFolder is not set'
+            $result.Detail | Should -Match 'is a file, not a folder'
+        }
+
+        It 'does not say that it is the default when OutputFolder is set, and ignores the script root' {
+            $root = Join-Path -Path $TestDrive -ChildPath 'toolkit-f'
+            New-Item -Path $root -ItemType Directory -Force | Out-Null
+
+            $result = Get-TestResult -Check @(Get-SPSReadinessCheck -ConfigPath $script:SettingsPath -ScriptRoot $root) -Name 'Output folder'
+
+            $result.Status | Should -Be 'OK'
+            $result.Detail | Should -Be $script:ReportsFolder
         }
 
         It 'is OK when the folder exists' {

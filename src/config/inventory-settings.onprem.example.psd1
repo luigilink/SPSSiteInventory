@@ -51,8 +51,9 @@
     # auto-detection (for example a known vendor package that should not count as custom).
     # KnownMicrosoftSolutionPrefix = @()
 
-    # Folder where the CSV/JSON reports are written.
-    OutputFolder = 'C:\SPSSiteInventory\Reports'
+    # Folder where the reports (CSV, JSON and HTML) are written. Leave it empty to write them in a
+    # Reports folder next to Invoke-SPSSiteInventory.ps1, as the logs go to a Logs folder next to it.
+    OutputFolder = ''
 
     # Days of run logs kept under the Logs folder.
     LogRetentionDays = 90

@@ -1,133 +1,143 @@
 # SPSSiteInventory - Release Notes
 
-## [2.0.0] - 2026-10-28
+## [2.1.0] - 2026-10-30
 
-This release brings the scans of the SharePoint Migration Assessment Tool (SMAT, out of
-support since 1 October 2026) into the inventory and says what to do about each finding: every
-risk becomes an alert with a severity, a remediation hint and a Microsoft Learn reference,
-and the advice follows what SharePoint Online has retired instead of repeating the older SMAT
-pages. SPSSiteInventory is still read-only and 100% generic (no client-specific value ships
-in the repository).
+This release adds a second question to the inventory. Besides "can this site collection move to
+SharePoint Online?", it can now answer "is it ready for the modern experience on the farm where it
+runs, and what does it take to modernize it?", with a target mode, the signals that keep a site
+collection in the classic experience, and a report that speaks of modernization. It also brings
+the last SMAT scans that were missing (Secure Store, audience targeting, site notebooks, profile
+property mappings and large Excel files), an offline inspection of WSP packages that needs no farm,
+a ranked list of risk indicators, an HTML report that splits itself on a very large farm, and the
+fixes for the known issues of 2.0.0. SPSSiteInventory is still read-only and 100% generic (no
+client-specific value ships in the repository).
 
-It is a major release because the reports and the example configuration change. If you parse
-the files with a script, or compare them with the ones of 1.1.0, read "Upgrading from 1.x"
-below first.
+It is a minor release: no public function lost a parameter, and the settings file of 2.0.x keeps
+working unchanged. The reports gain columns, files and manifest fields, and a few results change
+because bugs were fixed: read "Upgrading from 2.0.x" below.
 
 ### Highlights
 
-- **SMAT scans in the inventory.** The signals that matter for a move to SharePoint Online
-  are collected from the SharePoint object model, per site collection: large sites, lists,
-  list views, checked-out files and file versions; workflows and their running instances;
-  site templates and languages; add-ins; publishing sites, page layouts and customized pages;
-  custom permission levels, e-mail enabled lists, browser file handling and web application
-  policies; managed metadata columns and the term sets they use; external lists and Business
-  Connectivity Services applications; SharePoint alerts; IRM-enabled lists and site locks.
-  Web applications also report their authentication zones (FBA), and content types are inventoried.
-  The thresholds are configurable and the long scans are capped, so a run stays predictable.
-- **Risk alerts with a remediation.** One catalog gives every alert its severity, an
-  explanation, a remediation hint and a Microsoft Learn reference, so the same signal always
-  reads the same. The guidance follows what SharePoint Online has retired, for SharePoint
-  2013 workflows, add-ins, Business Connectivity Services, InfoPath Forms Services and
-  SharePoint Alerts. The alerts go to a new `-alerts-` CSV and JSON and to an "Alerts and
-  remediation" section of the HTML report, and the
-  [Alerts and remediation](https://github.com/luigilink/SPSSiteInventory/wiki/Alerts) wiki page
-  documents each of them.
-- **A report pack and an HTML report made to be read.** A modular JSON report pack (sites,
-  authentication, workflows, apps, publishing, permissions, IRM and locks, large content and
-  alerts) comes with a manifest. Content types, managed metadata, external lists, BCS
-  applications and SharePoint alerts get their own CSV and JSON files. The HTML report shows one
-  compact row per site collection, worst first, that opens to list the signals the site
-  collection raises, with a search box and category filters. The content types are summarized
-  and the other long tables are limited to 200 rows, so the file stays small on a large farm
-  (about 5 MB for 3,000 site collections).
-- **Personal sites and site masters are left out.** My Sites and the hidden site masters that
-  SharePoint creates buried the site collections that are worth migrating, so a scan now leaves
-  them out and says how many in the log, the HTML summary and the manifest. The new `Scope`
-  settings bring them back.
-- **Safer files.** The CSV files neutralize spreadsheet formulas (CSV injection): text typed by
-  the users of the farm is no longer read as a formula when an administrator opens a file in a
-  spreadsheet. The [usage page](https://github.com/luigilink/SPSSiteInventory/wiki/Usage) explains
-  the limits of this protection. The login names of the owners of SharePoint alerts are
-  personal data: the scan says so, the HTML report never carries them, and
-  `SharePointAlerts.IncludeUserLogin` leaves them out of the files too.
-- **Scans that say what they could not read.** A web application, site, list or alert that
-  cannot be read is reported and marks the record as partial, instead of showing zero or
-  nothing; an unknown storage value is no longer reported as 0. The progress messages are kept
-  in the transcript.
-- **A readiness check that says what to fix.** `Test-SPSSiteInventoryReadiness.ps1` prints one
-  line per check (`[ OK ]`, `[WARN]`, `[ERR ]`, `[SKIP]`) and a verdict, and exits with code 1
-  on an error. It also checks that the session is elevated, that the settings file and its
-  output folder are usable, that the farm and the web applications to scan can be reached, and
-  which blocking signals and weights an older settings file lacks.
-- **Subsite analysis.** Each site reports `SubsiteCount`, `MaxSubsiteDepth` and
-  `SubsiteExamples`, and a `Low` alert, `Subsites`, explains why a large or deep hierarchy is a
-  restructuring topic for SharePoint Online, never a blocker.
-- **The classic customization signals are columns.** `EventReceivers`, `CustomMasterPage`,
-  `SandboxSolutions`, `UniquePermissionsCount` and `UsesCustomFarmFeature` were scored since
-  1.0.0 but only visible in the `Reasons` text, and not at all when their weight was 0. They are
-  now in the CSV, the JSON and the details of each site collection in the HTML report; scores and
-  categories are unchanged.
+- **A target mode to modernize a farm in place.** `TargetMode = 'SharePointOnPrem'` (the default,
+  also when the setting is missing, stays `SharePointOnline`) names the four categories
+  *Modern-ready*, *Light remediation*, *Rebuild (SPFx)* and *Blocked*, words the HTML report and the
+  waves as a modernization plan, and has an alert catalog of its own: what only matters for a
+  migration to SharePoint Online is `Low` and says so, and the InfoPath forms and the SharePoint
+  2010 workflows stay `High`, with the date from which SharePoint Server Subscription Edition no
+  longer supports them. A new example file, `inventory-settings.onprem.example.psd1`, ships the
+  scoring of that question: full-trust code still runs on the farm, so it weighs as code to rebuild
+  with the SharePoint Framework and no longer blocks. A *Modern experience readiness* section of
+  the HTML report counts the site collections that have a blocker, and how many have each kind.
+- **What keeps a site collection in the classic experience.** In both modes the inventory counts
+  the webs that set an alternate CSS URL, the list views that render with a customized XSLT, the
+  Script Editor and Content Editor web parts that embed a script, the site collections and webs
+  that opted out of the modern list experience, and the lists forced to the classic experience.
+  `ModernBlockerCount` and `ModernBlockers` bring them together, and alerts say what to do about
+  each kind. A setting that cannot be read marks the site collection partial: it is never taken for
+  a site without the signal.
+- **The remaining SMAT scans.** The Secure Store target applications of the farm
+  (`Get-SPSSecureStoreApplication`), the list items that target an audience, the site notebooks,
+  the profile property mappings of the User Profile service (`Get-SPSProfilePropertyMapping`) with
+  the customized profile page of the My Site host, and the Excel workbooks that SharePoint Online
+  does not open in the browser. Each has its alerts (13 new alert types, 50 in all), its place in
+  the reports and the advice of its SMAT page. The SMAT scan "Long OneDrive URLs" is not covered,
+  by decision: see the `Scope` section of the
+  [Configuration](https://github.com/luigilink/SPSSiteInventory/wiki/Configuration) wiki page.
+- **Offline inspection of WSP packages.** `Get-SPSSolutionPackageInfo` and
+  `Export-SPSSolutionPackageReport` read a WSP with no farm and no SharePoint command. They report
+  the strong name of every assembly (a package is custom or Microsoft on its assemblies, not on the
+  name of the solution, and a token only counts when the signature is valid), the features even
+  when the solution is not deployed, the receivers, where the assemblies go, the safe controls, the
+  code access security policy and the .NET framework that the DLLs were built for, and match the
+  packages to the farm solutions. The package is not trusted: nothing in it is loaded. See
+  [Inspecting WSP packages offline](https://github.com/luigilink/SPSSiteInventory/wiki/Solution-Packages).
+- **A ranked list of risks, and an HTML report that scales.** The risk indicators are ranked bars
+  grouped by severity instead of a grid of cards, a click filters the inventory, and the alerts are
+  collapsible lines. Above `Report.HtmlSplitThreshold` site collections (3,000 by default) the
+  report becomes an entry page, with the summary, the indicators, the alerts and the wave plan, and
+  pages of at most `Report.HtmlRowsPerPage` site collections each (500): with 30,000 site
+  collections, 62 files, the largest 1.3 MB. The pages are self-contained and link to each other
+  with relative links, so the folder can be moved, zipped and sent.
+- **The known issues of 2.0.0 are fixed.** A site collection locked with `NoAccess` is reported as
+  `NoAccess` and blocks (#83); a Simple site collection whose assessment is partial waits in
+  `Needs review` instead of in the quick wins (#106); the My Site host no longer reports a custom
+  master page (#107); a site collection whose root web cannot be read no longer gets the template
+  `#` and the language 0 (#108).
+- **A lab that cleans up after itself.** The lab test script creates its site collections in a
+  content database of its own and removes it at the end (#88), and has a scenario for each new
+  signal.
 
-### Upgrading from 1.x
+### Upgrading from 2.0.x
 
-- **CSV files.** A text cell that starts with `=`, `+`, `-` or `@`, or with a tab, a carriage
-  return, a line feed or the full-width form of `=`, `+`, `-` and `@`, now begins with a single
-  quote, as OWASP recommends. A script that parses a CSV must remove it. The JSON files and
-  the HTML report keep the original text, and numbers, booleans and dates are not touched.
-- **Columns and files.** The site CSV and JSON gain a column for each new signal and for the five
-  classic customization signals above, and the run writes more files next to them (the manifest
-  lists them). Read the files by column name, not by position. The HTML report shows the number
-  of webs of a site collection, the root web included, as `Webs` (it was `Sub-webs`); the new
-  `SubsiteCount` counts the webs below the root web.
-- **Scope.** Personal sites and site masters are left out by default, so a run reports fewer
-  site collections than 1.x. Set `Scope.IncludePersonalSites` and `Scope.IncludeSiteMasters` to
-  `$true` in the settings to get the scope of 1.x. A settings file with no `Scope` section leaves
-  them out.
-- **HTML report.** The layout changed: the inventory table has a few columns and a row opens to
-  show the rest, the content types are summarized instead of listed (the `-contenttypes-` files
-  hold every row) and the long tables show at most 200 rows (`-MaxDetailRow` of
-  `ConvertTo-SPSInventoryHtml`). The CSV and JSON files are not affected.
-- **Scores on a server with a decimal comma.** In 1.x a signal that is not a whole number, above
-  all `SizeGB`, was read wrongly when the regional settings of the server use a decimal comma
-  (French, German, Spanish and others), so the size of a site collection did not count in its
-  score. Run the inventory again with 2.0.0: scores and categories can change.
-- **Readiness check.** `Test-SPSSiteInventoryReadiness.ps1` exits with code 1 when a check
-  fails, so it can gate an automated run, and returns an object only with `-PassThru`: it used to
-  return a small object of its own by default.
-- **Scoring.** The example configuration weights the new signals and blocks on more of them:
-  `HasFbaZone`, `IrmEnabledListCount`, `IsUnsupportedSiteTemplate`, `HasNoAccessLock` (a
-  `NoAccess` lock only: `ReadOnly` and `NoAdditions` locks are reported but not blocking) and
-  `ExternalListCount`. A configuration copied from it classifies more sites as Blocking than
-  1.1.0 did. Your own settings file is not rewritten and keeps working: only `Scoring` is
-  mandatory, the new sections (`LargeContentThresholds`, `TemplateParity`, `PermissionLevels`,
-  `SharePointAlerts`, `Scope`) fall back to their defaults, and the run warns when it finds one of these
-  blockers and your `Scoring.BlockingSignals` does not list it. Compare your file with
-  `inventory-settings.example.psd1` to adopt the new signals.
-- **Workflow counts.** Historical "previous version" workflow associations are no longer
-  counted, so the counts can be lower than with 1.1.0.
+- **Settings.** Nothing is required. The new settings are optional and fall back to their defaults:
+  `TargetMode`, the caps of `LargeContentThresholds` (`MaxItemsForWebPartScanPerLibrary`,
+  `LargeExcelFileSizeMB`, `MaxItemsForExcelFileScanPerLibrary`,
+  `MaxItemsForAudienceTargetingScanPerList` and `MaxItemsForNotebookScanPerLibrary`) and the
+  `Report` section (`HtmlSplitThreshold`, `HtmlRowsPerPage`). A signal that your file does not
+  weigh weighs nothing. The readiness check compares your file with the example of its mode and
+  lists what it lacks.
+- **Example configuration.** `inventory-settings.example.psd1` gives a small weight to three of the
+  new signals (`AlternateCssUrlCount` 0.5, `XsltListViewCount` 0.25, `ScriptWebPartCount` 0.5), so a
+  file copied from it can categorize a few site collections differently. A file of 2.0.x is not
+  affected.
+- **Files and manifest.** The site CSV and JSON gain a column for each new signal, and the run
+  writes more files: the `-collaboration-` JSON, and a CSV and a JSON for the Secure Store and for
+  the profile property mappings, which are read once for the farm. The manifest lists them and has
+  new fields (`Summary.TargetMode`, `Summary.SecureStoreInventoryComplete`,
+  `Summary.ProfileInventoryComplete`, `Files.InventoryHtmlPages`, and the paths of the new files).
+  They are additive: `ReportPackVersion` stays `1.0`. Read the files by column name, not by
+  position.
+- **HTML report.** The risk indicators are a ranked list, and a report of more than
+  `Report.HtmlSplitThreshold` site collections is several files: open the entry page, whose name is
+  that of the single file. `Report.HtmlSplitThreshold = 0` keeps one file, and
+  `ConvertTo-SPSInventoryHtml -FileName` returns the pages as objects (the report is still a string
+  without it).
+- **Results that change because of the fixes.** A site collection locked with `NoAccess` used to be
+  `Unknown`, partial and sometimes Simple: it is now `NoAccess`, raises the `NoAccessSite` alert
+  and blocks, so a farm that has such locks reports more Blocking site collections. A Simple site
+  collection whose assessment is partial leaves the quick wins for the `Needs review` bucket of
+  wave 0, and the wave plan has a `Partial` column. A root web that cannot be read leaves the
+  template and the language empty instead of `#` and 0. The My Site host no longer reports
+  `CustomMasterPage`, and a copy of `seattle.master` in another folder, or a master page such as
+  `contoso-v4.master`, is now reported. Run the inventory again to get them.
+- **Alerts.** The alert catalog grows from 37 to 50 types. The five alerts of the signals of the
+  modern experience (`AlternateCssUrl`, `XsltListViews`, `ScriptWebParts`, `ModernExperienceOptOut`
+  and `ClassicExperienceLists`) are raised in both modes, so a site collection can show alerts for
+  things that were there before and that 2.0.x did not look at.
+- **Permissions.** The Secure Store and the profile property mappings are read through the service
+  applications of the farm: the account that runs the inventory has to administer them (the farm
+  account does). Without the permission the report is partial, and the warning of the run says why.
+- **New public functions.** `Get-SPSSecureStoreApplication`, `Get-SPSProfilePropertyMapping`,
+  `Get-SPSSolutionPackageInfo` and `Export-SPSSolutionPackageReport`.
 
 ### Known issues
 
-- A site collection locked with `NoAccess` is reported as partial, with `SiteLockState`
-  `Unknown`, because SharePoint refuses to read its storage, solutions and webs ("Access to this
-  Web site has been blocked"). The `NoAccessSite` alert and the `HasNoAccessLock` blocker do not
-  fire for it on a real farm: look for that warning and for the `AssessmentPartial` alert. (#83)
-- A site collection whose inventory is partial is scored on what could be read, so it can be
-  categorized Simple and be in the first wave. Review the partial site collections (the status of
-  the row, the `AssessmentPartial` alert) before you plan the waves. (#106)
-- `CustomMasterPage` is reported for the My Site host. (#107)
-- A ranked list of risk indicators with collapsible alerts for the HTML report (#90) and a
-  report in several files for very large farms (#105) are planned for 2.1.0.
+- The Secure Store, profile property mapping, audience targeting and site notebook scans read
+  members of SharePoint objects that Microsoft documents only in part (what
+  `Get-SPSecureStoreApplication` returns, the connections of the User Profile service and the
+  non-public method that holds the mappings of an Active Directory import connection, the audience
+  manager, the file type of a notebook). They are tested with stand-ins, and the first run on a farm
+  settles them. When a member differs, the run log carries a warning that names it and the report
+  (the site collection, for the audience and notebook scans) is marked partial, apart from the case
+  where the service itself is not found (a farm without the Secure Store or the User Profile
+  service looks the same): the log then says that no proxy was found and the report is empty.
+  Please report the text of such a warning.
+- `JSLink`, the client-side rendering of the views and of the fields, is not collected yet: see
+  "What is not collected yet" in the
+  [Configuration](https://github.com/luigilink/SPSSiteInventory/wiki/Configuration) wiki page.
 
 ### Notes
 
-- Requires Windows PowerShell 5.1 (the SharePoint Server object model); do not use PowerShell 7.
-- Compatible with SharePoint Server 2016, 2019 and Subscription Edition.
+- The inventory requires Windows PowerShell 5.1 (the SharePoint Server object model); do not use
+  PowerShell 7. The offline inspection of WSP packages needs no farm: it runs on PowerShell 5.1 or
+  later, on any machine, with `expand.exe` on Windows or `cabextract` elsewhere.
+- Compatible with SharePoint Server 2016, 2019 and Subscription Edition. A SharePoint that has no
+  modern list experience, such as SharePoint Server 2016, has no list experience setting: the two
+  signals about it stay 0.
 - To test a release on a lab farm, the `tools/lab` folder of the repository (not part of this
   ZIP) builds one test site collection per signal and checks the reports. It writes to the farm,
   so use it on a lab only; see the
-  [Lab testing](https://github.com/luigilink/SPSSiteInventory/wiki/Lab-Testing) wiki page. This
-  release was run on a lab farm with these scripts before it was tagged; the scenarios that need
-  a deployed assembly, a SharePoint 2010 workflow template or Permissive browser file handling
-  stay manual.
+  [Lab testing](https://github.com/luigilink/SPSSiteInventory/wiki/Lab-Testing) wiki page. The
+  scenarios that need a deployed assembly, a SharePoint 2010 workflow template or Permissive
+  browser file handling stay manual.
 - See the [wiki](https://github.com/luigilink/SPSSiteInventory/wiki) for setup, configuration and usage.

@@ -5,8 +5,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+### Changed
 
+- `OutputFolder` is optional and empty in the example settings files. When it is empty, or missing, the
+  reports go to a `Reports` folder next to `Invoke-SPSSiteInventory.ps1`, as the logs go to a `Logs`
+  folder next to it; a value that is set keeps its behavior, so a settings file of an earlier version
+  is not affected. The orchestrator creates the folder when the run starts and says which one it is, so
+  that a folder that cannot be created stops the run before the scan and not when the reports are
+  written. The readiness check looks at the same folder, and an empty `OutputFolder` is no longer an
+  error. (#126)
+
+## [2.1.0] - 2026-10-30
+
+### Added
 - SMAT profile-migration parity. The new `Get-SPSProfilePropertyMapping` reads the profile property
   mappings of the User Profile service applications once for the farm, as the SMAT Custom Profile
   Property Mappings report does: one row per mapping, with the connection and its type, the profile
@@ -125,7 +136,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Windows, and a symbolic link or a junction is never followed. The DLLs are read as bytes and
   never loaded, and the XML is read with the DTD switched off. See the wiki page "Inspecting WSP
   packages (offline)". (#21)
-
 - A target mode, `TargetMode`, so that the same inventory can plan the modernization of a farm
   (the classic experience to the modern one, where the site collections run) and not only a
   migration to SharePoint Online. `SharePointOnline` is the default, also when the setting is
@@ -180,7 +190,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   many have each kind of blocker, and the 100 that have the most kinds), and the details of a site
   collection list its signals of the modern experience, in both modes. The wiki page "Alerts" documents
   the new alerts and the catalog of the mode. (#25)
-
 - The inventory counts the Excel workbooks that SharePoint Online does not open in the browser, as the
   SMAT scan "Large Excel Files" does. `LargeExcelFileCount` counts the `.xlsx` files of the document
   libraries (the system catalogs are skipped) that are at least `LargeContentThresholds.LargeExcelFileSizeMB`

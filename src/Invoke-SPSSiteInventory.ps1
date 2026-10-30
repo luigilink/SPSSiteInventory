@@ -16,7 +16,9 @@
        TargetMode = 'SharePointOnPrem' in the settings, the same four categories read as
        Modern-ready, Light remediation, Rebuild (SPFx) and Blocked;
     7. exports the scored inventory to CSV, JSON and a self-contained HTML report, and the
-       farm-solution map to its own CSV and JSON.
+       farm-solution map to its own CSV and JSON, in the OutputFolder of the settings, or in
+       a Reports folder next to this script when it is empty (the logs go to a Logs folder
+       next to it). The folder is created when the run starts.
 
     The tool is read-only: it never modifies the farm. Run it on a farm server, as the
     farm account, in an elevated Windows PowerShell 5.1 session.
@@ -56,6 +58,13 @@ try {
     } $(if ($settings.ContainsKey('TargetMode')) { $settings.TargetMode } else { 'SharePointOnline' })
     $targetMode = $targetProfile.TargetMode
     Add-SPSInventoryEvent -Message ("Target mode: {0} ({1})." -f $targetMode, $targetProfile.DisplayName) -Level Information
+
+    # The folder is created now, so that one that cannot be created stops the run before the scan and not when the reports are written.
+    $outputFolder = & $commonModule {
+        param ($Folder, $Root)
+        Resolve-SPSOutputFolder -OutputFolder $Folder -ScriptRoot $Root -Create
+    } $settings['OutputFolder'] $PSScriptRoot
+    Add-SPSInventoryEvent -Message ("Report folder: '{0}'{1}." -f $outputFolder.Path, $(if ($outputFolder.IsDefault) { ' (OutputFolder is empty: the Reports folder next to the script)' } else { '' })) -Level Information
 
     Import-SPSSharePointCommand
 
@@ -228,8 +237,8 @@ try {
         Add-SPSInventoryEvent -Message 'The SharePoint alerts files contain the login names of the alert owners, which are personal data. Set SharePointAlerts.IncludeUserLogin to $false in the settings to leave them out.' -Level Information
     }
 
-    $solutionOutput = Export-SPSSolutionReport -InputObject @($solutionMap) -OutputFolder $settings.OutputFolder -BaseName ('SPSSiteInventory-' + $settings.EnvName)
-    $output = Export-SPSInventoryReport -InputObject @($scored) -OutputFolder $settings.OutputFolder -BaseName ('SPSSiteInventory-' + $settings.EnvName) -EnvName $settings.EnvName -SolutionMap @($solutionMap) -ContentTypes $contentTypes -ManagedMetadataLists $managedMetadataLists -ExternalLists $externalLists -SharePointAlerts $sharePointAlerts -BcsApplications @($bcs.Applications) -BcsInventoryComplete ([bool]$bcs.Complete) -SecureStoreApplications @($secureStore.Applications) -SecureStoreInventoryComplete ([bool]$secureStore.Complete) -ProfilePropertyMappings @($profileMappings.Mappings) -ProfileInventoryComplete ([bool]$profileMappings.Complete) -SolutionJsonPath $solutionOutput.JsonPath -ExcludedPersonalSiteCount ([int]$exclusion.PersonalSites) -ExcludedSiteMasterCount ([int]$exclusion.SiteMasters) -HtmlSplitThreshold $reportOption.HtmlSplitThreshold -HtmlRowsPerPage $reportOption.HtmlRowsPerPage -TargetMode $targetMode
+    $solutionOutput = Export-SPSSolutionReport -InputObject @($solutionMap) -OutputFolder $outputFolder.Path -BaseName ('SPSSiteInventory-' + $settings.EnvName)
+    $output = Export-SPSInventoryReport -InputObject @($scored) -OutputFolder $outputFolder.Path -BaseName ('SPSSiteInventory-' + $settings.EnvName) -EnvName $settings.EnvName -SolutionMap @($solutionMap) -ContentTypes $contentTypes -ManagedMetadataLists $managedMetadataLists -ExternalLists $externalLists -SharePointAlerts $sharePointAlerts -BcsApplications @($bcs.Applications) -BcsInventoryComplete ([bool]$bcs.Complete) -SecureStoreApplications @($secureStore.Applications) -SecureStoreInventoryComplete ([bool]$secureStore.Complete) -ProfilePropertyMappings @($profileMappings.Mappings) -ProfileInventoryComplete ([bool]$profileMappings.Complete) -SolutionJsonPath $solutionOutput.JsonPath -ExcludedPersonalSiteCount ([int]$exclusion.PersonalSites) -ExcludedSiteMasterCount ([int]$exclusion.SiteMasters) -HtmlSplitThreshold $reportOption.HtmlSplitThreshold -HtmlRowsPerPage $reportOption.HtmlRowsPerPage -TargetMode $targetMode
 
     Add-SPSInventoryEvent -Message "Inventory complete. CSV: $($output.CsvPath) | JSON: $($output.JsonPath) | HTML: $($output.HtmlPath)" -Level Information
     if (@($output.HtmlPagePaths).Count -gt 0) {
