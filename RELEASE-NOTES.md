@@ -29,13 +29,14 @@ because bugs were fixed: read "Upgrading from 2.0.x" below.
   scoring of that question: full-trust code still runs on the farm, so it weighs as code to rebuild
   with the SharePoint Framework and no longer blocks. A *Modern experience readiness* section of
   the HTML report counts the site collections that have a blocker, and how many have each kind.
-- **What keeps a site collection in the classic experience.** In both modes the inventory counts
-  the webs that set an alternate CSS URL, the list views that render with a customized XSLT, the
-  Script Editor and Content Editor web parts that embed a script, the site collections and webs
-  that opted out of the modern list experience, and the lists forced to the classic experience.
-  `ModernBlockerCount` and `ModernBlockers` bring them together, and alerts say what to do about
-  each kind. A setting that cannot be read marks the site collection partial: it is never taken for
-  a site without the signal.
+- **What keeps a site collection in the classic experience.** In both modes the inventory counts the
+  webs that set an alternate CSS URL, the list views that render with a customized XSLT (an
+  `XslLink` that is not a style sheet that SharePoint ships, or an `Xsl`; the personal views and the
+  hidden views, in which web parts keep their settings, are left out), the Script Editor and Content
+  Editor web parts that embed a script, the site collections and webs that opted out of the modern
+  list experience, and the lists forced to the classic experience. `ModernBlockerCount` and
+  `ModernBlockers` bring them together, and alerts say what to do about each kind. A setting that
+  cannot be read marks the site collection partial: it is never taken for a site without the signal.
 - **The remaining SMAT scans.** The Secure Store target applications of the farm
   (`Get-SPSSecureStoreApplication`), the list items that target an audience, the site notebooks,
   the profile property mappings of the User Profile service (`Get-SPSProfilePropertyMapping`) with

@@ -81,6 +81,21 @@ public class SPSTestXsltBrokenView
 '@
     }
 
+    # A view whose hidden flag cannot be read, for the same reason.
+    if (-not ('SPSTestXsltHiddenBrokenView' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+public class SPSTestXsltHiddenBrokenView
+{
+    public string Title { get { return "Odd"; } }
+    public bool PersonalView { get { return false; } }
+    public bool Hidden { get { throw new InvalidOperationException("hidden unavailable"); } }
+    public string XslLink { get { return "/sites/team/Style Library/odd.xsl"; } }
+    public string Xsl { get { return ""; } }
+}
+'@
+    }
+
     # A list whose experience setting cannot be read, for the same reason.
     if (-not ('SPSTestExperienceList' -as [type])) {
         Add-Type -TypeDefinition @'
@@ -174,8 +189,8 @@ public class SPSTestExperienceList
     }
 
     function New-TestView {
-        param ([string]$Title = 'All Items', $XslLink = 'main.xsl', $Xsl = '', [bool]$PersonalView = $false)
-        [PSCustomObject]@{ Title = $Title; XslLink = $XslLink; Xsl = $Xsl; PersonalView = $PersonalView }
+        param ([string]$Title = 'All Items', $XslLink = 'main.xsl', $Xsl = '', [bool]$PersonalView = $false, [bool]$Hidden = $false)
+        [PSCustomObject]@{ Title = $Title; XslLink = $XslLink; Xsl = $Xsl; PersonalView = $PersonalView; Hidden = $Hidden }
     }
 
     # A plain list. -Experience adds the ListExperienceOptions property, which an older farm does not have.
@@ -594,13 +609,58 @@ Describe 'Get-SPSSiteCustomization XSLT list views' {
     }
 
     It 'does not count the personal views of a user' {
-        $web = New-TestWeb -Lists @((New-TestList -Views @((New-TestView -Title 'Mine' -XslLink 'custom.xsl' -PersonalView $true))))
+        $web = New-TestWeb -Lists @((New-TestList -Views @((New-TestView -Title 'Mine' -XslLink '/Style Library/custom.xsl' -PersonalView $true))))
 
         (Get-Signal -Site (New-TestSite -Webs @($web))).Signals.XsltListViewCount | Should -Be 0
     }
 
+    It 'does not count a hidden view, in which a web part keeps its settings, and counts the visible one next to it' {
+        $views = @(
+            (New-TestView -Title '' -XslLink '/Style Library/web-part.xsl' -Hidden $true)
+            (New-TestView -Title '' -Xsl '<xsl:stylesheet version="1.0" />' -Hidden $true)
+            (New-TestView -Title 'Late' -XslLink '/Style Library/late.xsl')
+        )
+        $web = New-TestWeb -Lists @((New-TestList -Title 'Tasks' -Views $views))
+
+        $result = Get-Signal -Site (New-TestSite -Webs @($web))
+
+        $result.Signals.XsltListViewCount | Should -Be 1
+        $result.Signals.XsltListViewExamples | Should -Be 'Tasks/Late'
+        $result.Signals.CustomizationInventoryComplete | Should -BeTrue
+        $result.Warnings | Should -HaveCount 0
+    }
+
+    It 'does not count the views that SharePoint draws with its own style sheets, those of a blog or an asset library for example' {
+        $blogViews = 1..12 | ForEach-Object { New-TestView -Title '' -XslLink 'blog.xsl' -Hidden $true }
+        $posts = New-TestList -Title 'Posts' -Views $blogViews
+        $images = New-TestList -Title 'Images' -Views @(
+            (New-TestView -Title 'Thumbnails' -XslLink 'AssetPicker.xsl')
+            (New-TestView -Title 'All Images' -XslLink '/_layouts/15/xsl/main.xsl')
+        )
+        $web = New-TestWeb -Lists @($posts, $images)
+
+        $result = Get-Signal -Site (New-TestSite -Webs @($web))
+
+        $result.Signals.XsltListViewCount | Should -Be 0
+        $result.Signals.XsltListViewExamples | Should -Be ''
+        $result.Signals.CustomizationInventoryComplete | Should -BeTrue
+    }
+
+    It 'marks the collection partial, names the list and goes on with the others, when the hidden flag of a view cannot be read' {
+        $broken = New-TestList -Title 'Broken' -Views @([SPSTestXsltHiddenBrokenView]::new())
+        $good = New-TestList -Title 'Good' -Views @((New-TestView -XslLink '/Style Library/a.xsl'))
+        $web = New-TestWeb -Lists @($broken, $good)
+
+        $result = Get-Signal -Site (New-TestSite -Webs @($web))
+
+        $result.Signals.XsltListViewCount | Should -Be 1
+        $result.Signals.XsltListViewExamples | Should -Be 'Good/All Items'
+        $result.Signals.CustomizationInventoryComplete | Should -BeFalse
+        ($result.Warnings -join ';') | Should -Match "Could not read the XSLT of the views on list 'Broken' in web 'https://intranet.contoso.com/sites/team': hidden unavailable"
+    }
+
     It 'does not look at the views of a hidden list' {
-        $web = New-TestWeb -Lists @((New-TestList -Title 'Workflow History' -Hidden $true -Views @((New-TestView -XslLink 'custom.xsl'))))
+        $web = New-TestWeb -Lists @((New-TestList -Title 'Workflow History' -Hidden $true -Views @((New-TestView -XslLink '/Style Library/custom.xsl'))))
 
         $result = Get-Signal -Site (New-TestSite -Webs @($web))
 
@@ -609,14 +669,14 @@ Describe 'Get-SPSSiteCustomization XSLT list views' {
     }
 
     It 'adds up the views of every list and every web' {
-        $one = New-TestWeb -Url 'https://intranet.contoso.com/sites/team' -Lists @((New-TestList -Views @((New-TestView -XslLink 'a.xsl'))))
-        $two = New-TestWeb -Url 'https://intranet.contoso.com/sites/team/news' -Lists @((New-TestList -Title 'Links' -Views @((New-TestView -XslLink 'b.xsl'), (New-TestView -XslLink 'c.xsl'))))
+        $one = New-TestWeb -Url 'https://intranet.contoso.com/sites/team' -Lists @((New-TestList -Views @((New-TestView -XslLink '/Style Library/a.xsl'))))
+        $two = New-TestWeb -Url 'https://intranet.contoso.com/sites/team/news' -Lists @((New-TestList -Title 'Links' -Views @((New-TestView -XslLink '/Style Library/b.xsl'), (New-TestView -XslLink '/Style Library/c.xsl'))))
 
         (Get-Signal -Site (New-TestSite -Webs @($one, $two))).Signals.XsltListViewCount | Should -Be 3
     }
 
     It 'lists at most five examples and still counts every view' {
-        $views = 1..7 | ForEach-Object { New-TestView -Title "V$_" -XslLink "v$_.xsl" }
+        $views = 1..7 | ForEach-Object { New-TestView -Title "V$_" -XslLink "/Style Library/v$_.xsl" }
         $web = New-TestWeb -Lists @((New-TestList -Views $views))
 
         $result = Get-Signal -Site (New-TestSite -Webs @($web))
@@ -627,7 +687,7 @@ Describe 'Get-SPSSiteCustomization XSLT list views' {
 
     It 'marks the collection partial, names the list and goes on with the others, when the XSLT of a view cannot be read' {
         $broken = New-TestList -Title 'Broken' -Views @([SPSTestXsltBrokenView]::new())
-        $good = New-TestList -Title 'Good' -Views @((New-TestView -XslLink 'a.xsl'))
+        $good = New-TestList -Title 'Good' -Views @((New-TestView -XslLink '/Style Library/a.xsl'))
         $web = New-TestWeb -Lists @($broken, $good)
 
         $result = Get-Signal -Site (New-TestSite -Webs @($web))
@@ -834,7 +894,7 @@ Describe 'Get-SPSSiteCustomization modern blockers' {
 
     It 'brings together the blockers that were found' {
         $homePage = New-TestPage -Url '/sites/team/default.aspx' -WebParts @((New-TestScriptEditor))
-        $tasks = New-TestList -Views @((New-TestView -XslLink 'custom.xsl'), (New-TestView -Title 'Late' -XslLink 'late.xsl'))
+        $tasks = New-TestList -Views @((New-TestView -XslLink '/Style Library/custom.xsl'), (New-TestView -Title 'Late' -XslLink '/Style Library/late.xsl'))
         $forced = New-TestList -Title 'Contracts' -WithExperience -Experience 'ClassicExperience'
         $web = New-TestWeb -Lists @($tasks, $forced) -AlternateCssUrl '/Style Library/brand.css' -WelcomePage 'default.aspx' -Pages @($homePage) -Features @($script:PublishingWebFeature, $script:OptOutWebFeature)
         $web.CustomMasterUrl = '/_catalogs/masterpage/brand.master'

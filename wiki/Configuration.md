@@ -460,10 +460,15 @@ collection not in the modern experience, and what does it take?
 - `AlternateCssUrlCount` — the webs that set an alternate CSS URL (`SPWeb.AlternateCssUrl`).
   Modern pages do not use it, so the branding it carries is redone, with a site theme for
   example. `AlternateCssUrlExamples` lists up to five webs with their CSS file.
-- `XsltListViewCount` — the list views that render with XSLT: a view whose `XslLink` is not the
-  default `main.xsl`, or that keeps an `Xsl` of its own. Personal views and the views of hidden
-  lists are not counted. The modern list view ignores XSLT, and SharePoint shows a list with a
-  customized view in the classic experience (see
+- `XsltListViewCount` — the list views that render with XSLT: a view that keeps an `Xsl` of its own,
+  or whose `XslLink` is not a style sheet that SharePoint ships. SharePoint looks a bare file name
+  up in its own XSL folder (`/_layouts/15/xsl`), so `main.xsl`, the default of every view,
+  `blog.xsl` and `AssetPicker.xsl` are not counted, and neither is a path into that folder; a file
+  of the Style Library, of a folder of a custom solution or at an address with a host (`https://...`
+  or `//...`) is. What a farm solution adds to the XSL folder is reported with the farm solutions.
+  Personal views, hidden views (the views in which the web parts of a blog or of an asset library
+  keep their settings) and the views of hidden lists are not counted. The modern list view ignores
+  XSLT, and SharePoint shows a list with a customized view in the classic experience (see
   [when SharePoint falls back to classic](https://learn.microsoft.com/en-us/sharepoint/dev/solution-guidance/modern-experience-customizations-customize-lists-and-libraries)).
   `XsltListViewExamples` lists up to five views as `list/view`.
 - `ScriptWebPartCount` — the Script Editor web parts, and the Content Editor web parts that
