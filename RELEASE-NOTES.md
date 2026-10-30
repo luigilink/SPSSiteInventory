@@ -8,9 +8,10 @@ runs, and what does it take to modernize it?", with a target mode, the signals t
 collection in the classic experience, and a report that speaks of modernization. It also brings
 the last SMAT scans that were missing (Secure Store, audience targeting, site notebooks, profile
 property mappings and large Excel files), an offline inspection of WSP packages that needs no farm,
-a ranked list of risk indicators, an HTML report that splits itself on a very large farm, and the
-fixes for the known issues of 2.0.0. SPSSiteInventory is still read-only and 100% generic (no
-client-specific value ships in the repository).
+a ranked list of risk indicators, an HTML report that splits itself on a very large farm, the
+fixes for the known issues of 2.0.0, and reports that are written next to the script when
+`OutputFolder` is empty. SPSSiteInventory is still read-only and 100% generic (no client-specific
+value ships in the repository).
 
 It is a minor release: no public function lost a parameter, and the settings file of 2.0.x keeps
 working unchanged. The reports gain columns, files and manifest fields, and a few results change
@@ -66,6 +67,10 @@ because bugs were fixed: read "Upgrading from 2.0.x" below.
 - **A lab that cleans up after itself.** The lab test script creates its site collections in a
   content database of its own and removes it at the end (#88), and has a scenario for each new
   signal.
+- **Reports next to the script by default.** `OutputFolder` is empty in the example settings: the
+  reports go to a `Reports` folder next to `Invoke-SPSSiteInventory.ps1`, as the logs go to a `Logs`
+  folder next to it. The folder is created when the run starts, so one that cannot be created stops
+  the run before the scan, not when the reports are written (#126).
 
 ### Upgrading from 2.0.x
 
@@ -73,13 +78,21 @@ because bugs were fixed: read "Upgrading from 2.0.x" below.
   `TargetMode`, the caps of `LargeContentThresholds` (`MaxItemsForWebPartScanPerLibrary`,
   `LargeExcelFileSizeMB`, `MaxItemsForExcelFileScanPerLibrary`,
   `MaxItemsForAudienceTargetingScanPerList` and `MaxItemsForNotebookScanPerLibrary`) and the
-  `Report` section (`HtmlSplitThreshold`, `HtmlRowsPerPage`). A signal that your file does not
-  weigh weighs nothing. The readiness check compares your file with the example of its mode and
-  lists what it lacks.
+  `Report` section (`HtmlSplitThreshold`, `HtmlRowsPerPage`); so is `OutputFolder`, which is not
+  mandatory any more (see "Output folder" below). A signal that your file does not weigh weighs
+  nothing. The readiness check compares your file with the example of its mode and lists what it
+  lacks.
 - **Example configuration.** `inventory-settings.example.psd1` gives a small weight to three of the
   new signals (`AlternateCssUrlCount` 0.5, `XsltListViewCount` 0.25, `ScriptWebPartCount` 0.5), so a
   file copied from it can categorize a few site collections differently. A file of 2.0.x is not
   affected.
+- **Output folder.** `OutputFolder` is empty in both example files. When it is empty, or missing, the
+  reports go to a `Reports` folder next to `Invoke-SPSSiteInventory.ps1`, as the logs go to a `Logs`
+  folder next to it, and the run creates it when it starts. A settings file that sets `OutputFolder`,
+  as every working file of 2.0.x does, is not affected: its folder is used as it is. A file that you
+  copy from the new example writes next to the script until you set the folder. The readiness check
+  looks at the same folder: an empty `OutputFolder` is no longer an error, and `Get-SPSReadinessCheck`
+  has a new optional `-ScriptRoot` parameter for it.
 - **Files and manifest.** The site CSV and JSON gain a column for each new signal, and the run
   writes more files: the `-collaboration-` JSON, and a CSV and a JSON for the Secure Store and for
   the profile property mappings, which are read once for the farm. The manifest lists them and has
