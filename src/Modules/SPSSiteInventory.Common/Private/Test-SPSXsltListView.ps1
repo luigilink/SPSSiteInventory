@@ -13,8 +13,10 @@
         main.xsl, the default of every view, needs no path, and so is a path into that folder. The
         style sheets that are there ship with SharePoint: blog.xsl for the web parts of a blog and
         AssetPicker.xsl for the views of an asset library, for example. What a farm solution adds to
-        that folder is reported with the farm solutions, not here. Any other value, such as a path in
-        the Style Library or in the folder of a custom solution, is a style sheet of the farm.
+        that folder is reported with the farm solutions, not here. Any other value is a style sheet of
+        the farm: a path in the Style Library or in the folder of a custom solution, or an address with
+        a scheme or a host (https://host/..., //host/... or \\host\...), which SharePoint does not
+        supply whatever its path.
 
         The caller leaves out the personal views and the hidden ones, which are the views that a web
         part keeps its settings in.
@@ -42,7 +44,8 @@
     )
 
     $xslLink = ([string](Get-SPSPropertyValue -InputObject $View -Name 'XslLink')).Trim()
-    $isShipped = $xslLink -notmatch '[/\\]' -or $xslLink -match '(^|[/\\])_layouts[/\\](\d+[/\\])?xsl[/\\][^/\\]+$'
+    $isRemote = $xslLink -match '^[A-Za-z][A-Za-z0-9+.\-]*:' -or $xslLink -match '^[/\\]{2}'
+    $isShipped = -not $isRemote -and ($xslLink -notmatch '[/\\]' -or $xslLink -match '(^|[/\\])_layouts[/\\](\d+[/\\])?xsl[/\\][^/\\]+$')
     if ($xslLink -and -not $isShipped) {
         return $true
     }

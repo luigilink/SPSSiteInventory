@@ -69,6 +69,14 @@ Describe 'Test-SPSXsltListView' {
         @{ Link = '/Style Library/my_layouts/xsl/custom.xsl' }
         @{ Link = '..\Style Library\custom.xsl' }
         @{ Link = 'https://cdn.contoso.com/xsl/custom.xsl' }
+        @{ Link = 'https://cdn.contoso.com/_layouts/15/xsl/custom.xsl' }
+        @{ Link = '//cdn.contoso.com/_layouts/15/xsl/custom.xsl' }
+        @{ Link = '/\cdn.contoso.com/_layouts/15/xsl/custom.xsl' }
+        @{ Link = '\\fileserver\share\_layouts\15\xsl\custom.xsl' }
+        @{ Link = 'HTTPS://CDN.CONTOSO.COM/_LAYOUTS/15/XSL/MAIN.XSL' }
+        @{ Link = 'http://sharepoint.contoso.com/_layouts/15/xsl/main.xsl' }
+        @{ Link = 'file:///C:/inetpub/_layouts/15/xsl/custom.xsl' }
+        @{ Link = 'C:\inetpub\_layouts\15\xsl\custom.xsl' }
     ) {
         Test-View -View ([PSCustomObject]@{ XslLink = $Link; Xsl = '' }) | Should -BeTrue
     }
