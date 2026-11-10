@@ -33,6 +33,34 @@ Describe 'Export-SPSSolutionPackageReport' {
         $result.JsonPath | Should -Match 'SPSSiteInventory-PROD-solution-packages-\d{8}-\d{4}\.json$'
     }
 
+    It 'puts the time stamp that it is given in the names of the three files' {
+        $result = Export-SPSSolutionPackageReport -InputObject $script:Package -OutputFolder $script:OutDir -BaseName 'Run' -Timestamp '20241231-2359'
+
+        $result.PackageCsvPath | Should -Match 'Run-solution-packages-20241231-2359\.csv$'
+        $result.AssemblyCsvPath | Should -Match 'Run-solution-assemblies-20241231-2359\.csv$'
+        $result.JsonPath | Should -Match 'Run-solution-packages-20241231-2359\.json$'
+    }
+
+    It 'uses the time of the call for the time stamp when it is not given' {
+        $before = Get-Date -Format 'yyyyMMdd-HHmm'
+        $result = Export-SPSSolutionPackageReport -InputObject $script:Package -OutputFolder $script:OutDir
+        $after = Get-Date -Format 'yyyyMMdd-HHmm'
+
+        $stamp = [regex]::Match($result.JsonPath, '-(\d{8}-\d{4})\.json$').Groups[1].Value
+        @($before, $after) | Should -Contain $stamp
+    }
+
+    It 'refuses a time stamp that is not of the form of the other file names, and writes nothing' -ForEach @(
+        @{ Value = '2024-12-31' }
+        @{ Value = '20241231' }
+        @{ Value = '20241231-2359\..\x' }
+        @{ Value = '' }
+    ) {
+        { Export-SPSSolutionPackageReport -InputObject $script:Package -OutputFolder $script:OutDir -Timestamp $Value } | Should -Throw
+
+        Test-Path -LiteralPath $script:OutDir | Should -BeFalse
+    }
+
     It 'writes one row per package, with the arrays flattened' {
         $result = Export-SPSSolutionPackageReport -InputObject $script:Package -OutputFolder $script:OutDir
 

@@ -5,6 +5,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The main scan offers the offline inspection of the WSP packages. `Invoke-SPSSiteInventory.ps1` has
+  an optional `-SolutionPackagePath` parameter (WSP files, folders that hold some, with their
+  subfolders, or folders of expanded packages): the packages, which you save from the farm with
+  `$_.SolutionFile.SaveAs(...)`, are inspected with `Get-SPSSolutionPackageInfo` right after the
+  farm-solution map and before the scan, so that a wrong path shows at once, and are matched to the
+  farm solutions. `Export-SPSInventoryReport` has a new `-SolutionPackages` parameter: it writes the
+  `*-solution-packages-*` CSV and JSON files and the `*-solution-assemblies-*` CSV file, lists them in
+  the manifest (`Files.SolutionPackagesCsv`, `Files.SolutionAssembliesCsv`, `Files.SolutionPackagesJson`)
+  with the number of packages and of those that are not read in full (`Summary.SolutionPackageCount`
+  and `Summary.SolutionPackageIssueCount`, null when no package was inspected), and adds a *Solution
+  packages* section to the HTML report, after the farm solutions: what each package holds (custom or
+  Microsoft, full-trust code, assemblies, features, .NET framework), the farm solution it matches and
+  what differs, the packages that could not be read in full first, and the farm solutions that no
+  inspected package matches. A package that cannot be read is a warning, not the end of the scan.
+  `Export-SPSSolutionPackageReport` has an optional `-Timestamp` parameter, which the report pack
+  uses to give the package files the time stamp of its other files.
+  Without `-SolutionPackagePath`, the scan ends by telling how to save and inspect the packages when
+  the farm has solutions. The Getting Started, Usage and Inspecting WSP packages wiki pages say it. (#135)
+
 ## [2.1.0] - 2026-10-30
 
 ### Added

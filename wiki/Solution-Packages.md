@@ -46,9 +46,28 @@ A package that cannot be inspected is returned with `Status` `Failed` and the re
 | `-MaximumMegabyte` | The size that a package may expand to. Defaults to 512. |
 | `-TemporaryFolder` | Where the packages are expanded (and removed from again). Defaults to the temporary folder of the user. |
 
+## From the main scan
+
+`Invoke-SPSSiteInventory.ps1` runs the same inspection when you give it the packages with `-SolutionPackagePath`: WSP files, folders that hold some (and their subfolders), or folders of expanded packages, one or several:
+
+```powershell
+Get-SPSolution | ForEach-Object { $_.SolutionFile.SaveAs((Join-Path 'D:\Packages' $_.Name)) }
+.\Invoke-SPSSiteInventory.ps1 -SolutionPackagePath D:\Packages
+```
+
+The packages are read right after the farm solutions, before the scan, so a wrong path shows at once. They are matched to the farm solutions by solution id, or else by file name, and the run:
+
+- writes the package CSV, the assembly CSV and the JSON file (see [The files](#the-files)) next to the other reports, with the time stamp of the run;
+- lists them in the manifest (`Files.SolutionPackagesCsv`, `Files.SolutionAssembliesCsv` and `Files.SolutionPackagesJson`) and counts the packages, and those that are `Partial` or `Failed`, in `Summary.SolutionPackageCount` and `Summary.SolutionPackageIssueCount`; both are null, like the files, when no package was inspected;
+- adds a **Solution packages** section to the HTML report, after the farm solutions: one row per package (status, custom or Microsoft, full-trust code, assemblies, features, .NET framework, the farm solution that it matches and what differs from it), the packages that could not be read in full first, and the farm solutions that no inspected package matches.
+
+A package that cannot be read is a warning of the log and a row with its reason: it does not stop the scan. Without `-SolutionPackagePath`, the scan ends with a line that says how to save and inspect the packages, when the farm has solutions.
+
+The packages are the code of your solutions. Save them in a folder that is not the reports folder, which is the one that you zip and send.
+
 ## The files
 
-`Export-SPSSolutionPackageReport` writes three files, next to the other reports (`-BaseName` and a timestamp are added to the names, as for `*-solutions-*`):
+`Export-SPSSolutionPackageReport` writes three files, next to the other reports (`-BaseName` and a timestamp are added to the names, as for `*-solutions-*`; `-Timestamp` sets the timestamp, which `Export-SPSInventoryReport` uses to give these files the stamp of the other files of its run):
 
 | File | Purpose |
 | --- | --- |

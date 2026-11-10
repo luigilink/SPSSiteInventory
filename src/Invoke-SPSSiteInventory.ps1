@@ -7,7 +7,9 @@
 
     1. bootstraps logging and validates prerequisites;
     2. loads the SharePoint commands and the inventory settings;
-    3. builds the farm-solution map (WSP -> full-trust code, features) to detect custom code;
+    3. builds the farm-solution map (WSP -> full-trust code, features) to detect custom code and,
+       with -SolutionPackagePath, inspects the WSP packages saved from the farm and matches
+       them to the farm solutions;
     4. enumerates site collections (identity + volumetry);
     5. collects the customization signals of each site and reads the Business Connectivity
        Services (BCS) definitions, the Secure Store target applications and the profile property
@@ -15,10 +17,11 @@
     6. scores each site from 1 (Simple) to 4 (Blocking) and assigns a migration wave; with
        TargetMode = 'SharePointOnPrem' in the settings, the same four categories read as
        Modern-ready, Light remediation, Rebuild (SPFx) and Blocked;
-    7. exports the scored inventory to CSV, JSON and a self-contained HTML report, and the
-       farm-solution map to its own CSV and JSON, in the OutputFolder of the settings, or in
-       a Reports folder next to this script when it is empty (the logs go to a Logs folder
-       next to it). The folder is created when the run starts.
+    7. exports the scored inventory to CSV, JSON and a self-contained HTML report, the
+       farm-solution map to its own CSV and JSON, and the inspected packages to theirs, in the
+       OutputFolder of the settings, or in a Reports folder next to this script when it is
+       empty (the logs go to a Logs folder next to it). The folder is created when the run
+       starts.
 
     The tool is read-only: it never modifies the farm. Run it on a farm server, as the
     farm account, in an elevated Windows PowerShell 5.1 session.
@@ -27,11 +30,25 @@
     Path to the inventory settings .psd1 file. Defaults to
     .\config\inventory-settings.psd1 next to this script.
 
+    .PARAMETER SolutionPackagePath
+    Optional. WSP files, folders that hold some (their subfolders too) or folders of expanded
+    packages, to inspect with Get-SPSSolutionPackageInfo: the strong name of every assembly, the
+    features (also those of a solution that is not deployed), the receivers and the .NET
+    framework. The packages are matched to the farm solutions, shown in the HTML report and
+    written to their own CSV and JSON files. Save them from the farm first, in a folder that is
+    not the reports folder, for example with
+    Get-SPSolution | ForEach-Object { $_.SolutionFile.SaveAs((Join-Path 'D:\Packages' $_.Name)) }.
+    A package that cannot be read is a warning of the log, not the end of the scan. Without this
+    parameter, the scan ends by telling how to inspect the packages.
+
     .EXAMPLE
     .\Invoke-SPSSiteInventory.ps1
 
     .EXAMPLE
     .\Invoke-SPSSiteInventory.ps1 -ConfigPath D:\Config\inventory-settings.psd1
+
+    .EXAMPLE
+    .\Invoke-SPSSiteInventory.ps1 -SolutionPackagePath D:\Packages
 #>
 #Requires -Version 5.1
 [CmdletBinding()]
@@ -39,7 +56,11 @@ param
 (
     [Parameter()]
     [System.String]
-    $ConfigPath = (Join-Path -Path $PSScriptRoot -ChildPath 'config\inventory-settings.psd1')
+    $ConfigPath = (Join-Path -Path $PSScriptRoot -ChildPath 'config\inventory-settings.psd1'),
+
+    [Parameter()]
+    [System.String[]]
+    $SolutionPackagePath
 )
 
 $ErrorActionPreference = 'Stop'
@@ -79,6 +100,29 @@ try {
     $solutionMap = Get-SPSFarmSolutionMap @solutionMapParams
     $customFeatureId = @($solutionMap | Where-Object { $_.IsCustom } | ForEach-Object { $_.FeatureIds } | Sort-Object -Unique)
     $fullTrustFeatureId = @($solutionMap | Where-Object { $_.IsFullTrustCode } | ForEach-Object { $_.FeatureIds } | Sort-Object -Unique)
+
+    # The packages are read now, so that a wrong path shows before the scan, and a failure here must not stop the site report.
+    $solutionPackages = @()
+    $packagePath = @($SolutionPackagePath | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    if ($packagePath.Count -gt 0) {
+        Add-SPSInventoryEvent -Message ('Inspecting the solution packages in {0}.' -f (($packagePath | ForEach-Object { "'$_'" }) -join ', ')) -Level Information
+        try {
+            $packageParams = @{ Path = $packagePath; Recurse = $true; FarmSolutionMap = @($solutionMap) }
+            if ($settings.ContainsKey('KnownMicrosoftSolutionPrefix')) {
+                $packageParams['KnownMicrosoftPrefix'] = $settings.KnownMicrosoftSolutionPrefix
+            }
+            $solutionPackages = @(Get-SPSSolutionPackageInfo @packageParams)
+        }
+        catch {
+            Add-SPSInventoryEvent -Message "The solution package inspection failed: $($_.Exception.Message)" -Level Warning
+        }
+        foreach ($solutionPackage in $solutionPackages) {
+            if ($solutionPackage.Status -ne 'Inspected') {
+                Add-SPSInventoryEvent -Message ("Solution package '{0}' is {1}: {2}" -f $solutionPackage.PackageName, $solutionPackage.Status, $solutionPackage.Detail) -Level Warning
+            }
+        }
+        Add-SPSInventoryEvent -Message ('{0} solution package(s) inspected: {1} custom, {2} with full-trust code, {3} not read in full.' -f $solutionPackages.Count, @($solutionPackages | Where-Object { $_.IsCustom }).Count, @($solutionPackages | Where-Object { $_.IsFullTrustCode }).Count, @($solutionPackages | Where-Object { $_.Status -ne 'Inspected' }).Count) -Level Information
+    }
 
     Add-SPSInventoryEvent -Message 'Enumerating site collections.' -Level Information
     $templateParity = if ($settings.ContainsKey('TemplateParity')) {
@@ -238,7 +282,12 @@ try {
     }
 
     $solutionOutput = Export-SPSSolutionReport -InputObject @($solutionMap) -OutputFolder $outputFolder.Path -BaseName ('SPSSiteInventory-' + $settings.EnvName)
-    $output = Export-SPSInventoryReport -InputObject @($scored) -OutputFolder $outputFolder.Path -BaseName ('SPSSiteInventory-' + $settings.EnvName) -EnvName $settings.EnvName -SolutionMap @($solutionMap) -ContentTypes $contentTypes -ManagedMetadataLists $managedMetadataLists -ExternalLists $externalLists -SharePointAlerts $sharePointAlerts -BcsApplications @($bcs.Applications) -BcsInventoryComplete ([bool]$bcs.Complete) -SecureStoreApplications @($secureStore.Applications) -SecureStoreInventoryComplete ([bool]$secureStore.Complete) -ProfilePropertyMappings @($profileMappings.Mappings) -ProfileInventoryComplete ([bool]$profileMappings.Complete) -SolutionJsonPath $solutionOutput.JsonPath -ExcludedPersonalSiteCount ([int]$exclusion.PersonalSites) -ExcludedSiteMasterCount ([int]$exclusion.SiteMasters) -HtmlSplitThreshold $reportOption.HtmlSplitThreshold -HtmlRowsPerPage $reportOption.HtmlRowsPerPage -TargetMode $targetMode
+    # The package files and their section of the HTML report exist only when packages were inspected.
+    $packageExportParams = @{}
+    if ($solutionPackages.Count -gt 0) {
+        $packageExportParams['SolutionPackages'] = @($solutionPackages)
+    }
+    $output = Export-SPSInventoryReport -InputObject @($scored) -OutputFolder $outputFolder.Path -BaseName ('SPSSiteInventory-' + $settings.EnvName) -EnvName $settings.EnvName -SolutionMap @($solutionMap) -ContentTypes $contentTypes -ManagedMetadataLists $managedMetadataLists -ExternalLists $externalLists -SharePointAlerts $sharePointAlerts -BcsApplications @($bcs.Applications) -BcsInventoryComplete ([bool]$bcs.Complete) -SecureStoreApplications @($secureStore.Applications) -SecureStoreInventoryComplete ([bool]$secureStore.Complete) -ProfilePropertyMappings @($profileMappings.Mappings) -ProfileInventoryComplete ([bool]$profileMappings.Complete) -SolutionJsonPath $solutionOutput.JsonPath -ExcludedPersonalSiteCount ([int]$exclusion.PersonalSites) -ExcludedSiteMasterCount ([int]$exclusion.SiteMasters) -HtmlSplitThreshold $reportOption.HtmlSplitThreshold -HtmlRowsPerPage $reportOption.HtmlRowsPerPage -TargetMode $targetMode @packageExportParams
 
     Add-SPSInventoryEvent -Message "Inventory complete. CSV: $($output.CsvPath) | JSON: $($output.JsonPath) | HTML: $($output.HtmlPath)" -Level Information
     if (@($output.HtmlPagePaths).Count -gt 0) {
@@ -253,6 +302,12 @@ try {
     Add-SPSInventoryEvent -Message "BCS report. CSV: $($output.BcsCsvPath) | JSON: $($output.BcsJsonPath)" -Level Information
     Add-SPSInventoryEvent -Message "Secure Store report. CSV: $($output.SecureStoreCsvPath) | JSON: $($output.SecureStoreJsonPath)" -Level Information
     Add-SPSInventoryEvent -Message "Profile property mappings report. CSV: $($output.ProfileMappingsCsvPath) | JSON: $($output.ProfileMappingsJsonPath)" -Level Information
+    if ($solutionPackages.Count -gt 0) {
+        Add-SPSInventoryEvent -Message "Solution package report. CSV: $($output.SolutionPackagesCsvPath) | Assemblies: $($output.SolutionAssembliesCsvPath) | JSON: $($output.SolutionPackagesJsonPath)" -Level Information
+    }
+    elseif ($packagePath.Count -eq 0 -and @($solutionMap).Count -gt 0) {
+        Add-SPSInventoryEvent -Message ('The farm-solution report only gives what SharePoint says about each solution. The WSP packages say more: the strong name of every assembly, the features of a solution that is not deployed, the receivers and the .NET framework. To inspect them, save the packages in a folder that is not the reports folder, for example with Get-SPSolution | ForEach-Object { $_.SolutionFile.SaveAs((Join-Path ''D:\Packages'' $_.Name)) }, then run this script again with -SolutionPackagePath ''D:\Packages'' to get them in the HTML report, or inspect them alone with Get-SPSSolutionPackageInfo. See the wiki page "Inspecting WSP packages offline".') -Level Information
+    }
 }
 catch {
     Add-SPSInventoryEvent -Message "Inventory failed: $($_.Exception.Message)" -Level Error

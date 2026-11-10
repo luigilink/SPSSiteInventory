@@ -67,6 +67,15 @@
         ContainsWebApplicationResource / FeatureCount / FeatureScopes. Omitted cleanly when
         no map is passed.
 
+        .PARAMETER SolutionPackages
+        Optional WSP package records, as produced by Get-SPSSolutionPackageInfo (which matches
+        them to the farm solutions when it is given the farm-solution map). When at least one is
+        provided, the report gains a "Solution packages (WSP files)" section after the farm
+        solutions: a summary line, a table with what each package holds (custom or Microsoft,
+        full-trust code, assemblies, features, .NET framework), the farm solution it matches and
+        what differs, the packages that could not be read in full first, and the farm solutions
+        of SolutionMap that no inspected package matches. Omitted cleanly when no package is passed.
+
         .PARAMETER ContentTypes
         Optional web content-type definitions and list bindings. When supplied,
         renders their metadata without classifying standard types as custom or
@@ -190,6 +199,12 @@
         [AllowNull()]
         [System.Object[]]
         $SolutionMap = @(),
+
+        [Parameter()]
+        [AllowEmptyCollection()]
+        [AllowNull()]
+        [System.Object[]]
+        $SolutionPackages = @(),
 
         [Parameter()]
         [AllowEmptyCollection()]
@@ -427,6 +442,8 @@
         @{ Expression = { if ($waveAgg[$_].Wave -eq 0) { [int]::MaxValue } else { [int]$waveAgg[$_].Wave } } },
         @{ Expression = { [string]$waveAgg[$_].Name } })
     $solutions = @($SolutionMap | Where-Object { $null -ne $_ })
+    $packages = @($SolutionPackages | Where-Object { $null -ne $_ })
+    $hasSolutionPackageSection = $packages.Count -gt 0
     $authenticationRecords = @($records | Where-Object { $_.AuthenticationZones })
     $policyRecords = @($records | Where-Object { $null -ne $_.WebAppPolicyCount -or $_.BrowserFileHandling })
     $hasContentTypeSection = $PSBoundParameters.ContainsKey('ContentTypes')
@@ -723,6 +740,9 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
     [void]$navigation.AppendLine('<a href="#inventory-table">Inventory table</a>')
     if ($solutions.Count -gt 0) {
         [void]$navigation.AppendLine('<a href="#farm-solutions">Farm solutions</a>')
+    }
+    if ($hasSolutionPackageSection) {
+        [void]$navigation.AppendLine('<a href="#solution-packages">Solution packages</a>')
     }
     if ($authenticationRecords.Count -gt 0) {
         [void]$navigation.AppendLine('<a href="#authentication">Authentication</a>')
@@ -1281,6 +1301,115 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
             [void]$sb.AppendLine('</table>')
             [void]$sb.AppendLine('</div>')
             [void]$sb.AppendLine((& $limitNote $fullTrustSites.Count 'The main CSV and JSON files'))
+        }
+    }
+
+    # Solution packages (WSP files read offline) section.
+    if ($hasSolutionPackageSection) {
+        $packageTotal = $packages.Count
+        $packageCustom = @($packages | Where-Object { $_.IsCustom }).Count
+        $packageFullTrust = @($packages | Where-Object { $_.IsFullTrustCode }).Count
+        $packageIssue = @($packages | Where-Object { [string]$_.Status -ne 'Inspected' }).Count
+
+        [void]$sb.AppendLine('<h2 id="solution-packages">Solution packages (WSP files)</h2>')
+        [void]$sb.AppendLine('<div class="summary">')
+        [void]$sb.AppendLine(('<div class="summary-total"><strong>{0}</strong> package(s) &middot; <strong>{1}</strong> custom &middot; <strong>{2}</strong> full-trust code &middot; <strong>{3}</strong> not read in full</div>' -f $packageTotal, $packageCustom, $packageFullTrust, $packageIssue))
+        [void]$sb.AppendLine('</div>')
+        [void]$sb.AppendLine('<p>The packages were read offline: nothing in them was loaded or run. A package is custom or Microsoft on the strong-name signature of its assemblies, not on the name of the solution (a package that has no assembly is judged on its name, and says so). Its features are read even when the solution is not deployed, whereas the farm lists none for such a solution. The CSV and JSON files of the solution packages hold the detail: every assembly with its strong name, the features of each package and the number of its safe controls.</p>')
+        if ($packageIssue -gt 0) {
+            [void]$sb.AppendLine(('<p><strong>Partial collection:</strong> {0} package(s) could not be read in full, so their figures are lower bounds, or missing for a package that failed. The notes of the table say why. Consult the run warnings.</p>' -f $packageIssue))
+        }
+
+        [void]$sb.AppendLine('<div class="table-scroll">')
+        [void]$sb.AppendLine('<table class="solutionpackages">')
+        [void]$sb.AppendLine('<thead><tr><th>Package</th><th>Status</th><th>Custom</th><th>Full-trust code</th><th class="num">Assemblies (custom / all)</th><th class="num">Features</th><th>.NET framework</th><th>Farm solution</th><th>Notes</th></tr></thead>')
+        [void]$sb.AppendLine('<tbody>')
+        $packageOrder = @(
+            @{ E = { if ([string]$_.Status -eq 'Failed') { 0 } elseif ([string]$_.Status -ne 'Inspected') { 1 } else { 2 } } }
+            @{ E = { [bool]$_.IsFullTrustCode }; Descending = $true }
+            @{ E = { [bool]$_.IsCustom }; Descending = $true }
+            @{ E = { [string]$_.PackageName } }
+        )
+        foreach ($package in @($packages | Sort-Object -Property $packageOrder | Select-Object -First $MaxDetailRow)) {
+            $packageStatus = [string]$package.Status
+            $statusCell = switch ($packageStatus) {
+                'Failed' { '<span class="pill yes">Failed</span>' }
+                'Partial' { '<span class="pill warn">Partial</span>' }
+                default { '<span class="muted">{0}</span>' -f (ConvertTo-SPSHtmlText -Value $packageStatus) }
+            }
+            $unknown = '<span class="muted">-</span>'
+            $customCell = if ($null -eq $package.IsCustom) {
+                $unknown
+            }
+            else {
+                $judgedOnName = if ([string]$package.IsCustomSource -eq 'Name') { ' <span class="muted">(by name)</span>' } else { '' }
+                '{0}{1}' -f (Get-SPSYesNoPill -Value $package.IsCustom), $judgedOnName
+            }
+            $fullTrustCell = if ($null -eq $package.IsFullTrustCode) { $unknown } else { Get-SPSYesNoPill -Value $package.IsFullTrustCode }
+            $contentRead = $packageStatus -ne 'Failed'
+            $assemblyCell = if ($contentRead) { '{0} / {1}' -f [int]$package.CustomAssemblyCount, [int]$package.AssemblyCount } else { '-' }
+            $featureCell = if ($contentRead) {
+                $receiverNote = if ([int]$package.FeatureReceiverCount -gt 0) { ' <span class="muted">({0} with a receiver)</span>' -f [int]$package.FeatureReceiverCount } else { '' }
+                '{0}{1}' -f [int]$package.FeatureCount, $receiverNote
+            }
+            else {
+                '-'
+            }
+            $frameworkCell = if ($contentRead) {
+                $legacyNote = if ([int]$package.LegacyFrameworkAssemblyCount -gt 0) { ' <span class="pill warn" title="Custom assemblies built for .NET Framework 3.5 or before: they have to be rebuilt for SharePoint 2016 and later">{0} legacy</span>' -f [int]$package.LegacyFrameworkAssemblyCount } else { '' }
+                '{0}{1}' -f (ConvertTo-SPSHtmlText -Value (@($package.TargetFrameworks) -join '; ')), $legacyNote
+            }
+            else {
+                '-'
+            }
+            $farmCell = if ($null -eq $package.InFarm) {
+                $unknown
+            }
+            elseif ([bool]$package.InFarm) {
+                '{0} <span class="muted">(by {1})</span>' -f (ConvertTo-SPSHtmlText -Value $package.FarmSolutionName), (ConvertTo-SPSHtmlText -Value $package.FarmMatch)
+            }
+            else {
+                '<span class="pill no">Not in the farm</span>'
+            }
+            $note = [System.Collections.Generic.List[string]]::new()
+            if ($package.Detail) {
+                $note.Add([string]$package.Detail)
+            }
+            foreach ($difference in @($package.Difference)) {
+                if ($difference) { $note.Add([string]$difference) }
+            }
+            $noteText = $note -join ' | '
+            if ($noteText.Length -gt 300) {
+                $noteText = $noteText.Substring(0, 297) + '...'
+            }
+            [void]$sb.AppendLine(('<tr><td>{0}</td><td>{1}</td><td>{2}</td><td>{3}</td><td class="num">{4}</td><td class="num">{5}</td><td>{6}</td><td>{7}</td><td class="muted">{8}</td></tr>' -f `
+                (ConvertTo-SPSHtmlText -Value $package.PackageName),
+                $statusCell,
+                $customCell,
+                $fullTrustCell,
+                $assemblyCell,
+                $featureCell,
+                $frameworkCell,
+                $farmCell,
+                (ConvertTo-SPSHtmlText -Value $noteText)))
+        }
+        [void]$sb.AppendLine('</tbody>')
+        [void]$sb.AppendLine('</table>')
+        [void]$sb.AppendLine('</div>')
+        [void]$sb.AppendLine((& $limitNote $packages.Count 'The solution packages CSV and JSON files'))
+
+        # A farm solution that no inspected package matches has still to be read from its package. Without a farm-solution map there is none to name.
+        $matchedSolution = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+        foreach ($package in $packages) {
+            if ($package.FarmSolutionName) {
+                [void]$matchedSolution.Add([string]$package.FarmSolutionName)
+            }
+        }
+        $unmatchedSolution = @($solutions | ForEach-Object { [string]$_.SolutionName } | Where-Object { -not $matchedSolution.Contains($_) } | Sort-Object)
+        if ($unmatchedSolution.Count -gt 0) {
+            $shownSolution = @($unmatchedSolution | Select-Object -First 20)
+            $moreSolution = if ($unmatchedSolution.Count -gt $shownSolution.Count) { ' and {0} more' -f ($unmatchedSolution.Count - $shownSolution.Count) } else { '' }
+            [void]$sb.AppendLine(('<p><strong>{0}</strong> farm solution(s) have no inspected package: {1}{2}. Save their packages from the farm to read them (see the wiki page "Inspecting WSP packages offline").</p>' -f $unmatchedSolution.Count, (ConvertTo-SPSHtmlText -Value ($shownSolution -join ', ')), $moreSolution))
         }
     }
 
