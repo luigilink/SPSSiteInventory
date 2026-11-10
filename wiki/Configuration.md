@@ -433,6 +433,12 @@ is personal data.
 `EventReceivers` counts only **custom** event receivers (those registered from a
 non-Microsoft assembly). Out-of-the-box receivers on native lists are ignored, so a stock
 site is not promoted just because SharePoint's own lists carry many built-in receivers.
+SharePoint registers one receiver per event type and per list, so a class that listens to six
+events on a hundred lists counts 600, and the weight applies to each. Only the receivers of lists
+and libraries are read, not those of webs, site collections or content types. The
+`EventReceiverExamples` column, the *Custom event receivers* section of the HTML report and the
+`*-eventreceivers-*` files say which assemblies and classes are behind the count, and the solution
+that ships each assembly when the packages were inspected (see [Usage](Usage)).
 
 The classic customization signals are columns of the CSV, JSON and HTML reports under their
 own name, so that you can filter and sort on them:

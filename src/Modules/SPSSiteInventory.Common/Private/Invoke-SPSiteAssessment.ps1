@@ -41,6 +41,10 @@
         $SharePointAlertSettings = @{},
 
         [Parameter()]
+        [System.Collections.IDictionary]
+        $SolutionAssemblyIndex = $null,
+
+        [Parameter()]
         [System.String]
         $TargetMode = 'SharePointOnline'
     )
@@ -53,6 +57,7 @@
     $managedMetadataLists = [System.Collections.Generic.List[object]]::new()
     $externalLists = [System.Collections.Generic.List[object]]::new()
     $sharePointAlerts = [System.Collections.Generic.List[object]]::new()
+    $eventReceiverClasses = [System.Collections.Generic.List[object]]::new()
     $scored = [System.Collections.Generic.List[object]]::new()
     $siteTotal = $Inventory.Count
     $siteIndex = 0
@@ -93,7 +98,7 @@
                 $customizationWarnings = @()
                 # HTML files only matter where browser file handling is Permissive; SharePoint Online enforces Strict.
                 $scanHtmlFile = [string]$item.BrowserFileHandling -eq 'Permissive'
-                $signals = Get-SPSSiteCustomization -Site $site -CustomFeatureId $CustomFeatureId -FullTrustFeatureId $FullTrustFeatureId -LargeContentThresholds $LargeContentThresholds -PermissionLevels $PermissionLevels -SharePointAlertSettings $SharePointAlertSettings -ScanHtmlFile:$scanHtmlFile -WarningVariable customizationWarnings
+                $signals = Get-SPSSiteCustomization -Site $site -CustomFeatureId $CustomFeatureId -FullTrustFeatureId $FullTrustFeatureId -LargeContentThresholds $LargeContentThresholds -PermissionLevels $PermissionLevels -SharePointAlertSettings $SharePointAlertSettings -SolutionAssemblyIndex $SolutionAssemblyIndex -ScanHtmlFile:$scanHtmlFile -WarningVariable customizationWarnings
                 foreach ($warning in $customizationWarnings) {
                     $siteWarnings.Add([string]$warning)
                 }
@@ -123,6 +128,9 @@
                 }
                 foreach ($sharePointAlert in $signals.SharePointAlerts) {
                     $sharePointAlerts.Add($sharePointAlert)
+                }
+                foreach ($eventReceiverClass in $signals.EventReceiverClasses) {
+                    $eventReceiverClasses.Add($eventReceiverClass)
                 }
 
                 $result = Measure-SPSSiteComplexity -Signals $signals -Scoring $Scoring -TargetMode $TargetMode
@@ -245,6 +253,7 @@
                     ModernBlockerCount = $signals['ModernBlockerCount']
                     ModernBlockers = $signals['ModernBlockers']
                     EventReceivers = $signals['EventReceivers']
+                    EventReceiverExamples = $signals['EventReceiverExamples']
                     UniquePermissionsCount = $signals['UniquePermissionsCount']
                     ContentTypeCount = $signals['ContentTypeCount']
                     ListContentTypeBindingCount = $signals['ListContentTypeBindingCount']
@@ -363,6 +372,7 @@
                     ModernBlockerCount = $null
                     ModernBlockers = $null
                     EventReceivers = $null
+                    EventReceiverExamples = $null
                     UniquePermissionsCount = $null
                     ContentTypeCount = $null
                     ListContentTypeBindingCount = $null
@@ -394,5 +404,6 @@
         ManagedMetadataLists = $managedMetadataLists.ToArray()
         ExternalLists = $externalLists.ToArray()
         SharePointAlerts = $sharePointAlerts.ToArray()
+        EventReceiverClasses = $eventReceiverClasses.ToArray()
     }
 }

@@ -35,6 +35,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   uses to give the package files the time stamp of its other files.
   Without either parameter, the scan ends by telling how to inspect the packages when the farm has
   solutions. The Getting Started, Usage and Inspecting WSP packages wiki pages say it. (#135)
+- The report says what the `EventReceivers` signal counts. SharePoint registers one receiver per
+  event type and per list, so a class that listens to six events on a hundred lists counts 600, and
+  the report did not say which receivers they were. A site collection now has `EventReceiverExamples`
+  (up to five assemblies and classes, the largest first, with the number of receivers and lists, the
+  first list and the solution that ships the assembly), the HTML detail of a site collection shows
+  it, and the report has a *Custom event receivers* section by assembly (versions, classes,
+  receivers, site collections and solution). `Export-SPSInventoryReport` has a new
+  `-EventReceiverClasses` parameter that writes `*-eventreceivers-*` CSV and JSON files, one row per
+  assembly and class in each site collection (up to 200 for a site collection: `EventReceivers` stays
+  exact and a warning says when rows are left out), and lists them in the manifest
+  (`Files.EventReceiversCsv`, `Files.EventReceiversJson`). When the WSP packages are inspected
+  (`-ExportSolutionPackage` or `-SolutionPackagePath`), each assembly is matched to the package and
+  the farm solution that ship it, by its name and its public key token (`SolutionMatch`:
+  `NotChecked`, `None`, `AssemblyNameAndKey`, `AssemblyName`). The value of `EventReceivers` and its
+  weight do not change; only the receivers of lists and libraries are read, as before. The Usage,
+  Configuration and Inspecting WSP packages wiki pages say it. (#132)
 
 ## [2.1.0] - 2026-10-30
 

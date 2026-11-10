@@ -54,6 +54,7 @@ report pack, plus a dedicated farm-solution report, to the output folder:
 | `*-solutions-*.json` | Farm-solution (WSP) inventory for automation, with the feature scopes/ids kept as arrays. |
 | `*-solution-packages-*.csv` / `*-solution-packages-*.json` | Only when packages were inspected (`-ExportSolutionPackage` or `-SolutionPackagePath`). The WSP packages that were inspected, one row per package: whether it is custom, its full-trust code, the number of assemblies and features, the .NET framework, the farm solution it matches and what differs. The same file as `Export-SPSSolutionPackageReport` writes (see [Inspecting WSP packages offline](Solution-Packages#the-files)). |
 | `*-solution-assemblies-*.csv` | Only when packages were inspected. One row per assembly of the inspected packages, with its strong name, public key token, framework and where it is deployed. |
+| `*-eventreceivers-*.csv` / `*-eventreceivers-*.json` | The custom event receivers that `EventReceivers` counts, by site collection. One row per assembly and class: the assembly as it is registered and split (`AssemblyName`, `AssemblyVersion`, `PublicKeyToken`), the class, the number of receivers (`ReceiverCount`) and of lists (`ListCount`), the event types, the first list where the class is registered, and the solution that ships the assembly. `SolutionMatch` is `NotChecked` when no package was inspected, `None` when no inspected package ships the assembly (a package that could not be read in full may be the one that does), and `AssemblyNameAndKey` or `AssemblyName` when one does, with `PackageName` and `FarmSolutionName` (empty when the package is not deployed in the farm). The match is on the name of the assembly and, when both have one, its public key token: the version is not compared. At most 200 assemblies and classes are kept for a site collection (the first 200 that the scan meets), and `EventReceivers` stays exact when some are left out (a warning says so). |
 | `*-contenttypes-*.csv` / `*-contenttypes-*.json` | Content-type definitions and list bindings, including standard types. One row per web definition or list binding, not per item. |
 | `*-managedmetadata-*.csv` / `*-managedmetadata-*.json` | Managed metadata columns by list, following the SMAT Managed Metadata Columns report. One row per list or library with at least one visible managed metadata column. |
 | `*-externallists-*.csv` / `*-externallists-*.json` | External lists by list, following the SMAT External List report. One row per list backed by a Business Connectivity Services (BCS) external content type, with its BCS binding. |
@@ -186,7 +187,8 @@ CSV/JSON rows describe site collections and any web-application enumeration fail
 | `ClassicExperienceOptOutCount` / `ClassicExperienceOptOutExamples` | The site collection and the webs that opted out of the modern list and library experience (the feature `E3540C7D-6BEA-403C-A224-1A12EAFEE4C4` of the site collection and the feature `52E14B6F-B1BB-4969-B89B-C4FAA56745EF` of a web, one each), and up to five as `URL (site collection)` or `URL (web)` |
 | `ClassicExperienceListCount` / `ClassicExperienceListExamples` | Lists, hidden ones left out, whose "List experience" setting is classic (`ListExperienceOptions`), and up to five as `title (list URL)`. It is 0 on a SharePoint that has no such setting, such as SharePoint Server 2016 |
 | `ModernBlockerCount` / `ModernBlockers` | The kinds of blocker of the modern experience that the site collection has, out of seven (custom master page, alternate CSS URL, publishing features, XSLT list views, script web parts, opt-out of the modern list experience, lists forced to classic), and one text that says how many webs, views, web parts or lists are behind each. Not weighed in the example configurations: each blocker weighs through its own signal |
-| `EventReceivers` | Event receivers registered on lists from a custom (non-Microsoft) assembly; out-of-the-box receivers are not counted |
+| `EventReceivers` | Event receivers registered on lists from a custom (non-Microsoft) assembly; out-of-the-box receivers are not counted. SharePoint registers one receiver per event type and per list, so a class that listens to six events on a hundred lists counts 600. Only the receivers of lists and libraries are read, not those of webs, site collections or content types |
+| `EventReceiverExamples` | Up to five of the assemblies and classes behind `EventReceivers`, the largest first, with the number of receivers and of lists and the first list, for example `Contoso.Intranet / Contoso.Intranet.ItemReceiver: 600 receiver(s) on 100 list(s), first /sites/team/Lists/Tasks (solution contoso.intranet.wsp)`. The solution is named when an inspected package ships the assembly (see `-ExportSolutionPackage` and `-SolutionPackagePath`). The `*-eventreceivers-*` files give the assemblies and classes, up to 200 for a site collection: when it has more, the files and the examples hold the first 200 that the scan meets, and the receivers of the others are only in `EventReceivers`. |
 | `UniquePermissionsCount` | Role assignments on the webs that do not inherit their permissions. The root web always has its own, so the value is never 0: it is not a count of webs with unique permissions |
 | `ContentTypeCount` | Distinct content-type IDs seen in web definition collections, deduplicated within this site collection |
 | `ListContentTypeBindingCount` | Number of content-type bindings across the collection's lists, not the number of distinct designs |
@@ -266,14 +268,17 @@ folder can be moved, zipped and sent. The manifest lists the pages in `Files.Inv
   at zero is not listed. Click a column heading to sort, use the category buttons to filter, and
   type in the search box to find a site collection by name, URL, template or signal; the count
   next to them says how many site collections are shown.
-- **Farm solutions, solution packages, authentication, web application policies, content types,
-  managed metadata, external lists, BCS applications, Secure Store applications and profile
-  property mappings** follow. The *Solution packages* section is there only when the run inspected
-  packages (`-ExportSolutionPackage` or `-SolutionPackagePath`): it shows what each package holds, how it compares with the farm
-  solution it matches, and the farm solutions that have no inspected package. The managed
+- **Farm solutions, solution packages, custom event receivers, authentication, web application
+  policies, content types, managed metadata, external lists, BCS applications, Secure Store
+  applications and profile property mappings** follow. The *Solution packages* section is there
+  only when the run inspected packages (`-ExportSolutionPackage` or `-SolutionPackagePath`): it
+  shows what each package holds, how it compares with the farm solution it matches, and the farm
+  solutions that have no inspected package. The *Custom event receivers* section is there when a site collection has some: it
+  lists, by assembly, the classes, receivers and site collections behind `EventReceivers`,
+  and the solution that ships the assembly when the packages were inspected. The managed
   metadata, external list, BCS, Secure Store, profile property mapping, farm solution, solution
-  package and full-trust site tables show at most 200 rows and say how many are not shown and
-  which files hold all of them. The content types are not listed in the report,
+  package, event receiver and full-trust site tables show at most 200 rows and say how many are
+  not shown and which files hold all of them. The content types are not listed in the report,
   because there are thousands of them: it shows how many definitions and list bindings there
   are, and the `*-contenttypes-*` files hold every row.
 

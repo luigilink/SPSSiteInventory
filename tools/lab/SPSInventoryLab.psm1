@@ -738,6 +738,7 @@ function Get-SPSLabScenario {
             }
             Expect      = @(
                 (Get-SPSLabExpectation EventReceivers ge 1)
+                (Get-SPSLabExpectation EventReceiverExamples match 'Contoso\.Lab\.Receivers / Contoso\.Lab\.Receivers\.ItemReceiver: 1 receiver\(s\) on 1 list\(s\)')
             )
         })
 

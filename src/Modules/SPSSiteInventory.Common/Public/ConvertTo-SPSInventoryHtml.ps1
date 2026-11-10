@@ -76,6 +76,14 @@
         what differs, the packages that could not be read in full first, and the farm solutions
         of SolutionMap that no inspected package matches. Omitted cleanly when no package is passed.
 
+        .PARAMETER EventReceiverClasses
+        Optional event receiver rows, from the EventReceiverClasses of Get-SPSSiteCustomization: the
+        assembly and the class of the custom event receivers of each site collection. When at least
+        one is provided, the report gains a "Custom event receivers" section after the solution
+        packages: a summary line and a table by assembly (versions, the solution that ships it when the
+        packages were inspected, classes, receivers and site collections), the largest first.
+        Omitted cleanly when no row is passed.
+
         .PARAMETER ContentTypes
         Optional web content-type definitions and list bindings. When supplied,
         renders their metadata without classifying standard types as custom or
@@ -205,6 +213,12 @@
         [AllowNull()]
         [System.Object[]]
         $SolutionPackages = @(),
+
+        [Parameter()]
+        [AllowEmptyCollection()]
+        [AllowNull()]
+        [System.Object[]]
+        $EventReceiverClasses = @(),
 
         [Parameter()]
         [AllowEmptyCollection()]
@@ -444,6 +458,8 @@
     $solutions = @($SolutionMap | Where-Object { $null -ne $_ })
     $packages = @($SolutionPackages | Where-Object { $null -ne $_ })
     $hasSolutionPackageSection = $packages.Count -gt 0
+    $eventReceivers = @($EventReceiverClasses | Where-Object { $null -ne $_ })
+    $hasEventReceiverSection = $eventReceivers.Count -gt 0
     $authenticationRecords = @($records | Where-Object { $_.AuthenticationZones })
     $policyRecords = @($records | Where-Object { $null -ne $_.WebAppPolicyCount -or $_.BrowserFileHandling })
     $hasContentTypeSection = $PSBoundParameters.ContainsKey('ContentTypes')
@@ -743,6 +759,9 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
     }
     if ($hasSolutionPackageSection) {
         [void]$navigation.AppendLine('<a href="#solution-packages">Solution packages</a>')
+    }
+    if ($hasEventReceiverSection) {
+        [void]$navigation.AppendLine('<a href="#custom-event-receivers">Event receivers</a>')
     }
     if ($authenticationRecords.Count -gt 0) {
         [void]$navigation.AppendLine('<a href="#authentication">Authentication</a>')
@@ -1410,6 +1429,76 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
             $shownSolution = @($unmatchedSolution | Select-Object -First 20)
             $moreSolution = if ($unmatchedSolution.Count -gt $shownSolution.Count) { ' and {0} more' -f ($unmatchedSolution.Count - $shownSolution.Count) } else { '' }
             [void]$sb.AppendLine(('<p><strong>{0}</strong> farm solution(s) have no inspected package: {1}{2}. Save their packages from the farm to read them (see the wiki page "Inspecting WSP packages offline").</p>' -f $unmatchedSolution.Count, (ConvertTo-SPSHtmlText -Value ($shownSolution -join ', ')), $moreSolution))
+        }
+    }
+
+    # Custom event receivers, by assembly, over the whole farm: what the EventReceivers signal counts.
+    if ($hasEventReceiverSection) {
+        $receiverAssembly = @(
+            foreach ($assemblyGroup in ($eventReceivers | Group-Object -Property { '{0}|{1}' -f ([string]$_.AssemblyName).ToLowerInvariant(), [string]$_.PublicKeyToken })) {
+                $assemblyRow = @($assemblyGroup.Group)
+                $farmSolutionName = @($assemblyRow | ForEach-Object { [string]$_.FarmSolutionName } | Where-Object { $_ } | Sort-Object -Unique)
+                $packageName = @($assemblyRow | ForEach-Object { [string]$_.PackageName } | Where-Object { $_ } | Sort-Object -Unique)
+                [PSCustomObject]@{
+                    Name           = if ([string]$assemblyRow[0].AssemblyName) { [string]$assemblyRow[0].AssemblyName } else { [string]$assemblyRow[0].Assembly }
+                    PublicKeyToken = [string]$assemblyRow[0].PublicKeyToken
+                    Version        = (@($assemblyRow | ForEach-Object { [string]$_.AssemblyVersion } | Where-Object { $_ } | Sort-Object -Unique) -join '; ')
+                    ClassCount     = @($assemblyRow | ForEach-Object { [string]$_.Class } | Sort-Object -Unique).Count
+                    ReceiverCount  = [int](($assemblyRow | Measure-Object -Property ReceiverCount -Sum).Sum)
+                    SiteCount      = @($assemblyRow | ForEach-Object { [string]$_.SiteUrl } | Sort-Object -Unique).Count
+                    FarmSolution   = $farmSolutionName -join '; '
+                    Package        = $packageName -join '; '
+                    NotChecked     = @($assemblyRow | Where-Object { [string]$_.SolutionMatch -eq 'NotChecked' }).Count -gt 0
+                    ByNameOnly     = @($assemblyRow | Where-Object { [string]$_.SolutionMatch -eq 'AssemblyName' }).Count -gt 0
+                }
+            }
+        )
+        $receiverTotal = [int](($eventReceivers | Measure-Object -Property ReceiverCount -Sum).Sum)
+        $receiverClassTotal = [int](($receiverAssembly | Measure-Object -Property ClassCount -Sum).Sum)
+        $receiverSiteTotal = @($eventReceivers | ForEach-Object { [string]$_.SiteUrl } | Sort-Object -Unique).Count
+        $receiverSolutionUnknown = @($receiverAssembly | Where-Object { $_.NotChecked }).Count -gt 0
+
+        [void]$sb.AppendLine('<h2 id="custom-event-receivers">Custom event receivers</h2>')
+        [void]$sb.AppendLine('<div class="summary">')
+        [void]$sb.AppendLine(('<div class="summary-total"><strong>{0}</strong> receiver(s) &middot; <strong>{1}</strong> assembly(ies) &middot; <strong>{2}</strong> class(es) &middot; <strong>{3}</strong> site collection(s)</div>' -f $receiverTotal, $receiverAssembly.Count, $receiverClassTotal, $receiverSiteTotal))
+        [void]$sb.AppendLine('</div>')
+        $receiverSolutionNote = if ($receiverSolutionUnknown) { 'The solution that ships an assembly is not known: inspect the WSP packages (-ExportSolutionPackage or -SolutionPackagePath) to name it.' } else { 'The solution is the farm solution of an inspected package that ships the assembly.' }
+        [void]$sb.AppendLine(('<p>The custom event receivers that the EventReceivers signal counts, by assembly. SharePoint registers one receiver per event type and per list, so a class that listens to six events on a hundred lists counts 600. Only the receivers of lists and libraries are read, and an assembly whose name starts with Microsoft. is not custom. {0} The event receivers CSV and JSON files give each assembly and class with its receivers and lists, by site collection (up to 200 assemblies and classes for each).</p>' -f $receiverSolutionNote))
+        [void]$sb.AppendLine('<div class="table-scroll">')
+        [void]$sb.AppendLine('<table class="eventreceivers">')
+        [void]$sb.AppendLine('<thead><tr><th>Assembly</th><th>Version</th><th>Solution</th><th class="num">Classes</th><th class="num">Receivers</th><th class="num">Site collections</th></tr></thead>')
+        [void]$sb.AppendLine('<tbody>')
+        foreach ($assembly in @($receiverAssembly | Sort-Object -Property @{ E = { $_.ReceiverCount }; Descending = $true }, @{ E = { $_.Name } }, @{ E = { $_.PublicKeyToken } } | Select-Object -First $MaxDetailRow)) {
+            $tokenText = if ($assembly.PublicKeyToken) { $assembly.PublicKeyToken } else { 'not signed' }
+            $solutionCell = if ($assembly.FarmSolution) {
+                ConvertTo-SPSHtmlText -Value $assembly.FarmSolution
+            }
+            elseif ($assembly.Package) {
+                '{0} <span class="muted">(package)</span>' -f (ConvertTo-SPSHtmlText -Value $assembly.Package)
+            }
+            elseif ($assembly.NotChecked) {
+                '<span class="muted">-</span>'
+            }
+            else {
+                '<span class="pill warn">No inspected package</span>'
+            }
+            if (($assembly.FarmSolution -or $assembly.Package) -and $assembly.ByNameOnly) {
+                $solutionCell += ' <span class="muted">(by name)</span>'
+            }
+            [void]$sb.AppendLine(('<tr><td>{0} <span class="muted">{1}</span></td><td>{2}</td><td>{3}</td><td class="num">{4}</td><td class="num">{5}</td><td class="num">{6}</td></tr>' -f `
+                (ConvertTo-SPSHtmlText -Value $assembly.Name),
+                (ConvertTo-SPSHtmlText -Value $tokenText),
+                (ConvertTo-SPSHtmlText -Value $assembly.Version),
+                $solutionCell,
+                $assembly.ClassCount,
+                $assembly.ReceiverCount,
+                $assembly.SiteCount))
+        }
+        [void]$sb.AppendLine('</tbody>')
+        [void]$sb.AppendLine('</table>')
+        [void]$sb.AppendLine('</div>')
+        if ($receiverAssembly.Count -gt $MaxDetailRow) {
+            [void]$sb.AppendLine(('<p class="muted">Showing the first {0} of {1} assemblies. The event receivers CSV and JSON files list the others, by site collection (up to 200 assemblies and classes for each).</p>' -f $MaxDetailRow, $receiverAssembly.Count))
         }
     }
 

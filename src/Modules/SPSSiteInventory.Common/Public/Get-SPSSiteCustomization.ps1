@@ -15,7 +15,16 @@
 
         EventReceivers counts only custom event receivers (those registered from a
         non-Microsoft assembly). Out-of-the-box receivers on native lists are ignored so
-        they do not inflate the score.
+        they do not inflate the score. Only the receivers of lists and libraries are read, not
+        those of webs, site collections or content types. SharePoint registers one receiver
+        per event type and per list, so a class that listens to six events on a hundred lists
+        counts 600. EventReceiverExamples names up to five of the assemblies and classes behind
+        the count, with how many receivers and lists each has and where the first one is, and the
+        farm solution that ships the assembly when SolutionAssemblyIndex is given. EventReceiverClasses
+        holds one row for each assembly and class (up to 200 per site collection, the first that the
+        scan meets, and a count that stays exact when rows are left out), for the event receiver
+        report. When the rows cannot be built, the site keeps its counts, has no rows and a warning
+        gives the reason.
 
         Workflows are split by platform because their migration cost differs sharply:
 
@@ -222,6 +231,12 @@
         login name of the owner of each alert is collected; a value that is not a boolean is
         rejected.
 
+        .PARAMETER SolutionAssemblyIndex
+        Optional index of the assemblies of the inspected solution packages (from
+        Get-SPSSolutionAssemblyIndex). When it is given, each row of EventReceiverClasses says
+        which package, and which farm solution, ships the assembly of the receivers, or that none
+        does. Leave it out when no package was inspected: the rows then say NotChecked.
+
         .PARAMETER ScanHtmlFile
         Counts .htm and .html files in document libraries. Set it for sites of a web
         application whose browser file handling is Permissive.
@@ -261,6 +276,10 @@
         [Parameter()]
         [System.Collections.IDictionary]
         $SharePointAlertSettings = @{},
+
+        [Parameter()]
+        [System.Collections.IDictionary]
+        $SolutionAssemblyIndex = $null,
 
         [Parameter()]
         [System.Management.Automation.SwitchParameter]
@@ -334,6 +353,8 @@
         ModernBlockers           = ''
         UniquePermissionsCount   = 0
         EventReceivers           = 0
+        EventReceiverClasses     = @()
+        EventReceiverExamples    = ''
         SubsiteCount             = 0
         MaxSubsiteDepth          = 0
         SubsiteExamples          = ''
@@ -346,6 +367,9 @@
     }
     $contentTypes = [System.Collections.Generic.List[object]]::new()
     $contentTypeIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $eventReceiverTable = [System.Collections.Generic.Dictionary[System.String, System.Object]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $maxEventReceiverGroup = 200
+    $eventReceiverGroupsLeftOut = $false
     $largeListExamples = [System.Collections.Generic.List[string]]::new()
     $largeListViewExamples = [System.Collections.Generic.List[string]]::new()
     $checkedOutFileExamples = [System.Collections.Generic.List[string]]::new()
@@ -849,6 +873,9 @@
                         foreach ($receiver in $list.EventReceivers) {
                             if (Test-SPSCustomAssembly -Assembly $receiver.Assembly) {
                                 $signals.EventReceivers++
+                                if (-not (Add-SPSEventReceiverClass -Table $eventReceiverTable -Receiver $receiver -List $list -MaximumGroup $maxEventReceiverGroup)) {
+                                    $eventReceiverGroupsLeftOut = $true
+                                }
                             }
                         }
 
@@ -1706,6 +1733,20 @@
     }
     if ($unreadablePageCount -gt $maxPageWarnings) {
         Write-Warning -Message "$($unreadablePageCount - $maxPageWarnings) more page(s) could not be read on site '$($Site.Url)'; only the first $maxPageWarnings are reported."
+    }
+
+    # The detail never changes the signal: when it cannot be built, the site keeps its counts and has no rows for it.
+    try {
+        $eventReceiverClasses = @(ConvertTo-SPSEventReceiverClassRow -Table $eventReceiverTable -SiteUrl ([System.String]$Site.Url) -SolutionAssemblyIndex $SolutionAssemblyIndex)
+        $eventReceiverExamples = Get-SPSEventReceiverExample -Row $eventReceiverClasses
+        $signals.EventReceiverClasses = $eventReceiverClasses
+        $signals.EventReceiverExamples = $eventReceiverExamples
+    }
+    catch {
+        Write-Warning -Message "The event receivers of site '$($Site.Url)' could not be listed by assembly and class: $($_.Exception.Message); EventReceivers stays exact."
+    }
+    if ($eventReceiverGroupsLeftOut) {
+        Write-Warning -Message "Event receiver rows stopped after $maxEventReceiverGroup assemblies and classes on site '$($Site.Url)'; EventReceivers stays exact."
     }
 
     $signals.SubsiteCount = $subsites.Count

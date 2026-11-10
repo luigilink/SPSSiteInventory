@@ -115,7 +115,7 @@
     & $flag 'UsesFullTrustCode' 'Full-trust code' ''
     & $flag 'UsesCustomFarmFeature' 'Custom farm feature' ''
     & $count 'SandboxSolutions' 'Sandbox solutions' ''
-    & $count 'EventReceivers' 'Custom event receivers' ''
+    & $count 'EventReceivers' 'Custom event receivers' 'EventReceiverExamples'
     & $flag 'CustomMasterPage' 'Custom master page' ''
     & $count 'AlternateCssUrlCount' 'Alternate CSS URL (webs)' 'AlternateCssUrlExamples'
     & $count 'XsltListViewCount' 'XSLT list views' 'XsltListViewExamples'

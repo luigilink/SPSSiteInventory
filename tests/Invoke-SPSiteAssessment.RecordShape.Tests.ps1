@@ -19,7 +19,7 @@ BeforeAll {
     $script:Settings = Get-SPSInventorySetting -Path (Join-Path $repoRoot 'src/config/inventory-settings.example.psd1')
     $script:OnPremSettings = Get-SPSInventorySetting -Path (Join-Path $repoRoot 'src/config/inventory-settings.onprem.example.psd1')
     $script:Usage = Get-Content -Path (Join-Path $repoRoot 'wiki/Usage.md') -Raw
-    $script:ClassicSignal = @('UsesCustomFarmFeature', 'SandboxSolutions', 'CustomMasterPage', 'EventReceivers', 'UniquePermissionsCount')
+    $script:ClassicSignal = @('UsesCustomFarmFeature', 'SandboxSolutions', 'CustomMasterPage', 'EventReceivers', 'EventReceiverExamples', 'UniquePermissionsCount')
     $script:ModernReadinessSignal = @(
         'AlternateCssUrlCount', 'AlternateCssUrlExamples', 'XsltListViewCount', 'XsltListViewExamples',
         'ScriptWebPartCount', 'ScriptWebPartExamples', 'ClassicExperienceOptOutCount', 'ClassicExperienceOptOutExamples',

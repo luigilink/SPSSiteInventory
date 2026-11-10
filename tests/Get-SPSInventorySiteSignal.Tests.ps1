@@ -142,6 +142,7 @@ Describe 'Get-SPSInventorySiteSignal' {
         @{ Count = 'AudienceTargetedItemCount'; Examples = 'AudienceTargetedExamples'; Label = 'Audience-targeted items' }
         @{ Count = 'SiteNotebookCount'; Examples = 'SiteNotebookExamples'; Label = 'Site notebooks' }
         @{ Count = 'CustomizedProfilePageCount'; Examples = 'CustomizedProfilePageExamples'; Label = 'Customized profile page' }
+        @{ Count = 'EventReceivers'; Examples = 'EventReceiverExamples'; Label = 'Custom event receivers' }
     ) {
         $signal = @(Get-Signal -Record (New-RecordWith @{ $Count = 2; $Examples = 'first (1); second (2)' }))
 
