@@ -88,7 +88,7 @@ Describe 'Invoke-SPSSiteInventory.ps1 and the solution packages' {
         $script:Text | Should -Match '(?m)^\s+\.\\Invoke-SPSSiteInventory\.ps1 -ExportSolutionPackage\s*$'
         $script:Text | Should -Match 'in a temporary folder of the\s+account that runs the scan'
         $script:Text | Should -Match 'removes the folder as soon as they are read'
-        $script:Text | Should -Match 'none goes in the reports folder'
+        $script:Text | Should -Match 'Ctrl\+C\.\s+None goes in the reports folder, which is the one that you zip and send'
         $script:Text | Should -Match 'with -ExportSolutionPackage or -SolutionPackagePath, inspects the WSP packages'
     }
 
