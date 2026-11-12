@@ -8,8 +8,8 @@
     1. bootstraps logging and validates prerequisites;
     2. loads the SharePoint commands and the inventory settings;
     3. builds the farm-solution map (WSP -> full-trust code, features) to detect custom code and,
-       with -SolutionPackagePath, inspects the WSP packages saved from the farm and matches
-       them to the farm solutions;
+       with -ExportSolutionPackage or -SolutionPackagePath, inspects the WSP packages and
+       matches them to the farm solutions;
     4. enumerates site collections (identity + volumetry);
     5. collects the customization signals of each site and reads the Business Connectivity
        Services (BCS) definitions, the Secure Store target applications and the profile property
@@ -30,22 +30,39 @@
     Path to the inventory settings .psd1 file. Defaults to
     .\config\inventory-settings.psd1 next to this script.
 
+    .PARAMETER ExportSolutionPackage
+    Optional switch. Saves the package (WSP) of every farm solution in a temporary folder of the
+    account that runs the scan, with SolutionFile.SaveAs, inspects the packages as
+    -SolutionPackagePath does, and removes the folder as soon as they are read, also after an
+    error or Ctrl+C. None goes in the reports folder, which is the one that you zip and send: only
+    what the inspection found is in the reports. If the process is killed, the window is closed or
+    security software keeps a file open, the folder stays: the log gives its path when the scan
+    saves the packages, a warning says at the end when the folder could not be removed, and you
+    remove it by hand. A package that cannot be saved is a warning of the log, not the end of the
+    scan. The code of the solutions is written to disk for a moment, which security software may
+    notice. It can be combined with -SolutionPackagePath.
+
     .PARAMETER SolutionPackagePath
     Optional. WSP files, folders that hold some (their subfolders too) or folders of expanded
     packages, to inspect with Get-SPSSolutionPackageInfo: the strong name of every assembly, the
     features (also those of a solution that is not deployed), the receivers and the .NET
     framework. The packages are matched to the farm solutions, shown in the HTML report and
-    written to their own CSV and JSON files. Save them from the farm first, in a folder that is
-    not the reports folder, for example with
+    written to their own CSV and JSON files. Use it for packages that you already have, or that
+    you want to keep: save them from the farm in a folder that is not the reports folder, for
+    example with
     Get-SPSolution | ForEach-Object { $_.SolutionFile.SaveAs((Join-Path 'D:\Packages' $_.Name)) }.
-    A package that cannot be read is a warning of the log, not the end of the scan. Without this
-    parameter, the scan ends by telling how to inspect the packages.
+    -ExportSolutionPackage does it for you, in a temporary folder. A package that cannot be read
+    is a warning of the log, not the end of the scan. Without either parameter, the scan ends by
+    telling how to inspect the packages, when the farm has solutions.
 
     .EXAMPLE
     .\Invoke-SPSSiteInventory.ps1
 
     .EXAMPLE
     .\Invoke-SPSSiteInventory.ps1 -ConfigPath D:\Config\inventory-settings.psd1
+
+    .EXAMPLE
+    .\Invoke-SPSSiteInventory.ps1 -ExportSolutionPackage
 
     .EXAMPLE
     .\Invoke-SPSSiteInventory.ps1 -SolutionPackagePath D:\Packages
@@ -60,7 +77,11 @@ param
 
     [Parameter()]
     [System.String[]]
-    $SolutionPackagePath
+    $SolutionPackagePath,
+
+    [Parameter()]
+    [System.Management.Automation.SwitchParameter]
+    $ExportSolutionPackage
 )
 
 $ErrorActionPreference = 'Stop'
@@ -104,24 +125,75 @@ try {
     # The packages are read now, so that a wrong path shows before the scan, and a failure here must not stop the site report.
     $solutionPackages = @()
     $packagePath = @($SolutionPackagePath | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
-    if ($packagePath.Count -gt 0) {
-        Add-SPSInventoryEvent -Message ('Inspecting the solution packages in {0}.' -f (($packagePath | ForEach-Object { "'$_'" }) -join ', ')) -Level Information
-        try {
-            $packageParams = @{ Path = $packagePath; Recurse = $true; FarmSolutionMap = @($solutionMap) }
-            if ($settings.ContainsKey('KnownMicrosoftSolutionPrefix')) {
-                $packageParams['KnownMicrosoftPrefix'] = $settings.KnownMicrosoftSolutionPrefix
+    # The packages that the scan saves from the farm go in a temporary folder, never in the reports folder (the one that is zipped and sent), and are removed as soon as they are read.
+    $exportFolder = $null
+    $packageFolderLeft = $null
+    if ($ExportSolutionPackage) {
+        $exportFolder = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath ('SPSSiteInventory-packages-' + [System.Guid]::NewGuid().ToString('N'))
+    }
+    try {
+        $inspectPath = @($packagePath)
+        $inspectLabel = @($packagePath | ForEach-Object { "'$_'" })
+        if ($ExportSolutionPackage) {
+            Add-SPSInventoryEvent -Message ("Saving the packages of the farm solutions in the temporary folder '{0}', to inspect them. The folder is removed as soon as they are read: if this run is stopped before that, remove it by hand." -f $exportFolder) -Level Information
+            try {
+                $packageExport = & $commonModule {
+                    param ($Path)
+                    Save-SPSFarmSolutionPackage -Path $Path
+                } $exportFolder
+                foreach ($exportFailure in @($packageExport.Failure)) {
+                    Add-SPSInventoryEvent -Message ("The package of the farm solution '{0}' could not be saved: {1}" -f $exportFailure.Name, $exportFailure.Reason) -Level Warning
+                }
+                if ($packageExport.Requested -eq 0) {
+                    Add-SPSInventoryEvent -Message 'The farm has no solution, so there is no package to save.' -Level Information
+                }
+                else {
+                    Add-SPSInventoryEvent -Message ('{0} of {1} farm solution package(s) saved.' -f $packageExport.Saved, $packageExport.Requested) -Level Information
+                }
+                if ($packageExport.Saved -gt 0) {
+                    $inspectPath += $exportFolder
+                    $inspectLabel += 'the packages saved from the farm'
+                }
             }
-            $solutionPackages = @(Get-SPSSolutionPackageInfo @packageParams)
-        }
-        catch {
-            Add-SPSInventoryEvent -Message "The solution package inspection failed: $($_.Exception.Message)" -Level Warning
-        }
-        foreach ($solutionPackage in $solutionPackages) {
-            if ($solutionPackage.Status -ne 'Inspected') {
-                Add-SPSInventoryEvent -Message ("Solution package '{0}' is {1}: {2}" -f $solutionPackage.PackageName, $solutionPackage.Status, $solutionPackage.Detail) -Level Warning
+            catch {
+                Add-SPSInventoryEvent -Message "The packages of the farm solutions could not be saved: $($_.Exception.Message)" -Level Warning
             }
         }
-        Add-SPSInventoryEvent -Message ('{0} solution package(s) inspected: {1} custom, {2} with full-trust code, {3} not read in full.' -f $solutionPackages.Count, @($solutionPackages | Where-Object { $_.IsCustom }).Count, @($solutionPackages | Where-Object { $_.IsFullTrustCode }).Count, @($solutionPackages | Where-Object { $_.Status -ne 'Inspected' }).Count) -Level Information
+        if ($inspectPath.Count -gt 0) {
+            Add-SPSInventoryEvent -Message ('Inspecting the solution packages in {0}.' -f ($inspectLabel -join ', ')) -Level Information
+            try {
+                $packageParams = @{ Path = $inspectPath; Recurse = $true; FarmSolutionMap = @($solutionMap) }
+                if ($settings.ContainsKey('KnownMicrosoftSolutionPrefix')) {
+                    $packageParams['KnownMicrosoftPrefix'] = $settings.KnownMicrosoftSolutionPrefix
+                }
+                $solutionPackages = @(Get-SPSSolutionPackageInfo @packageParams)
+            }
+            catch {
+                Add-SPSInventoryEvent -Message "The solution package inspection failed: $($_.Exception.Message)" -Level Warning
+            }
+            # The package files are sent: the temporary folders of the scan are taken out of the text of the records, which quotes the path that an inspection could not read, before the log and the reports.
+            & $commonModule {
+                param ($Record, $Folder)
+                Hide-SPSTemporaryPackagePath -Record $Record -Folder $Folder
+            } $solutionPackages $exportFolder
+            foreach ($solutionPackage in $solutionPackages) {
+                if ($solutionPackage.Status -ne 'Inspected') {
+                    Add-SPSInventoryEvent -Message ("Solution package '{0}' is {1}: {2}" -f $solutionPackage.PackageName, $solutionPackage.Status, $solutionPackage.Detail) -Level Warning
+                }
+            }
+            Add-SPSInventoryEvent -Message ('{0} solution package(s) inspected: {1} custom, {2} with full-trust code, {3} not read in full.' -f $solutionPackages.Count, @($solutionPackages | Where-Object { $_.IsCustom }).Count, @($solutionPackages | Where-Object { $_.IsFullTrustCode }).Count, @($solutionPackages | Where-Object { $_.Status -ne 'Inspected' }).Count) -Level Information
+        }
+    }
+    finally {
+        if ($null -ne $exportFolder) {
+            $removed = & $commonModule {
+                param ($Path)
+                Remove-SPSPackageWorkFolder -Path $Path
+            } $exportFolder
+            if (-not $removed) {
+                $packageFolderLeft = $exportFolder
+            }
+        }
     }
 
     Add-SPSInventoryEvent -Message 'Enumerating site collections.' -Level Information
@@ -305,8 +377,8 @@ try {
     if ($solutionPackages.Count -gt 0) {
         Add-SPSInventoryEvent -Message "Solution package report. CSV: $($output.SolutionPackagesCsvPath) | Assemblies: $($output.SolutionAssembliesCsvPath) | JSON: $($output.SolutionPackagesJsonPath)" -Level Information
     }
-    elseif ($packagePath.Count -eq 0 -and @($solutionMap).Count -gt 0) {
-        Add-SPSInventoryEvent -Message ('The farm-solution report only gives what SharePoint says about each solution. The WSP packages say more: the strong name of every assembly, the features of a solution that is not deployed, the receivers and the .NET framework. To inspect them, save the packages in a folder that is not the reports folder, for example with Get-SPSolution | ForEach-Object { $_.SolutionFile.SaveAs((Join-Path ''D:\Packages'' $_.Name)) }, then run this script again with -SolutionPackagePath ''D:\Packages'' to get them in the HTML report, or inspect them alone with Get-SPSSolutionPackageInfo. See the wiki page "Inspecting WSP packages offline".') -Level Information
+    elseif (-not $ExportSolutionPackage -and $packagePath.Count -eq 0 -and @($solutionMap).Count -gt 0) {
+        Add-SPSInventoryEvent -Message ('The farm-solution report only gives what SharePoint says about each solution. The WSP packages say more: the strong name of every assembly, the features of a solution that is not deployed, the receivers and the .NET framework. To inspect them, run this script again with -ExportSolutionPackage: it saves the packages of the farm solutions in a temporary folder, reads them and removes the folder as soon as they are read, so that none goes in the reports folder. To inspect packages that you already have, give their folder to -SolutionPackagePath, or use Get-SPSSolutionPackageInfo alone. See the wiki page "Inspecting WSP packages offline".') -Level Information
     }
 }
 catch {
@@ -314,5 +386,8 @@ catch {
     throw
 }
 finally {
+    if ($null -ne $packageFolderLeft) {
+        Add-SPSInventoryEvent -Message ("The temporary folder '{0}' still holds the packages of the farm solutions, because it could not be removed. Remove it by hand." -f $packageFolderLeft) -Level Warning
+    }
     Stop-Transcript | Out-Null
 }

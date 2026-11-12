@@ -10,12 +10,12 @@ The orchestrator:
 
 1. starts a transcript and prints a banner;
 2. loads the SharePoint commands and your settings;
-3. builds the farm-solution map (custom-code detection) and, with `-SolutionPackagePath`, inspects the WSP packages that you saved from the farm and matches them to it;
+3. builds the farm-solution map (custom-code detection) and, with `-ExportSolutionPackage` or `-SolutionPackagePath`, inspects the WSP packages and matches them to it;
 4. reads configured authentication across all zones, then enumerates site collections (personal sites and site masters are left out unless the `Scope` settings keep them);
 5. collects customization signals, content-type definitions and list bindings, and scores each site;
 6. exports CSV, JSON and a self-contained HTML report to the configured output folder.
 
-Add `-SolutionPackagePath <folder>` to inspect the WSP packages in the same run (see [Inspecting WSP packages offline](Solution-Packages#from-the-main-scan)); without it, the scan ends by telling how.
+Add `-ExportSolutionPackage` to inspect the WSP packages of the farm in the same run: the scan saves them in a temporary folder, reads them and removes the folder as soon as they are read, so that none goes in the reports folder. Add `-SolutionPackagePath <folder>` for packages that you already have (see [Inspecting WSP packages offline](Solution-Packages#from-the-main-scan)). Without either, the scan ends by telling how, when the farm has solutions.
 
 Progress is reported for both site-collection enumeration and per-site assessment.
 Collection read failures are recorded as partial or failed assessments and do not
@@ -52,8 +52,8 @@ report pack, plus a dedicated farm-solution report, to the output folder:
 | `*-alerts-*.csv` / `*-alerts-*.json` | Normalized risk alerts extracted from the site signals, each with its severity, an explanation and a remediation hint (and the Microsoft Learn page behind it). The `SharePointOnPrem` mode has its own severity and words for them. One alert per site collection and signal; web application and BCS alerts are written once per web application and per LOB system. The CSV is for Excel, the JSON for automation. The alert types and their advice are listed in [Alerts and remediation](Alerts). |
 | `*-solutions-*.csv` | Farm-solution (WSP) inventory for Excel; one row per solution, with the feature scopes/ids flattened. |
 | `*-solutions-*.json` | Farm-solution (WSP) inventory for automation, with the feature scopes/ids kept as arrays. |
-| `*-solution-packages-*.csv` / `*-solution-packages-*.json` | Only with `-SolutionPackagePath`. The WSP packages that were inspected, one row per package: whether it is custom, its full-trust code, the number of assemblies and features, the .NET framework, the farm solution it matches and what differs. The same file as `Export-SPSSolutionPackageReport` writes (see [Inspecting WSP packages offline](Solution-Packages#the-files)). |
-| `*-solution-assemblies-*.csv` | Only with `-SolutionPackagePath`. One row per assembly of the inspected packages, with its strong name, public key token, framework and where it is deployed. |
+| `*-solution-packages-*.csv` / `*-solution-packages-*.json` | Only when packages were inspected (`-ExportSolutionPackage` or `-SolutionPackagePath`). The WSP packages that were inspected, one row per package: whether it is custom, its full-trust code, the number of assemblies and features, the .NET framework, the farm solution it matches and what differs. The same file as `Export-SPSSolutionPackageReport` writes (see [Inspecting WSP packages offline](Solution-Packages#the-files)). |
+| `*-solution-assemblies-*.csv` | Only when packages were inspected. One row per assembly of the inspected packages, with its strong name, public key token, framework and where it is deployed. |
 | `*-contenttypes-*.csv` / `*-contenttypes-*.json` | Content-type definitions and list bindings, including standard types. One row per web definition or list binding, not per item. |
 | `*-managedmetadata-*.csv` / `*-managedmetadata-*.json` | Managed metadata columns by list, following the SMAT Managed Metadata Columns report. One row per list or library with at least one visible managed metadata column. |
 | `*-externallists-*.csv` / `*-externallists-*.json` | External lists by list, following the SMAT External List report. One row per list backed by a Business Connectivity Services (BCS) external content type, with its BCS binding. |
@@ -268,8 +268,8 @@ folder can be moved, zipped and sent. The manifest lists the pages in `Files.Inv
   next to them says how many site collections are shown.
 - **Farm solutions, solution packages, authentication, web application policies, content types,
   managed metadata, external lists, BCS applications, Secure Store applications and profile
-  property mappings** follow. The *Solution packages* section is there only when the run was given
-  `-SolutionPackagePath`: it shows what each package holds, how it compares with the farm
+  property mappings** follow. The *Solution packages* section is there only when the run inspected
+  packages (`-ExportSolutionPackage` or `-SolutionPackagePath`): it shows what each package holds, how it compares with the farm
   solution it matches, and the farm solutions that have no inspected package. The managed
   metadata, external list, BCS, Secure Store, profile property mapping, farm solution, solution
   package and full-trust site tables show at most 200 rows and say how many are not shown and

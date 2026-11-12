@@ -48,22 +48,34 @@ A package that cannot be inspected is returned with `Status` `Failed` and the re
 
 ## From the main scan
 
-`Invoke-SPSSiteInventory.ps1` runs the same inspection when you give it the packages with `-SolutionPackagePath`: WSP files, folders that hold some (and their subfolders), or folders of expanded packages, one or several:
+`Invoke-SPSSiteInventory.ps1` runs the same inspection, in one of two ways. With `-ExportSolutionPackage`, the scan saves the packages of the farm solutions itself:
+
+```powershell
+.\Invoke-SPSSiteInventory.ps1 -ExportSolutionPackage
+```
+
+It saves the package of every farm solution with `SolutionFile.SaveAs`, in a temporary folder of the account that runs the scan (`SPSSiteInventory-packages-` and a new name for each run), reads them, and removes the folder as soon as they are read, also after an error or Ctrl+C. **None goes in the reports folder**, which is the one that you zip and send: the packages are the code of your solutions, and only what the inspection found reaches the reports. A package that cannot be saved is a warning of the log with the reason, and the other ones are read. The temporary folder of the account must have room for the packages, and security software may notice that the code is written to disk for a moment.
+
+If the process is killed, the window is closed, or security software keeps a file open, the folder stays. The log gives its path when the packages are saved, a warning repeats it at the end of the run when the scan could not remove the folder, and you can look for `SPSSiteInventory-packages-*` in the temporary folder of the account that ran the scan. Remove it by hand: it holds the code of your solutions. The scan only removes a folder of exactly that form (the name, then 32 hexadecimal digits, directly in the temporary folder), and never a link.
+
+In the files and in the log of the reports, a package that was saved from the farm has `(saved from the farm)` and its name as its `PackagePath`, and the same words replace the temporary folder in any text of a record (the reason that a package could not be read, for example), because the temporary path is gone when the report is written and would show the profile of the account. A work folder of the expansion is shown as `(work folder)`. A package that you gave keeps its own path.
+
+With `-SolutionPackagePath`, you give the packages that you already have, or that you saved to keep: WSP files, folders that hold some (and their subfolders), or folders of expanded packages, one or several:
 
 ```powershell
 Get-SPSolution | ForEach-Object { $_.SolutionFile.SaveAs((Join-Path 'D:\Packages' $_.Name)) }
 .\Invoke-SPSSiteInventory.ps1 -SolutionPackagePath D:\Packages
 ```
 
-The packages are read right after the farm solutions, before the scan, so a wrong path shows at once. They are matched to the farm solutions by solution id, or else by file name, and the run:
+The two can be combined: the packages of both are inspected, and one that is in both is listed twice. The packages are read right after the farm solutions, before the scan, so a wrong path shows at once. They are matched to the farm solutions by solution id, or else by file name, and the run:
 
 - writes the package CSV, the assembly CSV and the JSON file (see [The files](#the-files)) next to the other reports, with the time stamp of the run;
 - lists them in the manifest (`Files.SolutionPackagesCsv`, `Files.SolutionAssembliesCsv` and `Files.SolutionPackagesJson`) and counts the packages, and those that are `Partial` or `Failed`, in `Summary.SolutionPackageCount` and `Summary.SolutionPackageIssueCount`; both are null, like the files, when no package was inspected;
 - adds a **Solution packages** section to the HTML report, after the farm solutions: one row per package (status, custom or Microsoft, full-trust code, assemblies, features, .NET framework, the farm solution that it matches and what differs from it), the packages that could not be read in full first, and the farm solutions that no inspected package matches.
 
-A package that cannot be read is a warning of the log and a row with its reason: it does not stop the scan. Without `-SolutionPackagePath`, the scan ends with a line that says how to save and inspect the packages, when the farm has solutions.
+A package that cannot be read is a warning of the log and a row with its reason: it does not stop the scan. Without `-ExportSolutionPackage` and `-SolutionPackagePath`, the scan ends with a line that says how to inspect the packages, when the farm has solutions (and not otherwise).
 
-The packages are the code of your solutions. Save them in a folder that is not the reports folder, which is the one that you zip and send.
+The packages are the code of your solutions. When you save them yourself, save them in a folder that is not the reports folder, which is the one that you zip and send. `-ExportSolutionPackage` removes them as soon as they are read.
 
 ## The files
 
