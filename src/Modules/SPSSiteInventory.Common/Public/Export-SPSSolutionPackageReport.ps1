@@ -30,6 +30,10 @@
         '-solution-packages' (or '-solution-assemblies') and a timestamp are appended to keep
         successive runs side by side.
 
+        .PARAMETER Timestamp
+        Time stamp (yyyyMMdd-HHmm) of the file names. Defaults to the current time. Export-SPSInventoryReport
+        gives its own, so that the package files carry the stamp of the other files of the report.
+
         .EXAMPLE
         Get-SPSSolutionPackageInfo -Path D:\Packages | Export-SPSSolutionPackageReport -OutputFolder C:\Inventory
     #>
@@ -48,7 +52,12 @@
 
         [Parameter()]
         [System.String]
-        $BaseName = 'SPSSiteInventory'
+        $BaseName = 'SPSSiteInventory',
+
+        [Parameter()]
+        [ValidatePattern('^[0-9]{8}-[0-9]{4}$')]
+        [System.String]
+        $Timestamp = (Get-Date -Format 'yyyyMMdd-HHmm')
     )
 
     begin {
@@ -68,10 +77,9 @@
             $null = New-Item -Path $OutputFolder -ItemType Directory -Force
         }
 
-        $timestamp = Get-Date -Format 'yyyyMMdd-HHmm'
-        $packageCsvPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-solution-packages-{1}.csv' -f $BaseName, $timestamp)
-        $assemblyCsvPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-solution-assemblies-{1}.csv' -f $BaseName, $timestamp)
-        $jsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-solution-packages-{1}.json' -f $BaseName, $timestamp)
+        $packageCsvPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-solution-packages-{1}.csv' -f $BaseName, $Timestamp)
+        $assemblyCsvPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-solution-assemblies-{1}.csv' -f $BaseName, $Timestamp)
+        $jsonPath = Join-Path -Path $OutputFolder -ChildPath ('{0}-solution-packages-{1}.json' -f $BaseName, $Timestamp)
 
         $join = { param ($Value) return (@($Value) -join '; ') }
 

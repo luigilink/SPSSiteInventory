@@ -101,6 +101,27 @@ The script exits with code 1 when there is an error, or when the checks themselv
 
 The scan is read-only. On a large farm it can take a while (it enumerates every site collection). When it finishes, the CSV, JSON and HTML reports are in the `OutputFolder` from your settings, or in the `Reports` folder next to the script when it is empty.
 
+### Inspect the WSP packages (optional)
+
+The farm-solution report only gives what SharePoint says about each solution. The WSP packages say more: the strong name of every assembly, the features of a solution that is not deployed, the receivers and the .NET framework (see [Inspecting WSP packages offline](Solution-Packages)). When the farm has solutions and you did not ask for the packages, the scan ends by telling you so. One switch gives you both reports from one run:
+
+```powershell
+.\Invoke-SPSSiteInventory.ps1 -ExportSolutionPackage
+```
+
+The scan saves the package of every farm solution in a temporary folder of the account that runs it (this reads the configuration database and changes nothing), reads them, and removes the folder as soon as they are read, before it scans the site collections. The packages are matched to the farm solutions, in the HTML report and in their own files, and **none goes in the reports folder**, which is the one that you zip and send: the packages are the code of your solutions, and only what the inspection found is in the reports. The temporary folder of the account must have room for the packages, and security software may notice that the code is written to disk for a moment.
+
+The folder is removed also after an error or Ctrl+C. If the process is killed, the window is closed, or security software keeps a file open, it stays: the log gives its path when the packages are saved, a warning says at the end when the folder could not be removed, and you can look for `SPSSiteInventory-packages-*` in the temporary folder of the account that ran the scan and delete it.
+
+To inspect packages that you already have, or to keep them, save them yourself in a folder that is not the reports folder and give it to the scan:
+
+```powershell
+Get-SPSolution | ForEach-Object { $_.SolutionFile.SaveAs((Join-Path 'D:\Packages' $_.Name)) }
+.\Invoke-SPSSiteInventory.ps1 -SolutionPackagePath D:\Packages
+```
+
+To inspect packages without scanning the farm again, run `Get-SPSSolutionPackageInfo` alone (see [Inspecting WSP packages offline](Solution-Packages#from-the-main-scan)).
+
 ## 6. Review the output
 
 Open the CSV in Excel and sort by `Category` and `Score`. Category 1 sites are your quick wins; category 4 sites need a dedicated plan. A text cell that Excel could read as a formula starts with a quote: that is deliberate (see [Usage](Usage#csv-files-and-spreadsheet-formulas)). See [Usage](Usage) for how to read and act on the report.

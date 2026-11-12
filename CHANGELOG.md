@@ -5,6 +5,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The main scan offers the offline inspection of the WSP packages. `Invoke-SPSSiteInventory.ps1` has
+  an optional `-ExportSolutionPackage` switch: the scan saves the package of every farm solution
+  (`SolutionFile.SaveAs`) in a temporary folder of the account that runs it, inspects the packages,
+  and removes the folder as soon as they are read, also after an error or Ctrl+C (a killed process
+  leaves it: the log gives its path when the packages are saved, and a warning repeats it at the end
+  when the removal failed). None goes in the reports folder, which is the one that is zipped and
+  sent: only what the inspection found reaches the reports. The `PackagePath` of such a package says
+  `(saved from the farm)`, and the temporary folders are taken out of the text of the records, such
+  as the reason that a package could not be read, because the files are sent and a path would show
+  the profile of the account. A package that cannot be saved is a warning, not the end of the scan.
+  It also has an optional `-SolutionPackagePath` parameter (WSP files, folders that hold some, with
+  their subfolders, or folders of expanded packages) for the packages that you already have, which
+  you save from the farm with `$_.SolutionFile.SaveAs(...)`; the two can be combined. The packages
+  are inspected with `Get-SPSSolutionPackageInfo` right after the farm-solution map and before the
+  scan, so that a wrong path shows at once, and are matched to the farm solutions.
+  `Export-SPSInventoryReport` has a new `-SolutionPackages` parameter: it writes the
+  `*-solution-packages-*` CSV and JSON files and the `*-solution-assemblies-*` CSV file, lists them in
+  the manifest (`Files.SolutionPackagesCsv`, `Files.SolutionAssembliesCsv`, `Files.SolutionPackagesJson`)
+  with the number of packages and of those that are not read in full (`Summary.SolutionPackageCount`
+  and `Summary.SolutionPackageIssueCount`, null when no package was inspected), and adds a *Solution
+  packages* section to the HTML report, after the farm solutions: what each package holds (custom or
+  Microsoft, full-trust code, assemblies, features, .NET framework), the farm solution it matches and
+  what differs, the packages that could not be read in full first, and the farm solutions that no
+  inspected package matches. A package that cannot be read is a warning, not the end of the scan.
+  `Export-SPSSolutionPackageReport` has an optional `-Timestamp` parameter, which the report pack
+  uses to give the package files the time stamp of its other files.
+  Without either parameter, the scan ends by telling how to inspect the packages when the farm has
+  solutions. The Getting Started, Usage and Inspecting WSP packages wiki pages say it. (#135)
+
 ## [2.1.0] - 2026-10-30
 
 ### Added
