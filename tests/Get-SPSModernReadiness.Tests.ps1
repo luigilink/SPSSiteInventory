@@ -140,7 +140,7 @@ Describe 'Get-SPSModernReadiness' {
 }
 
 Describe 'Get-SPSModernReadiness and a web part scan that reached its cap' {
-    It 'counts the assessed site collections whose web part scan reached its cap, also when they have no blocker, and where the number of web parts is a lower bound' {
+    It 'counts the assessed site collections whose web part scan reached its cap, also when they have no blocker, and where the number of web parts is a lower bound, also when none was found' {
         $result = Get-Readiness -Record @(
             (New-Site -Name 'capped-found' -Signals @{ ScriptWebPartCount = 4; LowerBoundSignals = 'FileVersionCount; ScriptWebPartCount' })
             (New-Site -Name 'capped-none' -Signals @{ ScriptWebPartCount = 0; LowerBoundSignals = 'ScriptWebPartCount' })
@@ -154,8 +154,36 @@ Describe 'Get-SPSModernReadiness and a web part scan that reached its cap' {
         $result.WebPartCapSiteCount | Should -Be 2
         $kind['ScriptWebPart'].SiteCount | Should -Be 4
         $kind['ScriptWebPart'].Items | Should -Be 8
-        $kind['ScriptWebPart'].LowerBoundSiteCount | Should -Be 1
+        $kind['ScriptWebPart'].LowerBoundSiteCount | Should -Be 2
         @($result.Kind | Where-Object { $_.Name -ne 'ScriptWebPart' -and $_.LowerBoundSiteCount -ne 0 }) | Should -HaveCount 0
+    }
+
+    It 'says that the total of the script web parts is a lower bound when the only site collection that reached the cap found none' {
+        $result = Get-Readiness -Record @(
+            (New-Site -Name 'exact' -Signals @{ ScriptWebPartCount = 2 })
+            (New-Site -Name 'capped-none' -Signals @{ ScriptWebPartCount = 0; LowerBoundSignals = 'ScriptWebPartCount' })
+        )
+
+        $kind = @{}
+        foreach ($row in $result.Kind) { $kind[$row.Name] = $row }
+        $result.WithBlocker | Should -Be 1
+        $kind['ScriptWebPart'].SiteCount | Should -Be 1
+        $kind['ScriptWebPart'].Items | Should -Be 2
+        $kind['ScriptWebPart'].LowerBoundSiteCount | Should -Be 1
+        $result.WebPartCapSiteCount | Should -Be 1
+    }
+
+    It 'gives the same number of site collections for the note and for the script web parts' {
+        $result = Get-Readiness -Record @(
+            (New-Site -Name 'a' -Signals @{ ScriptWebPartCount = 3; LowerBoundSignals = 'ScriptWebPartCount' })
+            (New-Site -Name 'b' -Signals @{ ScriptWebPartCount = 0; LowerBoundSignals = 'ScriptWebPartCount' })
+            (New-Site -Name 'c' -Signals @{ XsltListViewCount = 1; LowerBoundSignals = 'ScriptWebPartCount' })
+            (New-Site -Name 'd' -Signals @{ ScriptWebPartCount = 1 })
+        )
+
+        $scriptWebPart = @($result.Kind | Where-Object { $_.Name -eq 'ScriptWebPart' })[0]
+        $result.WebPartCapSiteCount | Should -Be 3
+        $scriptWebPart.LowerBoundSiteCount | Should -Be $result.WebPartCapSiteCount
     }
 
     It 'does not count a site collection that failed, or a web application row' {

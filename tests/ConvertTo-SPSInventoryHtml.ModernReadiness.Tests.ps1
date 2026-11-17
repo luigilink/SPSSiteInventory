@@ -288,6 +288,15 @@ Describe 'The Modern experience readiness section of the HTML report and a web p
         $section | Should -Match ([regex]::Escape('Script web parts (2)'))
     }
 
+    It 'shows the total of the script web parts as "at least" when the site collection that reached the cap found none' {
+        $records = @((New-Site -Name 'exact' -Signals @{ ScriptWebPartCount = 2 }), (New-Site -Name 'capped-none' -Signals @{ ScriptWebPartCount = 0; LowerBoundSignals = 'ScriptWebPartCount' }))
+
+        $section = Get-Section -Html (Get-Html -Record $records)
+
+        $section | Should -Match '<tr><td>Script web parts</td><td class="num">1</td><td class="num">at least 2 web part\(s\)</td></tr>'
+        $section | Should -Match 'The script web part scan reached its cap in <strong>1</strong> site collection\(s\)'
+    }
+
     It 'says nothing about a cap when no web part scan reached it, and not for another scan' {
         $records = @((New-Site -Name 'a' -Signals @{ ScriptWebPartCount = 3; LowerBoundSignals = 'FileVersionCount' }), (New-Site -Name 'b' -Signals @{ ScriptWebPartCount = 1 }))
 

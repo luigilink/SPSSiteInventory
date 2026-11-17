@@ -13,9 +13,11 @@
         - Kind: one row per kind of blocker, in a fixed order, also when no site collection has it, with
           its Name, Label, Unit, the number of site collections that have it (SiteCount), the items
           behind it in all of them (Items, null for the custom master page, which is a state) and the
-          number of site collections where that number is a lower bound (LowerBoundSiteCount);
+          number of site collections where that number is a lower bound (LowerBoundSiteCount), also those
+          that found none: the total is then "at least", although no kind carries it;
         - WebPartCapSiteCount: the assessed site collections whose web part scan reached its cap, which
-          can have a script web part that was not read, also when they have no blocker;
+          can have a script web part that was not read, also when they have no blocker (it is the
+          LowerBoundSiteCount of the script web parts);
         - Site: the site collections that have a blocker, the most kinds first, then the highest score,
           then by URL, at most MaxSite of them, each with its Url, Title, AssessmentStatus, Category,
           CategoryName, Score, Count (the number of kinds) and Text (what Get-SPSModernBlocker says);
@@ -93,8 +95,11 @@
         foreach ($name in $signalName) {
             $signals[$name] = if ($null -ne $record.PSObject.Properties[$name]) { $record.$name } else { $null }
         }
+        # The number of script web parts is a lower bound when the scan reached its cap, also when it found none: that site
+        # collection has no kind to carry the flag, but it may hold a script web part that was not read.
         if (@(Get-SPSLowerBoundSignalName -Value $signals['LowerBoundSignals']) -contains 'ScriptWebPartCount') {
             $webPartCapSite++
+            $kindLowerBound['ScriptWebPart']++
         }
         $blocker = Get-SPSModernBlocker -Signals $signals
         if ($blocker.Count -eq 0) {
@@ -105,9 +110,6 @@
             $kindSite[$kind.Name]++
             if ($null -ne $kind.Items) {
                 $kindItems[$kind.Name] += $kind.Items
-            }
-            if ($kind.LowerBound) {
-                $kindLowerBound[$kind.Name]++
             }
         }
         $site.Add([PSCustomObject]@{
