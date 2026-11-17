@@ -23,8 +23,8 @@
         farm solution that ships the assembly when SolutionAssemblyIndex is given. EventReceiverClasses
         holds one row for each assembly and class (up to 200 per site collection, the first that the
         scan meets, and a count that stays exact when rows are left out), for the event receiver
-        report. When the rows cannot be built, the site keeps its counts, has no rows and a warning
-        gives the reason.
+        report. When a receiver cannot be grouped or the rows cannot be built, the site keeps its counts
+        and the rest of its signals, has no rows and a warning gives the reason.
 
         Workflows are split by platform because their migration cost differs sharply:
 
@@ -383,6 +383,7 @@
     $eventReceiverTable = [System.Collections.Generic.Dictionary[System.String, System.Object]]::new([System.StringComparer]::OrdinalIgnoreCase)
     $maxEventReceiverGroup = 200
     $eventReceiverGroupsLeftOut = $false
+    $eventReceiverDetailError = ''
     $workflowTable = [PSCustomObject]@{
         Current  = [System.Collections.Generic.List[object]]::new()
         Previous = [System.Collections.Generic.List[object]]::new()
@@ -937,8 +938,16 @@
                         foreach ($receiver in $list.EventReceivers) {
                             if (Test-SPSCustomAssembly -Assembly $receiver.Assembly) {
                                 $signals.EventReceivers++
-                                if (-not (Add-SPSEventReceiverClass -Table $eventReceiverTable -Receiver $receiver -List $list -MaximumGroup $maxEventReceiverGroup)) {
-                                    $eventReceiverGroupsLeftOut = $true
+                                # The detail only describes the count: a receiver that cannot be grouped never changes it, and ends the detail of the site.
+                                if (-not $eventReceiverDetailError) {
+                                    try {
+                                        if (-not (Add-SPSEventReceiverClass -Table $eventReceiverTable -Receiver $receiver -List $list -MaximumGroup $maxEventReceiverGroup)) {
+                                            $eventReceiverGroupsLeftOut = $true
+                                        }
+                                    }
+                                    catch {
+                                        $eventReceiverDetailError = $_.Exception.Message
+                                    }
                                 }
                             }
                         }
@@ -1800,16 +1809,21 @@
     }
 
     # The detail never changes the signal: when it cannot be built, the site keeps its counts and has no rows for it.
-    try {
-        $eventReceiverClasses = @(ConvertTo-SPSEventReceiverClassRow -Table $eventReceiverTable -SiteUrl ([System.String]$Site.Url) -SolutionAssemblyIndex $SolutionAssemblyIndex)
-        $eventReceiverExamples = Get-SPSEventReceiverExample -Row $eventReceiverClasses
-        $signals.EventReceiverClasses = $eventReceiverClasses
-        $signals.EventReceiverExamples = $eventReceiverExamples
+    if (-not $eventReceiverDetailError) {
+        try {
+            $eventReceiverClasses = @(ConvertTo-SPSEventReceiverClassRow -Table $eventReceiverTable -SiteUrl ([System.String]$Site.Url) -SolutionAssemblyIndex $SolutionAssemblyIndex)
+            $eventReceiverExamples = Get-SPSEventReceiverExample -Row $eventReceiverClasses
+            $signals.EventReceiverClasses = $eventReceiverClasses
+            $signals.EventReceiverExamples = $eventReceiverExamples
+        }
+        catch {
+            $eventReceiverDetailError = $_.Exception.Message
+        }
     }
-    catch {
-        Write-Warning -Message "The event receivers of site '$($Site.Url)' could not be listed by assembly and class: $($_.Exception.Message); EventReceivers stays exact."
+    if ($eventReceiverDetailError) {
+        Write-Warning -Message "The event receivers of site '$($Site.Url)' could not be listed by assembly and class: $eventReceiverDetailError; EventReceivers stays exact."
     }
-    if ($eventReceiverGroupsLeftOut) {
+    elseif ($eventReceiverGroupsLeftOut) {
         Write-Warning -Message "Event receiver rows stopped after $maxEventReceiverGroup assemblies and classes on site '$($Site.Url)'; EventReceivers stays exact."
     }
 

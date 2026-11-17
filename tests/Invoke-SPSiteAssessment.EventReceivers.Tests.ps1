@@ -11,6 +11,17 @@ BeforeAll {
 }
 
 Describe 'Invoke-SPSiteAssessment event receivers' {
+    It 'keeps the parameters that it already had where they were, and puts the new one after them, because none has a position and they are positional in the order of declaration' {
+        $name = InModuleScope SPSSiteInventory.Common {
+            $common = @('Verbose', 'Debug', 'ErrorAction', 'WarningAction', 'InformationAction', 'ProgressAction', 'ErrorVariable', 'WarningVariable', 'InformationVariable', 'OutVariable', 'OutBuffer', 'PipelineVariable', 'WhatIf', 'Confirm')
+            @((Get-Command -Name Invoke-SPSiteAssessment).Parameters.Keys | Where-Object { $common -notcontains $_ })
+        }
+        $before = @('Inventory', 'CustomFeatureId', 'FullTrustFeatureId', 'Scoring', 'LargeContentThresholds', 'PermissionLevels', 'SharePointAlertSettings', 'TargetMode')
+
+        @($name[0..($before.Count - 1)]) | Should -BeExactly $before
+        $name[$before.Count] | Should -BeExactly 'SolutionAssemblyIndex'
+    }
+
     BeforeEach {
         InModuleScope SPSSiteInventory.Common {
             Mock Get-SPSite {

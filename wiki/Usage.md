@@ -277,7 +277,9 @@ folder can be moved, zipped and sent. The manifest lists the pages in `Files.Inv
   shows what each package holds, how it compares with the farm solution it matches, and the farm
   solutions that have no inspected package. The *Custom event receivers* section is there when a site collection has some: it
   lists, by assembly, the classes, receivers and site collections behind `EventReceivers`,
-  and the solution that ships the assembly when the packages were inspected. The *Workflow
+  and the solution that ships the assembly when the packages were inspected; a note says how many
+  receivers it accounts for when that is fewer than the `EventReceivers` column (a site collection
+  keeps its first 200 assemblies and classes, and one whose detail could not be built has none). The *Workflow
   associations* section is there when a site collection has some: it lists the classic workflow
   associations behind `Workflow2010Count`, the counted ones with the most running instances first,
   with their web, their list or library and their running instances. The managed

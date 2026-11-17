@@ -48,9 +48,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`Files.EventReceiversCsv`, `Files.EventReceiversJson`). When the WSP packages are inspected
   (`-ExportSolutionPackage` or `-SolutionPackagePath`), each assembly is matched to the package and
   the farm solution that ship it, by its name and its public key token (`SolutionMatch`:
-  `NotChecked`, `None`, `AssemblyNameAndKey`, `AssemblyName`). The value of `EventReceivers` and its
-  weight do not change; only the receivers of lists and libraries are read, as before. The Usage,
-  Configuration and Inspecting WSP packages wiki pages say it. (#132)
+  `NotChecked`, `None`, `AssemblyNameAndKey`, `AssemblyName`). The HTML section says how many
+  receivers its table accounts for when that is fewer than the `EventReceivers` column (a site
+  collection keeps its first 200 assemblies and classes, and one whose detail could not be built has
+  none), and a receiver that cannot be grouped is a warning that leaves the signal and the rest of
+  the site as they are. The new parameters of `Export-SPSInventoryReport`,
+  `ConvertTo-SPSInventoryHtml` and the assessment come after the existing ones, so that a call that
+  gives them by position still works. The value of `EventReceivers` and its weight do not change;
+  only the receivers of lists and libraries are read, as before. The Usage, Configuration and
+  Inspecting WSP packages wiki pages say it. (#132)
 - The report says what the `Workflow2010Count` and `Workflow2010RunningInstanceCount` signals count.
   The totals did not say which workflows they were, so the site owners could not be told which list
   or library to look at, and the counts could not be checked. A site collection now has
