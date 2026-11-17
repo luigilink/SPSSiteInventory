@@ -10,6 +10,17 @@ BeforeAll {
         @()
     }
 
+    . (Join-Path -Path $PSScriptRoot -ChildPath 'Helpers/WorkflowAssociationFixture.ps1')
+
+    # An association that is a real .NET object, whose running instances count their reads.
+    function New-StandIn {
+        param ([string]$Name, [int]$Running)
+        $association = [SPSTestWorkflowAssociation]::new()
+        $association.Name = $Name
+        $association.RunningInstances = $Running
+        $association
+    }
+
     function New-TestAssociation {
         param ([string]$Name = 'Approval', [int]$Running = 0, $IsCurrent = $null)
         $association = [PSCustomObject]@{ Name = $Name; RunningInstances = $Running }
@@ -127,6 +138,52 @@ Describe 'Get-SPSSiteCustomization workflow associations' {
         $examples = (Get-Signal -Site (New-TestSite -Web @($web))).Signals.Workflow2010Examples
 
         $examples | Should -BeExactly 'Busy (list Documents, https://intranet.contoso.com/sites/team): 20 running instance(s); Quiet (list Documents, https://intranet.contoso.com/sites/team): 1 running instance(s); Old (list Documents, https://intranet.contoso.com/sites/team): 99 running instance(s) [previous version]'
+    }
+
+    It 'reads the running instances of each association once, and gives the same number to the total and to its row' {
+        $webAssociation = New-StandIn -Name 'Publication' -Running 5
+        $listAssociation = New-StandIn -Name 'Approval' -Running 3
+        $previous = New-StandIn -Name 'Approval (Previous Version: 08/07/2016 14:50:34)' -Running 2
+        $web = New-TestWeb -Association @($webAssociation) -List @((New-TestList -Association @($listAssociation, $previous)))
+
+        $signals = (Get-Signal -Site (New-TestSite -Web @($web))).Signals
+
+        $webAssociation.Reads | Should -Be 1
+        $listAssociation.Reads | Should -Be 1
+        $previous.Reads | Should -Be 1
+        $signals.Workflow2010RunningInstanceCount | Should -Be 10
+        @($signals.WorkflowAssociations | ForEach-Object { $_.RunningInstances }) | Should -Be @(5, 3, 2)
+        (($signals.WorkflowAssociations | Measure-Object -Property RunningInstances -Sum).Sum) | Should -Be $signals.Workflow2010RunningInstanceCount
+    }
+
+    It 'gives each row the number of its own association, when a web and a list have several associations' {
+        $first = New-StandIn -Name 'A first' -Running 1
+        $second = New-StandIn -Name 'B second' -Running 20
+        $third = New-StandIn -Name 'C third' -Running 300
+        $fourth = New-StandIn -Name 'D fourth' -Running 4000
+        $web = New-TestWeb -Association @($first, $null, $second) -List @((New-TestList -Association @($third, $null, $fourth)))
+
+        $signals = (Get-Signal -Site (New-TestSite -Web @($web))).Signals
+
+        @($signals.WorkflowAssociations | ForEach-Object { '{0}={1}' -f $_.WorkflowName, $_.RunningInstances }) | Should -BeExactly @('A first=1', 'B second=20', 'C third=300', 'D fourth=4000')
+        $signals.Workflow2010RunningInstanceCount | Should -Be 4321
+        $signals.Workflow2010Count | Should -Be 4
+    }
+
+    It 'keeps the counts, the other rows and the status when the name of an association cannot be read, and warns with the reason' {
+        $good = New-StandIn -Name 'Approval' -Running 2
+        $unnamed = [SPSTestUnnamedWorkflowAssociation]::new()
+        $last = New-StandIn -Name 'Last' -Running 1
+        $web = New-TestWeb -List @((New-TestList -Title 'First' -Association @($good)), (New-TestList -Title 'Second' -Association @($unnamed)), (New-TestList -Title 'Third' -Association @($last)))
+
+        $result = Get-Signal -Site (New-TestSite -Web @($web))
+
+        $result.Signals.Workflow2010Count | Should -Be 3
+        $result.Signals.Workflow2010RunningInstanceCount | Should -Be 7
+        $result.Signals.CustomizationInventoryComplete | Should -BeTrue
+        @($result.Signals.WorkflowAssociations | ForEach-Object { $_.WorkflowName }) | Should -BeExactly @('Approval', 'Last')
+        $result.Warnings | Should -HaveCount 1
+        $result.Warnings[0] | Should -BeExactly "The workflow associations of site 'https://intranet.contoso.com/sites/team' could not be fully listed: The name could not be read.; Workflow2010Count and Workflow2010RunningInstanceCount stay exact."
     }
 
     It 'gives no row and no example for a site collection that has no association, and ignores a null association' {

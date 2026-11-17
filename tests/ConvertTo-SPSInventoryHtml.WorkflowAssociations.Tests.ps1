@@ -226,7 +226,7 @@ Describe 'ConvertTo-SPSInventoryHtml workflow associations' {
         $rows = & (Get-Module -Name SPSSiteInventory.Common) {
             param ($Association)
             $table = [PSCustomObject]@{ Current = [System.Collections.Generic.List[object]]::new(); Previous = [System.Collections.Generic.List[object]]::new() }
-            $null = Add-SPSWorkflowAssociationRow -Table $table -Association $Association -ActiveAssociation @($Association) -SiteUrl 'https://intranet/sites/team' -WebUrl 'https://intranet/sites/team' -Scope List -ListTitle 'Documents' -ListUrl '/sites/team/Shared Documents'
+            $null = Add-SPSWorkflowAssociationRow -Table $table -Association $Association -ActiveAssociation @($Association) -RunningInstance 3 -SiteUrl 'https://intranet/sites/team' -WebUrl 'https://intranet/sites/team' -Scope List -ListTitle 'Documents' -ListUrl '/sites/team/Shared Documents'
             @($table.Current)
         } $association
 

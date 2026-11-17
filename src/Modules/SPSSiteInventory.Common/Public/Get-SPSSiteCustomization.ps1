@@ -39,7 +39,8 @@
           workflow, its list or library and web, and its running instances), and
           WorkflowAssociations holds one row for each association, for the workflow
           association report. The rows of the counted associations add up to
-          Workflow2010Count and all the rows add up to Workflow2010RunningInstanceCount; the
+          Workflow2010Count and all the rows add up to Workflow2010RunningInstanceCount (each
+          association is read once, so that its row and the total have the same number); the
           rows of the previous versions stop at 1000 for a site collection, and the counts
           stay exact. When the rows cannot be built, the site keeps its counts, and a warning gives
           the reason.
@@ -856,14 +857,21 @@
                 $allWebWorkflowAssociations = @($web.WorkflowAssociations)
                 $webWorkflowAssociations = @(Get-SPSActiveWorkflowAssociations -WorkflowAssociations $allWebWorkflowAssociations)
                 $signals.Workflow2010Count += $webWorkflowAssociations.Count
-                $signals.Workflow2010RunningInstanceCount += Get-SPSWorkflowAssociationRunningCount -WorkflowAssociations $allWebWorkflowAssociations
+                # Each association is read once: the total and its row have the same number, even when instances start or finish during the scan.
+                $webRunningInstance = [System.Collections.Generic.List[int]]::new()
+                foreach ($association in $allWebWorkflowAssociations) {
+                    $running = [System.Int32](Get-SPSWorkflowAssociationRunningCount -WorkflowAssociations @($association))
+                    $webRunningInstance.Add($running)
+                    $signals.Workflow2010RunningInstanceCount += $running
+                }
                 # The rows only describe the counts above: a row that cannot be built never changes them.
                 try {
-                    foreach ($association in $allWebWorkflowAssociations) {
+                    for ($index = 0; $index -lt $allWebWorkflowAssociations.Count; $index++) {
+                        $association = $allWebWorkflowAssociations[$index]
                         if ($null -eq $association) {
                             continue
                         }
-                        if (-not (Add-SPSWorkflowAssociationRow -Table $workflowTable -Association $association -ActiveAssociation $webWorkflowAssociations -SiteUrl ([System.String]$Site.Url) -WebUrl ([System.String]$web.Url) -Scope Web -MaximumPreviousVersion $maxWorkflowPreviousVersion)) {
+                        if (-not (Add-SPSWorkflowAssociationRow -Table $workflowTable -Association $association -ActiveAssociation $webWorkflowAssociations -RunningInstance $webRunningInstance[$index] -SiteUrl ([System.String]$Site.Url) -WebUrl ([System.String]$web.Url) -Scope Web -MaximumPreviousVersion $maxWorkflowPreviousVersion)) {
                             $workflowRowsLeftOut = $true
                         }
                     }
@@ -900,13 +908,19 @@
                         $allListWorkflowAssociations = @($list.WorkflowAssociations)
                         $listWorkflowAssociations = @(Get-SPSActiveWorkflowAssociations -WorkflowAssociations $allListWorkflowAssociations)
                         $signals.Workflow2010Count += $listWorkflowAssociations.Count
-                        $signals.Workflow2010RunningInstanceCount += Get-SPSWorkflowAssociationRunningCount -WorkflowAssociations $allListWorkflowAssociations
+                        $listRunningInstance = [System.Collections.Generic.List[int]]::new()
+                        foreach ($association in $allListWorkflowAssociations) {
+                            $running = [System.Int32](Get-SPSWorkflowAssociationRunningCount -WorkflowAssociations @($association))
+                            $listRunningInstance.Add($running)
+                            $signals.Workflow2010RunningInstanceCount += $running
+                        }
                         try {
-                            foreach ($association in $allListWorkflowAssociations) {
+                            for ($index = 0; $index -lt $allListWorkflowAssociations.Count; $index++) {
+                                $association = $allListWorkflowAssociations[$index]
                                 if ($null -eq $association) {
                                     continue
                                 }
-                                if (-not (Add-SPSWorkflowAssociationRow -Table $workflowTable -Association $association -ActiveAssociation $listWorkflowAssociations -SiteUrl ([System.String]$Site.Url) -WebUrl ([System.String]$web.Url) -Scope List -ListTitle ([System.String]$list.Title) -ListUrl ([System.String]$list.RootFolder.ServerRelativeUrl) -MaximumPreviousVersion $maxWorkflowPreviousVersion)) {
+                                if (-not (Add-SPSWorkflowAssociationRow -Table $workflowTable -Association $association -ActiveAssociation $listWorkflowAssociations -RunningInstance $listRunningInstance[$index] -SiteUrl ([System.String]$Site.Url) -WebUrl ([System.String]$web.Url) -Scope List -ListTitle ([System.String]$list.Title) -ListUrl ([System.String]$list.RootFolder.ServerRelativeUrl) -MaximumPreviousVersion $maxWorkflowPreviousVersion)) {
                                     $workflowRowsLeftOut = $true
                                 }
                             }

@@ -4,16 +4,8 @@ BeforeAll {
     Import-Module -Name (Join-Path $repoRoot 'src/Modules/SPSSiteInventory.Common/SPSSiteInventory.Common.psd1') -Force
     $script:Module = Get-Module -Name SPSSiteInventory.Common
 
-    # A real .NET object, as SharePoint gives, and not a custom object: the association is told apart by the object itself.
-    if (-not ('SPSTestWorkflowAssociation' -as [type])) {
-        Add-Type -TypeDefinition @'
-public class SPSTestWorkflowAssociation
-{
-    public string Name { get; set; }
-    public int RunningInstances { get; set; }
-}
-'@
-    }
+    # Real .NET objects, as SharePoint gives, and not custom objects: an association is told apart by the object itself.
+    . (Join-Path -Path $PSScriptRoot -ChildPath 'Helpers/WorkflowAssociationFixture.ps1')
 
     function New-Association {
         param ([string]$Name = 'Approval', [int]$Running = 0)
@@ -24,13 +16,18 @@ public class SPSTestWorkflowAssociation
         [PSCustomObject]@{ Current = [System.Collections.Generic.List[object]]::new(); Previous = [System.Collections.Generic.List[object]]::new() }
     }
 
-    # The result of the function and the table that it changed.
+    # The result of the function and the table that it changed. The caller gives the running instances: unless the test gives them,
+    # they are the ones that the association says.
     function Add-Row {
         param ($Table = (New-Table), $Association, [object[]]$Active = @(), [hashtable]$Extra = @{})
+        $parameters = @{} + $Extra
+        if (-not $parameters.ContainsKey('RunningInstance')) {
+            $parameters['RunningInstance'] = [int]$Association.RunningInstances
+        }
         $result = & $script:Module {
             param ($Table, $Association, $Active, $Extra)
             Add-SPSWorkflowAssociationRow -Table $Table -Association $Association -ActiveAssociation $Active -SiteUrl 'https://intranet/sites/team' -WebUrl 'https://intranet/sites/team/hr' @Extra
-        } $Table $Association $Active $Extra
+        } $Table $Association $Active $parameters
         [PSCustomObject]@{ Result = $result; Table = $Table }
     }
 }
@@ -123,13 +120,45 @@ Describe 'Add-SPSWorkflowAssociationRow' {
         $outcome.Table.Previous[0].RunningInstances | Should -Be 4
     }
 
-    It 'gives no running instance to an association that does not say how many there are' {
-        $association = [PSCustomObject]@{ Name = 'Silent' }
+    It 'takes the running instances that it is given, and does not read them from the association again' {
+        $association = [SPSTestWorkflowAssociation]::new()
+        $association.Name = 'Approval'
+        $association.RunningInstances = 9
 
-        $outcome = Add-Row -Association $association -Active @($association)
+        $outcome = Add-Row -Association $association -Active @($association) -Extra @{ RunningInstance = 5 }
 
-        $outcome.Table.Current[0].RunningInstances | Should -Be 0
+        $outcome.Table.Current[0].RunningInstances | Should -Be 5
         $outcome.Table.Current[0].RunningInstances | Should -BeOfType [int]
+        $association.Reads | Should -Be 0
+    }
+
+    It 'gives the row of a previous version the running instances that it is given too, without reading the association' {
+        $association = [SPSTestWorkflowAssociation]::new()
+        $association.Name = 'Old'
+        $association.RunningInstances = 9
+
+        $outcome = Add-Row -Association $association -Active @() -Extra @{ RunningInstance = 0 }
+
+        $outcome.Table.Previous[0].RunningInstances | Should -Be 0
+        $association.Reads | Should -Be 0
+    }
+
+    It 'raises the exception of the getter, and adds no row, when the name of the association cannot be read' {
+        $association = [SPSTestUnnamedWorkflowAssociation]::new()
+        $table = New-Table
+
+        { Add-Row -Table $table -Association $association -Active @($association) } | Should -Throw '*The name could not be read.*'
+
+        $table.Current | Should -HaveCount 0
+        $table.Previous | Should -HaveCount 0
+    }
+
+    It 'reads the name of an association that is a custom object, as it is' {
+        $association = [PSCustomObject]@{ Name = 'Approval' }
+
+        $outcome = Add-Row -Association $association -Active @($association) -Extra @{ RunningInstance = 1 }
+
+        $outcome.Table.Current[0].WorkflowName | Should -BeExactly 'Approval'
     }
 
     It 'stops the rows of the previous versions at the maximum, says so, and goes on with the counted associations' {
@@ -152,7 +181,7 @@ Describe 'Add-SPSWorkflowAssociationRow' {
             param ($Association)
             $table = [PSCustomObject]@{ Current = [System.Collections.Generic.List[object]]::new(); Previous = [System.Collections.Generic.List[object]]::new() }
             $result = foreach ($index in 1..1001) {
-                Add-SPSWorkflowAssociationRow -Table $table -Association $Association -ActiveAssociation @() -SiteUrl 'https://intranet/sites/team' -WebUrl 'https://intranet/sites/team'
+                Add-SPSWorkflowAssociationRow -Table $table -Association $Association -ActiveAssociation @() -RunningInstance 1 -SiteUrl 'https://intranet/sites/team' -WebUrl 'https://intranet/sites/team'
             }
             [PSCustomObject]@{ Last = @($result)[-1]; Fitting = @($result | Where-Object { $_ }).Count; Previous = $table.Previous.Count }
         } (New-Association -Name 'Old' -Running 1)
@@ -187,11 +216,23 @@ Describe 'Add-SPSWorkflowAssociationRow' {
 
         $result = & $script:Module {
             param ($Table, $Association)
-            Add-SPSWorkflowAssociationRow -Table $Table -Association $Association -ActiveAssociation @($Association) -SiteUrl '' -WebUrl ''
+            Add-SPSWorkflowAssociationRow -Table $Table -Association $Association -ActiveAssociation @($Association) -RunningInstance 0 -SiteUrl '' -WebUrl ''
         } $table $association
 
         $result | Should -BeTrue
         $table.Current[0].WebUrl | Should -BeExactly ''
+    }
+
+    It 'requires the number of running instances, and refuses one that is negative' {
+        $association = New-Association
+
+        # A missing mandatory parameter would be asked for by an interactive host, so the attribute is read instead of the call being made.
+        $mandatory = & $script:Module {
+            @((Get-Command -Name Add-SPSWorkflowAssociationRow).Parameters['RunningInstance'].Attributes | Where-Object { $_ -is [System.Management.Automation.ParameterAttribute] } | ForEach-Object { $_.Mandatory })
+        }
+
+        $mandatory | Should -Be @($true)
+        { Add-Row -Association $association -Extra @{ RunningInstance = -1 } } | Should -Throw
     }
 
     It 'refuses a scope that is not Web or List, and a maximum that is not a positive number' {

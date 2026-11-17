@@ -17,6 +17,12 @@
         nothing, when one does not fit. The counts are not read from the rows, so a row that is left out never
         changes them.
 
+        The running instances come from the caller, which counted them for Workflow2010RunningInstanceCount:
+        the row does not read the association again, so the rows add up to that total even when instances
+        start or finish during the scan. The name of the workflow is read with Get-SPSPropertyValue, so a
+        getter that fails raises its exception, which the collector reports as a warning, instead of giving
+        a workflow with no name.
+
         Private because it is an implementation detail of Get-SPSSiteCustomization.
 
         .PARAMETER Table
@@ -24,7 +30,10 @@
         Previous list. It is changed in place.
 
         .PARAMETER Association
-        The workflow association (SPWorkflowAssociation): its Name and its running instances are read.
+        The workflow association (SPWorkflowAssociation): its Name is read.
+
+        .PARAMETER RunningInstance
+        The running instances of the association, as they were counted for Workflow2010RunningInstanceCount.
 
         .PARAMETER ActiveAssociation
         The associations of the same web or list that count, from Get-SPSActiveWorkflowAssociations. The
@@ -49,7 +58,7 @@
         The most rows of previous versions that the table may hold. Defaults to 1000.
 
         .EXAMPLE
-        $null = Add-SPSWorkflowAssociationRow -Table $table -Association $association -ActiveAssociation $active -SiteUrl $site.Url -WebUrl $web.Url
+        $null = Add-SPSWorkflowAssociationRow -Table $table -Association $association -ActiveAssociation $active -RunningInstance $running -SiteUrl $site.Url -WebUrl $web.Url
     #>
     [CmdletBinding()]
     [OutputType([System.Boolean])]
@@ -62,6 +71,11 @@
         [Parameter(Mandatory = $true)]
         [System.Object]
         $Association,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateRange(0, 2147483647)]
+        [System.Int32]
+        $RunningInstance,
 
         [Parameter()]
         [AllowNull()]
@@ -128,9 +142,9 @@
         Scope            = $Scope
         ListTitle        = $ListTitle
         ListUrl          = $ListUrl
-        WorkflowName     = [System.String]$Association.Name
+        WorkflowName     = [System.String](Get-SPSPropertyValue -InputObject $Association -Name 'Name')
         Counted          = $counted
-        RunningInstances = [System.Int32](Get-SPSWorkflowAssociationRunningCount -WorkflowAssociations @($Association))
+        RunningInstances = $RunningInstance
     }
     if ($counted) {
         $Table.Current.Add($row)

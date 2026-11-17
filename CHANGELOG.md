@@ -63,10 +63,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Files.WorkflowAssociationsJson`). `Counted` says whether the association is in
   `Workflow2010Count`: a previous version of a workflow, which SharePoint keeps as an association of
   its own, is not, but its running instances are in `Workflow2010RunningInstanceCount`, so the
-  counted rows of a site collection add up to the first count and all its rows to the second. The
-  rows of the previous versions stop at 1000 for a site collection (the counts stay exact, and a
-  warning says so), and the detail never changes the counts. The workflow dataset of the report
-  pack gains `Workflow2010Examples`. The values and the weights of the signals do not change. The
+  counted rows of a site collection add up to the first count and all its rows to the second (each
+  association is read once, for the total and for its row, so that they agree even when instances
+  start or finish during the scan). The rows of the previous versions stop at 1000 for a site
+  collection (the counts stay exact, and a warning says so), and the detail never changes the
+  counts: a name that cannot be read is a warning, not a workflow with no name. The workflow
+  dataset of the report pack gains `Workflow2010Examples`. The values and the weights of the signals do not change. The
   Usage, Configuration and Lab Testing wiki pages say it. (#133)
 
 ## [2.1.0] - 2026-10-30
