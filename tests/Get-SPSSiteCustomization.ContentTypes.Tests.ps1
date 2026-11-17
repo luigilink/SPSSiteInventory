@@ -1654,7 +1654,8 @@ Describe 'Get-SPSSiteCustomization content types' {
             if ($null -ne $Query.PSObject.Properties['Query'] -and $Query.Query) {
                 $queryText = [string]$Query.Query
             }
-            if ($queryText -match 'CheckoutUser') {
+            # Only the version scan reads these items: the check-out scan and the workbook scan find none.
+            if ($queryText -match 'CheckoutUser|File_x0020_Type') {
                 return [PSCustomObject]@{ Items = @(); ListItemCollectionPosition = $null }
             }
             return [PSCustomObject]@{ Items = @($this.VersionItems); ListItemCollectionPosition = $null }
@@ -1712,7 +1713,8 @@ Describe 'Get-SPSSiteCustomization content types' {
             if ($null -ne $Query.PSObject.Properties['Query'] -and $Query.Query) {
                 $queryText = [string]$Query.Query
             }
-            if ($queryText -match 'CheckoutUser') {
+            # Only the version scan reads these items: the check-out scan and the workbook scan find none.
+            if ($queryText -match 'CheckoutUser|File_x0020_Type') {
                 return [PSCustomObject]@{
                     Items = @()
                     ListItemCollectionPosition = $null
