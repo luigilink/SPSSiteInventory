@@ -76,6 +76,23 @@
         what differs, the packages that could not be read in full first, and the farm solutions
         of SolutionMap that no inspected package matches. Omitted cleanly when no package is passed.
 
+        .PARAMETER EventReceiverClasses
+        Optional event receiver rows, from the EventReceiverClasses of Get-SPSSiteCustomization: the
+        assembly and the class of the custom event receivers of each site collection. When at least
+        one is provided, the report gains a "Custom event receivers" section after the solution
+        packages: a summary line and a table by assembly (versions, the solution that ships it when the
+        packages were inspected, classes, receivers and site collections), the largest first.
+        Omitted cleanly when no row is passed.
+
+        .PARAMETER WorkflowAssociations
+        Optional workflow association rows, from the WorkflowAssociations of Get-SPSSiteCustomization: the
+        classic workflow associations of the webs, lists and libraries of each site collection. When at
+        least one is provided, the report gains a "Workflow associations" section after the event receivers:
+        a summary line and a table with the site collection, the web, the list or library, the workflow,
+        whether it is counted (a previous version of a workflow is not) and its running instances, the
+        counted associations with the most running instances first, up to MaxDetailRow rows. Omitted cleanly
+        when no row is passed.
+
         .PARAMETER ContentTypes
         Optional web content-type definitions and list bindings. When supplied,
         renders their metadata without classifying standard types as custom or
@@ -283,7 +300,19 @@
         [Parameter(ParameterSetName = 'Pages')]
         [ValidateRange(50, 5000)]
         [System.Int32]
-        $RowsPerPage = 500
+        $RowsPerPage = 500,
+
+        [Parameter()]
+        [AllowEmptyCollection()]
+        [AllowNull()]
+        [System.Object[]]
+        $EventReceiverClasses = @(),
+
+        [Parameter()]
+        [AllowEmptyCollection()]
+        [AllowNull()]
+        [System.Object[]]
+        $WorkflowAssociations = @()
     )
 
     # Category metadata: name and accent colour for each complexity level. A plain
@@ -444,6 +473,10 @@
     $solutions = @($SolutionMap | Where-Object { $null -ne $_ })
     $packages = @($SolutionPackages | Where-Object { $null -ne $_ })
     $hasSolutionPackageSection = $packages.Count -gt 0
+    $eventReceivers = @($EventReceiverClasses | Where-Object { $null -ne $_ })
+    $hasEventReceiverSection = $eventReceivers.Count -gt 0
+    $workflowAssociationRows = @($WorkflowAssociations | Where-Object { $null -ne $_ })
+    $hasWorkflowAssociationSection = $workflowAssociationRows.Count -gt 0
     $authenticationRecords = @($records | Where-Object { $_.AuthenticationZones })
     $policyRecords = @($records | Where-Object { $null -ne $_.WebAppPolicyCount -or $_.BrowserFileHandling })
     $hasContentTypeSection = $PSBoundParameters.ContainsKey('ContentTypes')
@@ -743,6 +776,12 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
     }
     if ($hasSolutionPackageSection) {
         [void]$navigation.AppendLine('<a href="#solution-packages">Solution packages</a>')
+    }
+    if ($hasEventReceiverSection) {
+        [void]$navigation.AppendLine('<a href="#custom-event-receivers">Event receivers</a>')
+    }
+    if ($hasWorkflowAssociationSection) {
+        [void]$navigation.AppendLine('<a href="#workflow-associations">Workflow associations</a>')
     }
     if ($authenticationRecords.Count -gt 0) {
         [void]$navigation.AppendLine('<a href="#authentication">Authentication</a>')
@@ -1411,6 +1450,136 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
             $moreSolution = if ($unmatchedSolution.Count -gt $shownSolution.Count) { ' and {0} more' -f ($unmatchedSolution.Count - $shownSolution.Count) } else { '' }
             [void]$sb.AppendLine(('<p><strong>{0}</strong> farm solution(s) have no inspected package: {1}{2}. Save their packages from the farm to read them (see the wiki page "Inspecting WSP packages offline").</p>' -f $unmatchedSolution.Count, (ConvertTo-SPSHtmlText -Value ($shownSolution -join ', ')), $moreSolution))
         }
+    }
+
+    # Custom event receivers, by assembly, over the whole farm: what the EventReceivers signal counts.
+    if ($hasEventReceiverSection) {
+        $receiverAssembly = @(
+            foreach ($assemblyGroup in ($eventReceivers | Group-Object -Property { '{0}|{1}' -f ([string]$_.AssemblyName).ToLowerInvariant(), [string]$_.PublicKeyToken })) {
+                $assemblyRow = @($assemblyGroup.Group)
+                $farmSolutionName = @($assemblyRow | ForEach-Object { [string]$_.FarmSolutionName } | Where-Object { $_ } | Sort-Object -Unique)
+                $packageName = @($assemblyRow | ForEach-Object { [string]$_.PackageName } | Where-Object { $_ } | Sort-Object -Unique)
+                [PSCustomObject]@{
+                    Name           = if ([string]$assemblyRow[0].AssemblyName) { [string]$assemblyRow[0].AssemblyName } else { [string]$assemblyRow[0].Assembly }
+                    PublicKeyToken = [string]$assemblyRow[0].PublicKeyToken
+                    Version        = (@($assemblyRow | ForEach-Object { [string]$_.AssemblyVersion } | Where-Object { $_ } | Sort-Object -Unique) -join '; ')
+                    ClassCount     = @($assemblyRow | ForEach-Object { [string]$_.Class } | Sort-Object -Unique).Count
+                    ReceiverCount  = [int](($assemblyRow | Measure-Object -Property ReceiverCount -Sum).Sum)
+                    SiteCount      = @($assemblyRow | ForEach-Object { [string]$_.SiteUrl } | Sort-Object -Unique).Count
+                    FarmSolution   = $farmSolutionName -join '; '
+                    Package        = $packageName -join '; '
+                    NotChecked     = @($assemblyRow | Where-Object { [string]$_.SolutionMatch -eq 'NotChecked' }).Count -gt 0
+                    ByNameOnly     = @($assemblyRow | Where-Object { [string]$_.SolutionMatch -eq 'AssemblyName' }).Count -gt 0
+                }
+            }
+        )
+        $receiverTotal = [int](($eventReceivers | Measure-Object -Property ReceiverCount -Sum).Sum)
+        $receiverClassTotal = [int](($receiverAssembly | Measure-Object -Property ClassCount -Sum).Sum)
+        $receiverSiteTotal = @($eventReceivers | ForEach-Object { [string]$_.SiteUrl } | Sort-Object -Unique).Count
+        $receiverSolutionUnknown = @($receiverAssembly | Where-Object { $_.NotChecked }).Count -gt 0
+        # The rows hold at most 200 assemblies and classes for a site collection, and none for one whose detail could not be built: the column is the total.
+        $receiverSignalTotal = 0
+        foreach ($siteRecord in $siteRecords) {
+            $siteReceiver = 0
+            if ($null -ne $siteRecord.PSObject.Properties['EventReceivers'] -and [System.Int32]::TryParse([System.String]$siteRecord.EventReceivers, [ref]$siteReceiver)) {
+                $receiverSignalTotal += $siteReceiver
+            }
+        }
+
+        [void]$sb.AppendLine('<h2 id="custom-event-receivers">Custom event receivers</h2>')
+        [void]$sb.AppendLine('<div class="summary">')
+        [void]$sb.AppendLine(('<div class="summary-total"><strong>{0}</strong> receiver(s) &middot; <strong>{1}</strong> assembly(ies) &middot; <strong>{2}</strong> class(es) &middot; <strong>{3}</strong> site collection(s)</div>' -f $receiverTotal, $receiverAssembly.Count, $receiverClassTotal, $receiverSiteTotal))
+        [void]$sb.AppendLine('</div>')
+        $receiverSolutionNote = if ($receiverSolutionUnknown) { 'The solution that ships an assembly is not known: inspect the WSP packages (-ExportSolutionPackage or -SolutionPackagePath) to name it.' } else { 'The solution is the farm solution of an inspected package that ships the assembly.' }
+        [void]$sb.AppendLine(('<p>The custom event receivers that the EventReceivers signal counts, by assembly. SharePoint registers one receiver per event type and per list, so a class that listens to six events on a hundred lists counts 600. Only the receivers of lists and libraries are read, and an assembly whose name starts with Microsoft. is not custom. {0} The event receivers CSV and JSON files give each assembly and class with its receivers and lists, by site collection (up to 200 assemblies and classes for each).</p>' -f $receiverSolutionNote))
+        if ($receiverTotal -lt $receiverSignalTotal) {
+            [void]$sb.AppendLine(('<p><strong>Partial detail:</strong> the site collections have <strong>{0}</strong> custom event receiver(s) in all (the EventReceivers column), and this table accounts for <strong>{1}</strong> of them. A site collection with more than 200 assemblies and classes keeps the first 200 in the detail, and one whose detail could not be built has none. The column is exact.</p>' -f $receiverSignalTotal, $receiverTotal))
+        }
+        [void]$sb.AppendLine('<div class="table-scroll">')
+        [void]$sb.AppendLine('<table class="eventreceivers">')
+        [void]$sb.AppendLine('<thead><tr><th>Assembly</th><th>Version</th><th>Solution</th><th class="num">Classes</th><th class="num">Receivers</th><th class="num">Site collections</th></tr></thead>')
+        [void]$sb.AppendLine('<tbody>')
+        foreach ($assembly in @($receiverAssembly | Sort-Object -Property @{ E = { $_.ReceiverCount }; Descending = $true }, @{ E = { $_.Name } }, @{ E = { $_.PublicKeyToken } } | Select-Object -First $MaxDetailRow)) {
+            $tokenText = if ($assembly.PublicKeyToken) { $assembly.PublicKeyToken } else { 'not signed' }
+            $solutionCell = if ($assembly.FarmSolution) {
+                ConvertTo-SPSHtmlText -Value $assembly.FarmSolution
+            }
+            elseif ($assembly.Package) {
+                '{0} <span class="muted">(package)</span>' -f (ConvertTo-SPSHtmlText -Value $assembly.Package)
+            }
+            elseif ($assembly.NotChecked) {
+                '<span class="muted">-</span>'
+            }
+            else {
+                '<span class="pill warn">No inspected package</span>'
+            }
+            if (($assembly.FarmSolution -or $assembly.Package) -and $assembly.ByNameOnly) {
+                $solutionCell += ' <span class="muted">(by name)</span>'
+            }
+            [void]$sb.AppendLine(('<tr><td>{0} <span class="muted">{1}</span></td><td>{2}</td><td>{3}</td><td class="num">{4}</td><td class="num">{5}</td><td class="num">{6}</td></tr>' -f `
+                (ConvertTo-SPSHtmlText -Value $assembly.Name),
+                (ConvertTo-SPSHtmlText -Value $tokenText),
+                (ConvertTo-SPSHtmlText -Value $assembly.Version),
+                $solutionCell,
+                $assembly.ClassCount,
+                $assembly.ReceiverCount,
+                $assembly.SiteCount))
+        }
+        [void]$sb.AppendLine('</tbody>')
+        [void]$sb.AppendLine('</table>')
+        [void]$sb.AppendLine('</div>')
+        if ($receiverAssembly.Count -gt $MaxDetailRow) {
+            [void]$sb.AppendLine(('<p class="muted">Showing the first {0} of {1} assemblies. The event receivers CSV and JSON files list the others, by site collection (up to 200 assemblies and classes for each).</p>' -f $MaxDetailRow, $receiverAssembly.Count))
+        }
+    }
+
+    # Classic workflow associations, one row each: what the Workflow2010 signals count.
+    if ($hasWorkflowAssociationSection) {
+        $workflowCounted = @($workflowAssociationRows | Where-Object { [bool]$_.Counted }).Count
+        $workflowRunning = [int](($workflowAssociationRows | Measure-Object -Property RunningInstances -Sum).Sum)
+        $workflowSiteTotal = @($workflowAssociationRows | ForEach-Object { [string]$_.SiteUrl } | Sort-Object -Unique).Count
+        # The rows are missing for a site collection whose detail could not be built, and the rows of the previous versions stop at 1000 for each: the columns are the totals.
+        $workflowCountedSignal = 0
+        $workflowRunningSignal = 0
+        foreach ($siteRecord in $siteRecords) {
+            $siteValue = 0
+            if ($null -ne $siteRecord.PSObject.Properties['Workflow2010Count'] -and [System.Int32]::TryParse([System.String]$siteRecord.Workflow2010Count, [ref]$siteValue)) {
+                $workflowCountedSignal += $siteValue
+            }
+            $siteValue = 0
+            if ($null -ne $siteRecord.PSObject.Properties['Workflow2010RunningInstanceCount'] -and [System.Int32]::TryParse([System.String]$siteRecord.Workflow2010RunningInstanceCount, [ref]$siteValue)) {
+                $workflowRunningSignal += $siteValue
+            }
+        }
+
+        [void]$sb.AppendLine('<h2 id="workflow-associations">Workflow associations</h2>')
+        [void]$sb.AppendLine('<div class="summary">')
+        [void]$sb.AppendLine(('<div class="summary-total"><strong>{0}</strong> association(s) &middot; <strong>{1}</strong> counted &middot; <strong>{2}</strong> running instance(s) &middot; <strong>{3}</strong> site collection(s)</div>' -f $workflowAssociationRows.Count, $workflowCounted, $workflowRunning, $workflowSiteTotal))
+        [void]$sb.AppendLine('</div>')
+        [void]$sb.AppendLine('<p>The SharePoint 2010 workflow associations of the webs, lists and libraries that the Workflow 2010 signals count. An association is counted unless it is a previous version of a workflow, which SharePoint keeps beside the current one: a previous version is not counted, but its running instances are in the running total. The SharePoint 2010 workflow engine is retired in SharePoint Online, so these workflows have to be rebuilt. The counted associations with the most running instances come first. The workflow association CSV and JSON files give every association, by site collection (the rows of the previous versions stop at 1000 for each).</p>')
+        if ($workflowCounted -lt $workflowCountedSignal -or $workflowRunning -lt $workflowRunningSignal) {
+            [void]$sb.AppendLine(('<p><strong>Partial detail:</strong> the site collections have <strong>{0}</strong> workflow association(s) counted and <strong>{1}</strong> running instance(s) in all (the Workflow2010Count and Workflow2010RunningInstanceCount columns), and this table accounts for <strong>{2}</strong> and <strong>{3}</strong> of them. A site collection whose detail could not be built is missing, and the rows of the previous versions stop at 1000 for a site collection. The columns are exact.</p>' -f $workflowCountedSignal, $workflowRunningSignal, $workflowCounted, $workflowRunning))
+        }
+        [void]$sb.AppendLine('<div class="table-scroll">')
+        [void]$sb.AppendLine('<table class="workflowassociations">')
+        [void]$sb.AppendLine('<thead><tr><th>Site collection</th><th>Web</th><th>List or library</th><th>Workflow</th><th>Counted</th><th class="num">Running instances</th></tr></thead>')
+        [void]$sb.AppendLine('<tbody>')
+        $shownWorkflow = @($workflowAssociationRows | Sort-Object -Property @{ Expression = { [bool]$_.Counted }; Descending = $true }, @{ Expression = { [int]$_.RunningInstances }; Descending = $true }, @{ Expression = { [string]$_.SiteUrl } }, @{ Expression = { [string]$_.WebUrl } }, @{ Expression = { [string]$_.ListTitle } }, @{ Expression = { [string]$_.WorkflowName } } | Select-Object -First $MaxDetailRow)
+        foreach ($workflowAssociation in $shownWorkflow) {
+            $listCell = if ([string]$workflowAssociation.Scope -eq 'List') { ConvertTo-SPSHtmlText -Value $workflowAssociation.ListTitle } else { '<span class="muted">web</span>' }
+            $countedCell = if ([bool]$workflowAssociation.Counted) { 'Yes' } else { '<span class="muted">No (previous version)</span>' }
+            [void]$sb.AppendLine(('<tr><td>{0}</td><td>{1}</td><td>{2}</td><td>{3}</td><td>{4}</td><td class="num">{5}</td></tr>' -f `
+                (ConvertTo-SPSHtmlText -Value $workflowAssociation.SiteUrl),
+                (ConvertTo-SPSHtmlText -Value $workflowAssociation.WebUrl),
+                $listCell,
+                (ConvertTo-SPSHtmlText -Value $workflowAssociation.WorkflowName),
+                $countedCell,
+                [int]$workflowAssociation.RunningInstances))
+        }
+        [void]$sb.AppendLine('</tbody>')
+        [void]$sb.AppendLine('</table>')
+        [void]$sb.AppendLine('</div>')
+        [void]$sb.AppendLine((& $limitNote $workflowAssociationRows.Count 'The workflow association CSV and JSON files'))
     }
 
     if ($authenticationRecords.Count -gt 0) {

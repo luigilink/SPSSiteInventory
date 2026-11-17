@@ -15,7 +15,16 @@
 
         EventReceivers counts only custom event receivers (those registered from a
         non-Microsoft assembly). Out-of-the-box receivers on native lists are ignored so
-        they do not inflate the score.
+        they do not inflate the score. Only the receivers of lists and libraries are read, not
+        those of webs, site collections or content types. SharePoint registers one receiver
+        per event type and per list, so a class that listens to six events on a hundred lists
+        counts 600. EventReceiverExamples names up to five of the assemblies and classes behind
+        the count, with how many receivers and lists each has and where the first one is, and the
+        farm solution that ships the assembly when SolutionAssemblyIndex is given. EventReceiverClasses
+        holds one row for each assembly and class (up to 200 per site collection, the first that the
+        scan meets, and a count that stays exact when rows are left out), for the event receiver
+        report. When a receiver cannot be grouped or the rows cannot be built, the site keeps its counts
+        and the rest of its signals, has no rows and a warning gives the reason.
 
         Workflows are split by platform because their migration cost differs sharply:
 
@@ -23,7 +32,18 @@
           2010 workflow platform, whose engine is retired in SharePoint Online, so those
           workflows always need a rebuild).
         - Workflow2010RunningInstanceCount counts active 2010 workflow instances where
-          runtime counters are exposed by the platform.
+          runtime counters are exposed by the platform, with those of the previous versions
+          of a workflow, which SharePoint keeps as associations of their own and which are
+          not in Workflow2010Count.
+        - Workflow2010Examples names up to five of the associations behind these counts (the
+          workflow, its list or library and web, and its running instances), and
+          WorkflowAssociations holds one row for each association, for the workflow
+          association report. The rows of the counted associations add up to
+          Workflow2010Count and all the rows add up to Workflow2010RunningInstanceCount (each
+          association is read once, so that its row and the total have the same number); the
+          rows of the previous versions stop at 1000 for a site collection, and the counts
+          stay exact. When the rows cannot be built, the site keeps its counts, and a warning gives
+          the reason.
         - Workflow2013Count counts Workflow Manager subscriptions (the SharePoint 2013
           platform), read through WorkflowServicesManager. This is best-effort: when
           Workflow Manager is not connected the count stays at 0 rather than failing.
@@ -222,6 +242,12 @@
         login name of the owner of each alert is collected; a value that is not a boolean is
         rejected.
 
+        .PARAMETER SolutionAssemblyIndex
+        Optional index of the assemblies of the inspected solution packages (from
+        Get-SPSSolutionAssemblyIndex). When it is given, each row of EventReceiverClasses says
+        which package, and which farm solution, ships the assembly of the receivers, or that none
+        does. Leave it out when no package was inspected: the rows then say NotChecked.
+
         .PARAMETER ScanHtmlFile
         Counts .htm and .html files in document libraries. Set it for sites of a web
         application whose browser file handling is Permissive.
@@ -263,6 +289,10 @@
         $SharePointAlertSettings = @{},
 
         [Parameter()]
+        [System.Collections.IDictionary]
+        $SolutionAssemblyIndex = $null,
+
+        [Parameter()]
         [System.Management.Automation.SwitchParameter]
         $ScanHtmlFile
     )
@@ -270,6 +300,8 @@
     $signals = @{
         Workflow2010Count        = 0
         Workflow2010RunningInstanceCount = 0
+        Workflow2010Examples     = ''
+        WorkflowAssociations     = @()
         Workflow2013Count        = 0
         Workflow2013RunningInstanceCount = 0
         AppInstanceCount         = 0
@@ -334,6 +366,8 @@
         ModernBlockers           = ''
         UniquePermissionsCount   = 0
         EventReceivers           = 0
+        EventReceiverClasses     = @()
+        EventReceiverExamples    = ''
         SubsiteCount             = 0
         MaxSubsiteDepth          = 0
         SubsiteExamples          = ''
@@ -346,6 +380,17 @@
     }
     $contentTypes = [System.Collections.Generic.List[object]]::new()
     $contentTypeIds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $eventReceiverTable = [System.Collections.Generic.Dictionary[System.String, System.Object]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $maxEventReceiverGroup = 200
+    $eventReceiverGroupsLeftOut = $false
+    $eventReceiverDetailError = ''
+    $workflowTable = [PSCustomObject]@{
+        Current  = [System.Collections.Generic.List[object]]::new()
+        Previous = [System.Collections.Generic.List[object]]::new()
+    }
+    $maxWorkflowPreviousVersion = 1000
+    $workflowRowsLeftOut = $false
+    $workflowRowError = ''
     $largeListExamples = [System.Collections.Generic.List[string]]::new()
     $largeListViewExamples = [System.Collections.Generic.List[string]]::new()
     $checkedOutFileExamples = [System.Collections.Generic.List[string]]::new()
@@ -813,7 +858,30 @@
                 $allWebWorkflowAssociations = @($web.WorkflowAssociations)
                 $webWorkflowAssociations = @(Get-SPSActiveWorkflowAssociations -WorkflowAssociations $allWebWorkflowAssociations)
                 $signals.Workflow2010Count += $webWorkflowAssociations.Count
-                $signals.Workflow2010RunningInstanceCount += Get-SPSWorkflowAssociationRunningCount -WorkflowAssociations $allWebWorkflowAssociations
+                # Each association is read once: the total and its row have the same number, even when instances start or finish during the scan.
+                $webRunningInstance = [System.Collections.Generic.List[int]]::new()
+                foreach ($association in $allWebWorkflowAssociations) {
+                    $running = [System.Int32](Get-SPSWorkflowAssociationRunningCount -WorkflowAssociations @($association))
+                    $webRunningInstance.Add($running)
+                    $signals.Workflow2010RunningInstanceCount += $running
+                }
+                # The rows only describe the counts above: a row that cannot be built never changes them.
+                try {
+                    for ($index = 0; $index -lt $allWebWorkflowAssociations.Count; $index++) {
+                        $association = $allWebWorkflowAssociations[$index]
+                        if ($null -eq $association) {
+                            continue
+                        }
+                        if (-not (Add-SPSWorkflowAssociationRow -Table $workflowTable -Association $association -ActiveAssociation $webWorkflowAssociations -RunningInstance $webRunningInstance[$index] -SiteUrl ([System.String]$Site.Url) -WebUrl ([System.String]$web.Url) -Scope Web -MaximumPreviousVersion $maxWorkflowPreviousVersion)) {
+                            $workflowRowsLeftOut = $true
+                        }
+                    }
+                }
+                catch {
+                    if (-not $workflowRowError) {
+                        $workflowRowError = $_.Exception.Message
+                    }
+                }
 
                 try {
                     $webLists = $web.Lists
@@ -841,7 +909,28 @@
                         $allListWorkflowAssociations = @($list.WorkflowAssociations)
                         $listWorkflowAssociations = @(Get-SPSActiveWorkflowAssociations -WorkflowAssociations $allListWorkflowAssociations)
                         $signals.Workflow2010Count += $listWorkflowAssociations.Count
-                        $signals.Workflow2010RunningInstanceCount += Get-SPSWorkflowAssociationRunningCount -WorkflowAssociations $allListWorkflowAssociations
+                        $listRunningInstance = [System.Collections.Generic.List[int]]::new()
+                        foreach ($association in $allListWorkflowAssociations) {
+                            $running = [System.Int32](Get-SPSWorkflowAssociationRunningCount -WorkflowAssociations @($association))
+                            $listRunningInstance.Add($running)
+                            $signals.Workflow2010RunningInstanceCount += $running
+                        }
+                        try {
+                            for ($index = 0; $index -lt $allListWorkflowAssociations.Count; $index++) {
+                                $association = $allListWorkflowAssociations[$index]
+                                if ($null -eq $association) {
+                                    continue
+                                }
+                                if (-not (Add-SPSWorkflowAssociationRow -Table $workflowTable -Association $association -ActiveAssociation $listWorkflowAssociations -RunningInstance $listRunningInstance[$index] -SiteUrl ([System.String]$Site.Url) -WebUrl ([System.String]$web.Url) -Scope List -ListTitle ([System.String]$list.Title) -ListUrl ([System.String]$list.RootFolder.ServerRelativeUrl) -MaximumPreviousVersion $maxWorkflowPreviousVersion)) {
+                                    $workflowRowsLeftOut = $true
+                                }
+                            }
+                        }
+                        catch {
+                            if (-not $workflowRowError) {
+                                $workflowRowError = $_.Exception.Message
+                            }
+                        }
 
                         # Count only custom event receivers. Out-of-the-box lists carry many
                         # native receivers from Microsoft assemblies that are not a migration
@@ -849,6 +938,17 @@
                         foreach ($receiver in $list.EventReceivers) {
                             if (Test-SPSCustomAssembly -Assembly $receiver.Assembly) {
                                 $signals.EventReceivers++
+                                # The detail only describes the count: a receiver that cannot be grouped never changes it, and ends the detail of the site.
+                                if (-not $eventReceiverDetailError) {
+                                    try {
+                                        if (-not (Add-SPSEventReceiverClass -Table $eventReceiverTable -Receiver $receiver -List $list -MaximumGroup $maxEventReceiverGroup)) {
+                                            $eventReceiverGroupsLeftOut = $true
+                                        }
+                                    }
+                                    catch {
+                                        $eventReceiverDetailError = $_.Exception.Message
+                                    }
+                                }
                             }
                         }
 
@@ -1706,6 +1806,47 @@
     }
     if ($unreadablePageCount -gt $maxPageWarnings) {
         Write-Warning -Message "$($unreadablePageCount - $maxPageWarnings) more page(s) could not be read on site '$($Site.Url)'; only the first $maxPageWarnings are reported."
+    }
+
+    # The detail never changes the signal: when it cannot be built, the site keeps its counts and has no rows for it.
+    if (-not $eventReceiverDetailError) {
+        try {
+            $eventReceiverClasses = @(ConvertTo-SPSEventReceiverClassRow -Table $eventReceiverTable -SiteUrl ([System.String]$Site.Url) -SolutionAssemblyIndex $SolutionAssemblyIndex)
+            $eventReceiverExamples = Get-SPSEventReceiverExample -Row $eventReceiverClasses
+            $signals.EventReceiverClasses = $eventReceiverClasses
+            $signals.EventReceiverExamples = $eventReceiverExamples
+        }
+        catch {
+            $eventReceiverDetailError = $_.Exception.Message
+        }
+    }
+    if ($eventReceiverDetailError) {
+        Write-Warning -Message "The event receivers of site '$($Site.Url)' could not be listed by assembly and class: $eventReceiverDetailError; EventReceivers stays exact."
+    }
+    elseif ($eventReceiverGroupsLeftOut) {
+        Write-Warning -Message "Event receiver rows stopped after $maxEventReceiverGroup assemblies and classes on site '$($Site.Url)'; EventReceivers stays exact."
+    }
+
+    # The detail never changes the signals: when it cannot be built, the site keeps its counts and has no rows for it.
+    try {
+        $workflowRows = @(
+            @($workflowTable.Current) + @($workflowTable.Previous) |
+                Sort-Object -Property @{ Expression = { $_.WebUrl } }, @{ Expression = { $_.Scope -ne 'Web' } }, @{ Expression = { $_.ListTitle } }, @{ Expression = { $_.WorkflowName } }
+        )
+        $workflowExamples = Get-SPSWorkflowAssociationExample -Row $workflowRows
+        $signals.WorkflowAssociations = $workflowRows
+        $signals.Workflow2010Examples = $workflowExamples
+    }
+    catch {
+        if (-not $workflowRowError) {
+            $workflowRowError = $_.Exception.Message
+        }
+    }
+    if ($workflowRowError) {
+        Write-Warning -Message "The workflow associations of site '$($Site.Url)' could not be fully listed: $workflowRowError; Workflow2010Count and Workflow2010RunningInstanceCount stay exact."
+    }
+    if ($workflowRowsLeftOut) {
+        Write-Warning -Message "Workflow association rows of previous versions stopped after $maxWorkflowPreviousVersion on site '$($Site.Url)'; Workflow2010Count and Workflow2010RunningInstanceCount stay exact."
     }
 
     $signals.SubsiteCount = $subsites.Count

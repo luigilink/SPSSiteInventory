@@ -35,6 +35,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   uses to give the package files the time stamp of its other files.
   Without either parameter, the scan ends by telling how to inspect the packages when the farm has
   solutions. The Getting Started, Usage and Inspecting WSP packages wiki pages say it. (#135)
+- The report says what the `EventReceivers` signal counts. SharePoint registers one receiver per
+  event type and per list, so a class that listens to six events on a hundred lists counts 600, and
+  the report did not say which receivers they were. A site collection now has `EventReceiverExamples`
+  (up to five assemblies and classes, the largest first, with the number of receivers and lists, the
+  first list and the solution that ships the assembly), the HTML detail of a site collection shows
+  it, and the report has a *Custom event receivers* section by assembly (versions, classes,
+  receivers, site collections and solution). `Export-SPSInventoryReport` has a new
+  `-EventReceiverClasses` parameter that writes `*-eventreceivers-*` CSV and JSON files, one row per
+  assembly and class in each site collection (up to 200 for a site collection: `EventReceivers` stays
+  exact and a warning says when rows are left out), and lists them in the manifest
+  (`Files.EventReceiversCsv`, `Files.EventReceiversJson`). When the WSP packages are inspected
+  (`-ExportSolutionPackage` or `-SolutionPackagePath`), each assembly is matched to the package and
+  the farm solution that ship it, by its name and its public key token (`SolutionMatch`:
+  `NotChecked`, `None`, `AssemblyNameAndKey`, `AssemblyName`). The HTML section says how many
+  receivers its table accounts for when that is fewer than the `EventReceivers` column (a site
+  collection keeps its first 200 assemblies and classes, and one whose detail could not be built has
+  none), and a receiver that cannot be grouped is a warning that leaves the signal and the rest of
+  the site as they are. The new parameters of `Export-SPSInventoryReport`,
+  `ConvertTo-SPSInventoryHtml` and the assessment come after the existing ones, so that a call that
+  gives them by position still works. The value of `EventReceivers` and its weight do not change;
+  only the receivers of lists and libraries are read, as before. The Usage, Configuration and
+  Inspecting WSP packages wiki pages say it. (#132)
+- The report says what the `Workflow2010Count` and `Workflow2010RunningInstanceCount` signals count.
+  The totals did not say which workflows they were, so the site owners could not be told which list
+  or library to look at, and the counts could not be checked. A site collection now has
+  `Workflow2010Examples` (up to five associations, the counted ones with the most running instances
+  first: the workflow, its list or library and its web, and its running instances), the HTML detail
+  of a site collection shows it, and the report has a *Workflow associations* section (up to 200
+  rows). `Export-SPSInventoryReport` has a new `-WorkflowAssociations` parameter that writes
+  `*-workflow-associations-*` CSV and JSON files, one row for each classic workflow association of
+  a web, a list or a library, and lists them in the manifest (`Files.WorkflowAssociationsCsv`,
+  `Files.WorkflowAssociationsJson`). `Counted` says whether the association is in
+  `Workflow2010Count`: a previous version of a workflow, which SharePoint keeps as an association of
+  its own, is not, but its running instances are in `Workflow2010RunningInstanceCount`, so the
+  counted rows of a site collection add up to the first count and all its rows to the second (each
+  association is read once, for the total and for its row, so that they agree even when instances
+  start or finish during the scan). The rows of the previous versions stop at 1000 for a site
+  collection (the counts stay exact, and a warning says so), and the detail never changes the
+  counts: a name that cannot be read is a warning, not a workflow with no name. The workflow
+  dataset of the report pack gains `Workflow2010Examples`. The HTML section says how many associations
+  and running instances its table accounts for when that is fewer than the two columns (a site
+  collection whose detail could not be built is missing). The values and the weights of the signals
+  do not change. The Usage, Configuration and Lab Testing wiki pages say it. (#133)
 
 ## [2.1.0] - 2026-10-30
 

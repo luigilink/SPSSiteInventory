@@ -115,7 +115,7 @@
     & $flag 'UsesFullTrustCode' 'Full-trust code' ''
     & $flag 'UsesCustomFarmFeature' 'Custom farm feature' ''
     & $count 'SandboxSolutions' 'Sandbox solutions' ''
-    & $count 'EventReceivers' 'Custom event receivers' ''
+    & $count 'EventReceivers' 'Custom event receivers' 'EventReceiverExamples'
     & $flag 'CustomMasterPage' 'Custom master page' ''
     & $count 'AlternateCssUrlCount' 'Alternate CSS URL (webs)' 'AlternateCssUrlExamples'
     & $count 'XsltListViewCount' 'XSLT list views' 'XsltListViewExamples'
@@ -142,7 +142,8 @@
             $parts = @()
             if ($workflowCount -gt 0) { $parts += '{0} workflow(s)' -f (& $formatNumber $workflowCount) }
             if ($runningCount -gt 0) { $parts += '{0} running instance(s)' -f (& $formatNumber $runningCount) }
-            & $add ('Workflow {0}' -f $version) ($parts -join ', ') ''
+            $workflowDetail = if ($version -eq '2010') { [string]$Record.Workflow2010Examples } else { '' }
+            & $add ('Workflow {0}' -f $version) ($parts -join ', ') $workflowDetail
         }
     }
     & $count 'InfoPathFormCount' 'InfoPath forms' ''

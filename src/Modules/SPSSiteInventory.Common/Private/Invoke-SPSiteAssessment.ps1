@@ -42,7 +42,11 @@
 
         [Parameter()]
         [System.String]
-        $TargetMode = 'SharePointOnline'
+        $TargetMode = 'SharePointOnline',
+
+        [Parameter()]
+        [System.Collections.IDictionary]
+        $SolutionAssemblyIndex = $null
     )
 
     # Fail before any site is read when the alert settings or the target mode are invalid.
@@ -53,6 +57,8 @@
     $managedMetadataLists = [System.Collections.Generic.List[object]]::new()
     $externalLists = [System.Collections.Generic.List[object]]::new()
     $sharePointAlerts = [System.Collections.Generic.List[object]]::new()
+    $eventReceiverClasses = [System.Collections.Generic.List[object]]::new()
+    $workflowAssociations = [System.Collections.Generic.List[object]]::new()
     $scored = [System.Collections.Generic.List[object]]::new()
     $siteTotal = $Inventory.Count
     $siteIndex = 0
@@ -93,7 +99,7 @@
                 $customizationWarnings = @()
                 # HTML files only matter where browser file handling is Permissive; SharePoint Online enforces Strict.
                 $scanHtmlFile = [string]$item.BrowserFileHandling -eq 'Permissive'
-                $signals = Get-SPSSiteCustomization -Site $site -CustomFeatureId $CustomFeatureId -FullTrustFeatureId $FullTrustFeatureId -LargeContentThresholds $LargeContentThresholds -PermissionLevels $PermissionLevels -SharePointAlertSettings $SharePointAlertSettings -ScanHtmlFile:$scanHtmlFile -WarningVariable customizationWarnings
+                $signals = Get-SPSSiteCustomization -Site $site -CustomFeatureId $CustomFeatureId -FullTrustFeatureId $FullTrustFeatureId -LargeContentThresholds $LargeContentThresholds -PermissionLevels $PermissionLevels -SharePointAlertSettings $SharePointAlertSettings -SolutionAssemblyIndex $SolutionAssemblyIndex -ScanHtmlFile:$scanHtmlFile -WarningVariable customizationWarnings
                 foreach ($warning in $customizationWarnings) {
                     $siteWarnings.Add([string]$warning)
                 }
@@ -123,6 +129,12 @@
                 }
                 foreach ($sharePointAlert in $signals.SharePointAlerts) {
                     $sharePointAlerts.Add($sharePointAlert)
+                }
+                foreach ($eventReceiverClass in $signals.EventReceiverClasses) {
+                    $eventReceiverClasses.Add($eventReceiverClass)
+                }
+                foreach ($workflowAssociation in $signals.WorkflowAssociations) {
+                    $workflowAssociations.Add($workflowAssociation)
                 }
 
                 $result = Measure-SPSSiteComplexity -Signals $signals -Scoring $Scoring -TargetMode $TargetMode
@@ -180,6 +192,7 @@
                     AssessmentWarnings = $groupedWarnings -join '; '
                     Workflow2010Count = $signals['Workflow2010Count']
                     Workflow2010RunningInstanceCount = $signals['Workflow2010RunningInstanceCount']
+                    Workflow2010Examples = $signals['Workflow2010Examples']
                     Workflow2013Count = $signals['Workflow2013Count']
                     Workflow2013RunningInstanceCount = $signals['Workflow2013RunningInstanceCount']
                     AppInstanceCount = $signals['AppInstanceCount']
@@ -245,6 +258,7 @@
                     ModernBlockerCount = $signals['ModernBlockerCount']
                     ModernBlockers = $signals['ModernBlockers']
                     EventReceivers = $signals['EventReceivers']
+                    EventReceiverExamples = $signals['EventReceiverExamples']
                     UniquePermissionsCount = $signals['UniquePermissionsCount']
                     ContentTypeCount = $signals['ContentTypeCount']
                     ListContentTypeBindingCount = $signals['ListContentTypeBindingCount']
@@ -298,6 +312,7 @@
                     AssessmentWarnings = $groupedWarnings -join '; '
                     Workflow2010Count = $null
                     Workflow2010RunningInstanceCount = $null
+                    Workflow2010Examples = $null
                     Workflow2013Count = $null
                     Workflow2013RunningInstanceCount = $null
                     AppInstanceCount = $null
@@ -363,6 +378,7 @@
                     ModernBlockerCount = $null
                     ModernBlockers = $null
                     EventReceivers = $null
+                    EventReceiverExamples = $null
                     UniquePermissionsCount = $null
                     ContentTypeCount = $null
                     ListContentTypeBindingCount = $null
@@ -394,5 +410,7 @@
         ManagedMetadataLists = $managedMetadataLists.ToArray()
         ExternalLists = $externalLists.ToArray()
         SharePointAlerts = $sharePointAlerts.ToArray()
+        EventReceiverClasses = $eventReceiverClasses.ToArray()
+        WorkflowAssociations = $workflowAssociations.ToArray()
     }
 }

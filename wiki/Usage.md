@@ -42,7 +42,7 @@ report pack, plus a dedicated farm-solution report, to the output folder:
 | `*-manifest-*.json` | Report-pack manifest with the layout version (`ReportPackVersion`), generation metadata, top-level counters and file references. |
 | `*-sites-*.json` | Site inventory dataset used by the dashboard/report-pack consumers. |
 | `*-auth-*.json` | Authentication-by-web-application dataset (zone/provider summary + collection counts). |
-| `*-workflows-*.json` | Workflow/template-focused dataset (`Workflow2010Count`, `Workflow2013Count`, running-instance counts, template-compatibility and template-language review fields, status, category). |
+| `*-workflows-*.json` | Workflow/template-focused dataset (`Workflow2010Count`, `Workflow2010Examples`, `Workflow2013Count`, running-instance counts, template-compatibility and template-language review fields, status, category). |
 | `*-apps-*.json` | App-focused dataset (`AppInstanceCount`, `AppWebCount`, `AppInstanceExamples`, status, category). |
 | `*-permissions-*.json` | Permissions and policy dataset (`CustomPermissionLevelCount`/`Examples`, `EmailEnabledListCount`/`Examples`, `HtmlFileCount`/`Examples`, plus the web application values `BrowserFileHandling`, `WebAppPolicyCount`/`Examples` repeated per site collection, status, category). Web application failure rows (`InventoryScope` = `WebApplication`) are included so the policy values read for an application whose site collections could not be enumerated are kept. |
 | `*-publishing-*.json` | Publishing and customized-page dataset (`PublishingInfrastructureEnabled`, `PublishingWebCount`, `PublishingPageCount`, `PublishingPageLayoutCount`/`PublishingPageLayoutExamples`, `CustomizedPageCount`/`CustomizedPageExamples`, status, category). |
@@ -54,6 +54,8 @@ report pack, plus a dedicated farm-solution report, to the output folder:
 | `*-solutions-*.json` | Farm-solution (WSP) inventory for automation, with the feature scopes/ids kept as arrays. |
 | `*-solution-packages-*.csv` / `*-solution-packages-*.json` | Only when packages were inspected (`-ExportSolutionPackage` or `-SolutionPackagePath`). The WSP packages that were inspected, one row per package: whether it is custom, its full-trust code, the number of assemblies and features, the .NET framework, the farm solution it matches and what differs. The same file as `Export-SPSSolutionPackageReport` writes (see [Inspecting WSP packages offline](Solution-Packages#the-files)). |
 | `*-solution-assemblies-*.csv` | Only when packages were inspected. One row per assembly of the inspected packages, with its strong name, public key token, framework and where it is deployed. |
+| `*-eventreceivers-*.csv` / `*-eventreceivers-*.json` | The custom event receivers that `EventReceivers` counts, by site collection. One row per assembly and class: the assembly as it is registered and split (`AssemblyName`, `AssemblyVersion`, `PublicKeyToken`), the class, the number of receivers (`ReceiverCount`) and of lists (`ListCount`), the event types, the first list where the class is registered, and the solution that ships the assembly. `SolutionMatch` is `NotChecked` when no package was inspected, `None` when no inspected package ships the assembly (a package that could not be read in full may be the one that does), and `AssemblyNameAndKey` or `AssemblyName` when one does, with `PackageName` and `FarmSolutionName` (empty when the package is not deployed in the farm). The match is on the name of the assembly and, when both have one, its public key token: the version is not compared. At most 200 assemblies and classes are kept for a site collection (the first 200 that the scan meets), and `EventReceivers` stays exact when some are left out (a warning says so). |
+| `*-workflow-associations-*.csv` / `*-workflow-associations-*.json` | The classic (SharePoint 2010) workflow associations that `Workflow2010Count` and `Workflow2010RunningInstanceCount` count, by site collection. One row per association of a web, a list or a library: the site collection (`SiteUrl`), the web (`WebUrl`), `Scope` (`Web` or `List`), the list or library (`ListTitle` and `ListUrl`, empty for a web), the name of the workflow (`WorkflowName`), `Counted` and `RunningInstances`. `Counted` is true when the association is in `Workflow2010Count`. A previous version of a workflow, which SharePoint keeps as an association of its own, is not counted, but its running instances are in `Workflow2010RunningInstanceCount`: so the counted rows of a site collection add up to its `Workflow2010Count`, and all its rows to its `Workflow2010RunningInstanceCount`. The rows of the previous versions stop at 1000 for a site collection (the counts stay exact, and a warning says so). |
 | `*-contenttypes-*.csv` / `*-contenttypes-*.json` | Content-type definitions and list bindings, including standard types. One row per web definition or list binding, not per item. |
 | `*-managedmetadata-*.csv` / `*-managedmetadata-*.json` | Managed metadata columns by list, following the SMAT Managed Metadata Columns report. One row per list or library with at least one visible managed metadata column. |
 | `*-externallists-*.csv` / `*-externallists-*.json` | External lists by list, following the SMAT External List report. One row per list backed by a Business Connectivity Services (BCS) external content type, with its BCS binding. |
@@ -146,7 +148,8 @@ CSV/JSON rows describe site collections and any web-application enumeration fail
 | `CustomizationInventoryComplete` | False means one or more customization signals may be missing |
 | `Workflow2010Count` | Active SharePoint 2010 workflow associations (legacy engine, retired in SPO); historical "previous version" associations are excluded when detectable |
 | `Workflow2013Count` | SharePoint 2013 workflow subscriptions (Workflow Manager) |
-| `Workflow2010RunningInstanceCount` | Active SharePoint 2010 workflow runtime instances where counters are exposed |
+| `Workflow2010RunningInstanceCount` | Active SharePoint 2010 workflow runtime instances where counters are exposed, with those of the previous versions of a workflow, which can still run |
+| `Workflow2010Examples` | Up to five of the associations behind `Workflow2010Count` and `Workflow2010RunningInstanceCount`, the counted ones with the most running instances first, for example `Approval (list Documents, https://intranet/sites/team): 12 running instance(s)`; a previous version says `[previous version]`. The `*-workflow-associations-*` files give every association, by site collection. |
 | `Workflow2013RunningInstanceCount` | Active SharePoint 2013 workflow runtime instances where instance APIs are available |
 | `AppInstanceCount` / `AppInstanceExamples` | SharePoint add-in instances detected across the site collection and up to five examples (name + web URL) |
 | `AppWebCount` | Number of webs identified as app webs (`APP#*` / `IsAppWeb`) |
@@ -186,7 +189,8 @@ CSV/JSON rows describe site collections and any web-application enumeration fail
 | `ClassicExperienceOptOutCount` / `ClassicExperienceOptOutExamples` | The site collection and the webs that opted out of the modern list and library experience (the feature `E3540C7D-6BEA-403C-A224-1A12EAFEE4C4` of the site collection and the feature `52E14B6F-B1BB-4969-B89B-C4FAA56745EF` of a web, one each), and up to five as `URL (site collection)` or `URL (web)` |
 | `ClassicExperienceListCount` / `ClassicExperienceListExamples` | Lists, hidden ones left out, whose "List experience" setting is classic (`ListExperienceOptions`), and up to five as `title (list URL)`. It is 0 on a SharePoint that has no such setting, such as SharePoint Server 2016 |
 | `ModernBlockerCount` / `ModernBlockers` | The kinds of blocker of the modern experience that the site collection has, out of seven (custom master page, alternate CSS URL, publishing features, XSLT list views, script web parts, opt-out of the modern list experience, lists forced to classic), and one text that says how many webs, views, web parts or lists are behind each. Not weighed in the example configurations: each blocker weighs through its own signal |
-| `EventReceivers` | Event receivers registered on lists from a custom (non-Microsoft) assembly; out-of-the-box receivers are not counted |
+| `EventReceivers` | Event receivers registered on lists from a custom (non-Microsoft) assembly; out-of-the-box receivers are not counted. SharePoint registers one receiver per event type and per list, so a class that listens to six events on a hundred lists counts 600. Only the receivers of lists and libraries are read, not those of webs, site collections or content types |
+| `EventReceiverExamples` | Up to five of the assemblies and classes behind `EventReceivers`, the largest first, with the number of receivers and of lists and the first list, for example `Contoso.Intranet / Contoso.Intranet.ItemReceiver: 600 receiver(s) on 100 list(s), first /sites/team/Lists/Tasks (solution contoso.intranet.wsp)`. The solution is named when an inspected package ships the assembly (see `-ExportSolutionPackage` and `-SolutionPackagePath`). The `*-eventreceivers-*` files give the assemblies and classes, up to 200 for a site collection: when it has more, the files and the examples hold the first 200 that the scan meets, and the receivers of the others are only in `EventReceivers`. |
 | `UniquePermissionsCount` | Role assignments on the webs that do not inherit their permissions. The root web always has its own, so the value is never 0: it is not a count of webs with unique permissions |
 | `ContentTypeCount` | Distinct content-type IDs seen in web definition collections, deduplicated within this site collection |
 | `ListContentTypeBindingCount` | Number of content-type bindings across the collection's lists, not the number of distinct designs |
@@ -266,14 +270,24 @@ folder can be moved, zipped and sent. The manifest lists the pages in `Files.Inv
   at zero is not listed. Click a column heading to sort, use the category buttons to filter, and
   type in the search box to find a site collection by name, URL, template or signal; the count
   next to them says how many site collections are shown.
-- **Farm solutions, solution packages, authentication, web application policies, content types,
-  managed metadata, external lists, BCS applications, Secure Store applications and profile
-  property mappings** follow. The *Solution packages* section is there only when the run inspected
-  packages (`-ExportSolutionPackage` or `-SolutionPackagePath`): it shows what each package holds, how it compares with the farm
-  solution it matches, and the farm solutions that have no inspected package. The managed
+- **Farm solutions, solution packages, custom event receivers, workflow associations, authentication, web application
+  policies, content types, managed metadata, external lists, BCS applications, Secure Store
+  applications and profile property mappings** follow. The *Solution packages* section is there
+  only when the run inspected packages (`-ExportSolutionPackage` or `-SolutionPackagePath`): it
+  shows what each package holds, how it compares with the farm solution it matches, and the farm
+  solutions that have no inspected package. The *Custom event receivers* section is there when a site collection has some: it
+  lists, by assembly, the classes, receivers and site collections behind `EventReceivers`,
+  and the solution that ships the assembly when the packages were inspected; a note says how many
+  receivers it accounts for when that is fewer than the `EventReceivers` column (a site collection
+  keeps its first 200 assemblies and classes, and one whose detail could not be built has none). The *Workflow
+  associations* section is there when a site collection has some: it lists the classic workflow
+  associations behind `Workflow2010Count`, the counted ones with the most running instances first,
+  with their web, their list or library and their running instances; a note says how many it
+  accounts for when that is fewer than the two columns (a site collection whose detail could not be
+  built is missing). The managed
   metadata, external list, BCS, Secure Store, profile property mapping, farm solution, solution
-  package and full-trust site tables show at most 200 rows and say how many are not shown and
-  which files hold all of them. The content types are not listed in the report,
+  package, event receiver, workflow association and full-trust site tables show at most 200 rows and say how many are
+  not shown and which files hold all of them. The content types are not listed in the report,
   because there are thousands of them: it shows how many definitions and list bindings there
   are, and the `*-contenttypes-*` files hold every row.
 

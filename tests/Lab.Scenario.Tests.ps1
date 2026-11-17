@@ -216,14 +216,31 @@ Describe 'The lab scenarios' {
         }
         $receiver = $script:Scenario | Where-Object { $_.Name -eq 'event-receiver' }
         $master = $script:Scenario | Where-Object { $_.Name -eq 'custom-master' }
-        $receiver.Expect | Should -HaveCount 1
+        $receiver.Expect | Should -HaveCount 2
         $receiver.Expect[0].Property | Should -Be 'EventReceivers'
         $receiver.Expect[0].Operator | Should -Be 'ge'
         $receiver.Expect[0].Value | Should -Be 1
+        $receiver.Expect[1].Property | Should -Be 'EventReceiverExamples'
+        $receiver.Expect[1].Operator | Should -Be 'match'
         $master.Expect | Should -HaveCount 1
         $master.Expect[0].Property | Should -Be 'CustomMasterPage'
         $master.Expect[0].Operator | Should -Be 'eq'
         $master.Expect[0].Value | Should -BeTrue
+    }
+
+    It 'expect the workflow of the workflow scenario in the examples of the inventory' {
+        $workflow = $script:Scenario | Where-Object { $_.Name -eq 'workflow-2010' }
+
+        $workflow.Expect | Should -HaveCount 3
+        $workflow.Expect[0].Property | Should -BeExactly 'Workflow2010Count'
+        $workflow.Expect[1].Property | Should -BeExactly 'Workflow2010Examples'
+        $workflow.Expect[1].Operator | Should -BeExactly 'match'
+        $example = 'Lab approval (list LabWorkflowList, https://lab/sites/spslab-one): 0 running instance(s)'
+        (Test-SPSLabExpectation -Expectation $workflow.Expect[1] -Record ([PSCustomObject]@{ Workflow2010Examples = $example }) -Alert @()).Status | Should -Be 'PASS'
+        (Test-SPSLabExpectation -Expectation $workflow.Expect[1] -Record ([PSCustomObject]@{ Workflow2010Examples = 'Other (list LabWorkflowList, https://lab/sites/spslab-one): 0 running instance(s)' }) -Alert @()).Status | Should -Be 'FAIL'
+        (Test-SPSLabExpectation -Expectation $workflow.Expect[1] -Record ([PSCustomObject]@{ Workflow2010Examples = 'Lab approval (web https://lab/sites/spslab-one): 0 running instance(s)' }) -Alert @()).Status | Should -Be 'FAIL'
+        (Test-SPSLabExpectation -Expectation $workflow.Expect[1] -Record ([PSCustomObject]@{ Workflow2010Examples = '' }) -Alert @()).Status | Should -Be 'FAIL'
+        (Test-SPSLabExpectation -Expectation $workflow.Expect[1] -Record ([PSCustomObject]@{ Workflow2010Examples = $null }) -Alert @()).Status | Should -Be 'FAIL'
     }
 
     It 'meet the expectations on the columns with the values that the inventory writes' {
@@ -233,6 +250,11 @@ Describe 'The lab scenarios' {
         (Test-SPSLabExpectation -Expectation $receiver.Expect[0] -Record ([PSCustomObject]@{ EventReceivers = 2 }) -Alert @()).Status | Should -Be 'PASS'
         (Test-SPSLabExpectation -Expectation $receiver.Expect[0] -Record ([PSCustomObject]@{ EventReceivers = 0 }) -Alert @()).Status | Should -Be 'FAIL'
         (Test-SPSLabExpectation -Expectation $receiver.Expect[0] -Record ([PSCustomObject]@{ EventReceivers = $null }) -Alert @()).Status | Should -Be 'FAIL'
+        $example = 'Contoso.Lab.Receivers / Contoso.Lab.Receivers.ItemReceiver: 1 receiver(s) on 1 list(s), first /sites/spslab-one/Lists/LabReceivers'
+        (Test-SPSLabExpectation -Expectation $receiver.Expect[1] -Record ([PSCustomObject]@{ EventReceiverExamples = $example }) -Alert @()).Status | Should -Be 'PASS'
+        (Test-SPSLabExpectation -Expectation $receiver.Expect[1] -Record ([PSCustomObject]@{ EventReceiverExamples = 'Contoso.Other / Contoso.Other.Receiver: 1 receiver(s) on 1 list(s)' }) -Alert @()).Status | Should -Be 'FAIL'
+        (Test-SPSLabExpectation -Expectation $receiver.Expect[1] -Record ([PSCustomObject]@{ EventReceiverExamples = '' }) -Alert @()).Status | Should -Be 'FAIL'
+        (Test-SPSLabExpectation -Expectation $receiver.Expect[1] -Record ([PSCustomObject]@{ EventReceiverExamples = $null }) -Alert @()).Status | Should -Be 'FAIL'
         (Test-SPSLabExpectation -Expectation $master.Expect[0] -Record ([PSCustomObject]@{ CustomMasterPage = $true }) -Alert @()).Status | Should -Be 'PASS'
         (Test-SPSLabExpectation -Expectation $master.Expect[0] -Record ([PSCustomObject]@{ CustomMasterPage = $false }) -Alert @()).Status | Should -Be 'FAIL'
         (Test-SPSLabExpectation -Expectation $master.Expect[0] -Record ([PSCustomObject]@{ CustomMasterPage = 'True' }) -Alert @()).Status | Should -Be 'PASS'

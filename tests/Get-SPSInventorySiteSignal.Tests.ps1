@@ -142,6 +142,7 @@ Describe 'Get-SPSInventorySiteSignal' {
         @{ Count = 'AudienceTargetedItemCount'; Examples = 'AudienceTargetedExamples'; Label = 'Audience-targeted items' }
         @{ Count = 'SiteNotebookCount'; Examples = 'SiteNotebookExamples'; Label = 'Site notebooks' }
         @{ Count = 'CustomizedProfilePageCount'; Examples = 'CustomizedProfilePageExamples'; Label = 'Customized profile page' }
+        @{ Count = 'EventReceivers'; Examples = 'EventReceiverExamples'; Label = 'Custom event receivers' }
     ) {
         $signal = @(Get-Signal -Record (New-RecordWith @{ $Count = 2; $Examples = 'first (1); second (2)' }))
 
@@ -210,6 +211,22 @@ Describe 'Get-SPSInventorySiteSignal' {
         $signal[0].Value | Should -Be '3 workflow(s), 2 running instance(s)'
         $signal[1].Label | Should -Be 'Workflow 2013'
         $signal[1].Value | Should -Be '5 running instance(s)'
+    }
+
+    It 'gives the examples of the 2010 workflows as the detail of their line, and none for the 2013 workflows' {
+        $signal = @(Get-Signal -Record (New-RecordWith @{ Workflow2010Count = 1; Workflow2010RunningInstanceCount = 2; Workflow2010Examples = 'Approval (list Documents, https://intranet/sites/team): 2 running instance(s)'; Workflow2013Count = 1 }))
+
+        $signal.Count | Should -Be 2
+        $signal[0].Label | Should -BeExactly 'Workflow 2010'
+        $signal[0].Detail | Should -BeExactly 'Approval (list Documents, https://intranet/sites/team): 2 running instance(s)'
+        $signal[1].Label | Should -BeExactly 'Workflow 2013'
+        $signal[1].Detail | Should -BeExactly ''
+    }
+
+    It 'gives an empty detail to the 2010 workflows of a record that has no examples' {
+        $signal = @(Get-Signal -Record (New-RecordWith @{ Workflow2010Count = 1 }))
+
+        $signal[0].Detail | Should -BeExactly ''
     }
 
     It 'gives the managed metadata lists, columns and term sets in one line' {

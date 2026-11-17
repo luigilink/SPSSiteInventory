@@ -212,7 +212,10 @@ Workflows are split by platform because their migration cost differs:
   `Workflow2010Count` to `BlockingSignals` if you want any legacy workflow to force
   **Blocking (4)**.
 - `Workflow2010RunningInstanceCount` — active runtime instances on the 2010
-  platform where per-association counters are available.
+  platform where per-association counters are available, with those of the previous
+  versions of a workflow, which can still run. The `Workflow2010Examples` column, the
+  *Workflow associations* section of the HTML report and the `*-workflow-associations-*`
+  files say which workflows are behind the two counts (see [Usage](Usage)).
 - `Workflow2013Count` — SharePoint 2013 workflows (Workflow Manager). A lighter, more
   direct remediation, so they are weighted less than their 2010 counterparts. They
   were nevertheless **retired in SharePoint Online** on 2 April 2026, so every one
@@ -433,6 +436,12 @@ is personal data.
 `EventReceivers` counts only **custom** event receivers (those registered from a
 non-Microsoft assembly). Out-of-the-box receivers on native lists are ignored, so a stock
 site is not promoted just because SharePoint's own lists carry many built-in receivers.
+SharePoint registers one receiver per event type and per list, so a class that listens to six
+events on a hundred lists counts 600, and the weight applies to each. Only the receivers of lists
+and libraries are read, not those of webs, site collections or content types. The
+`EventReceiverExamples` column, the *Custom event receivers* section of the HTML report and the
+`*-eventreceivers-*` files say which assemblies and classes are behind the count, and the solution
+that ships each assembly when the packages were inspected (see [Usage](Usage)).
 
 The classic customization signals are columns of the CSV, JSON and HTML reports under their
 own name, so that you can filter and sort on them:

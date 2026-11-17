@@ -738,6 +738,7 @@ function Get-SPSLabScenario {
             }
             Expect      = @(
                 (Get-SPSLabExpectation EventReceivers ge 1)
+                (Get-SPSLabExpectation EventReceiverExamples match 'Contoso\.Lab\.Receivers / Contoso\.Lab\.Receivers\.ItemReceiver: 1 receiver\(s\) on 1 list\(s\)')
             )
         })
 
@@ -958,6 +959,7 @@ function Get-SPSLabScenario {
             }
             Expect      = @(
                 (Get-SPSLabExpectation Workflow2010Count ge 1)
+                (Get-SPSLabExpectation Workflow2010Examples match 'Lab approval \(list LabWorkflowList, [^)]+\): \d+ running instance\(s\)')
                 (Get-SPSLabExpectation -Alert 'Workflow2010')
             )
         })
