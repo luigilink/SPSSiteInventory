@@ -498,6 +498,17 @@ Describe 'Get-SPSSiteCustomization site notebooks' {
         $assetsFirst.Signals.CustomizationInventoryComplete | Should -BeTrue
     }
 
+    It 'does not name the count as a lower bound when the library has exactly as many folders as the cap' {
+        $assets = New-TestSiteAssets -Batches @((New-TestBatch -Item @(1..2 | ForEach-Object { New-TestNotebook -Name "Site $_ Notebook" })))
+
+        $result = Get-Signal -Site (New-TestSite -List @($assets)) -Threshold @{ MaxItemsForNotebookScanPerLibrary = 2 }
+
+        $result.Signals.SiteNotebookCount | Should -Be 2
+        $result.Signals.CustomizationInventoryComplete | Should -BeTrue
+        $result.Signals.LowerBoundSignals | Should -BeExactly ''
+        ($result.Warnings -join ';') | Should -Not -Match 'stopped'
+    }
+
     It 'marks the collection partial when the library cannot be listed' {
         $assets = New-TestSiteAssets -ErrorText 'Access is denied'
 

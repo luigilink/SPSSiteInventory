@@ -1278,6 +1278,27 @@ Describe 'Get-SPSSiteCustomization content types' {
         $tasks.HtmlQueries | Should -HaveCount 0
     }
 
+    It 'does not name the HTML file count as a lower bound when the library has exactly as many files as the cap' {
+        $library = Get-TestLibrary -HtmlBatches @(
+            Get-TestHtmlBatch -Urls @('/sites/team/Docs/a.htm', '/sites/team/Docs/b.htm')
+        )
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Lists = @($library)
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -ScanHtmlFile -LargeContentThresholds @{ MaxItemsForHtmlFileScanPerLibrary = 2 } -WarningVariable warnings -WarningAction SilentlyContinue
+
+        $signals.HtmlFileCount | Should -Be 2
+        $signals.CustomizationInventoryComplete | Should -BeTrue
+        $signals.LowerBoundSignals | Should -BeExactly ''
+        ($warnings -join ';') | Should -Not -Match 'stopped'
+    }
+
     It 'caps the HTML file scan, marks the count as a lower bound and leaves the collection complete' {
         $library = Get-TestLibrary -HtmlBatches @(
             Get-TestHtmlBatch -Urls @('/sites/team/Docs/a.htm', '/sites/team/Docs/b.htm', '/sites/team/Docs/c.htm')
@@ -1614,6 +1635,46 @@ Describe 'Get-SPSSiteCustomization content types' {
 
         $signals.CheckedOutFileCount | Should -Be 1
         $signals.CheckedOutFileExamples | Should -Match 'Shared Documents \(1\)'
+    }
+
+    It 'does not name the file version count as a lower bound when the library has exactly as many items as the cap' {
+        $web = Get-TestWeb -Definitions @() -Bindings @()
+        $web.Lists[0].Title = 'Architecture'
+        $web.Lists[0].ItemCount = 2
+        $web.Lists[0].EnableVersioning = $true
+        $web.Lists[0].Views = @()
+        $web.Lists[0].CheckedOutFiles = @()
+        $web.Lists[0] | Add-Member -MemberType NoteProperty -Name VersionItems -Value @(
+            [PSCustomObject]@{ Name = 'a.docx'; File = [PSCustomObject]@{ ServerRelativeUrl = '/sites/team/Architecture/a.docx'; Versions = @(1..60) } }
+            [PSCustomObject]@{ Name = 'b.docx'; File = [PSCustomObject]@{ ServerRelativeUrl = '/sites/team/Architecture/b.docx'; Versions = @(1..55) } }
+        ) -Force
+        $web.Lists[0] | Add-Member -MemberType ScriptMethod -Name GetItems -Value {
+            param ($Query)
+            $queryText = ''
+            if ($null -ne $Query.PSObject.Properties['Query'] -and $Query.Query) {
+                $queryText = [string]$Query.Query
+            }
+            if ($queryText -match 'CheckoutUser') {
+                return [PSCustomObject]@{ Items = @(); ListItemCollectionPosition = $null }
+            }
+            return [PSCustomObject]@{ Items = @($this.VersionItems); ListItemCollectionPosition = $null }
+        } -Force
+        $site = [PSCustomObject]@{
+            Url = 'https://intranet.contoso.com/sites/team'
+            Features = @()
+            Solutions = @()
+            AllWebs = @($web)
+        }
+
+        $signals = Get-SPSSiteCustomization -Site $site -LargeContentThresholds @{
+            FileVersionCount = 50
+            MaxItemsForVersionScanPerLibrary = 2
+        } -WarningVariable warnings -WarningAction SilentlyContinue
+
+        $signals.FileVersionCount | Should -Be 2
+        $signals.CustomizationInventoryComplete | Should -BeTrue
+        $signals.LowerBoundSignals | Should -BeExactly ''
+        ($warnings -join '; ') | Should -Not -Match 'stopped'
     }
 
     It 'uses paged item retrieval for version scans and marks the count as a lower bound when capped' {

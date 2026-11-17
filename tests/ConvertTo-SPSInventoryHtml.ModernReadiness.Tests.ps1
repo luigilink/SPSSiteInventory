@@ -260,3 +260,41 @@ Describe 'The risk indicators and the alerts of the HTML report, for the modern 
         $onPrem | Should -Match 'Nothing to do to modernize this farm'
     }
 }
+
+Describe 'The Modern experience readiness section of the HTML report and a web part scan that reached its cap' {
+    It 'says that a script web part may have been missed, also when no blocker was detected, and does not call it partial' {
+        $records = @((New-Site -Name 'capped' -Signals @{ ScriptWebPartCount = 0; LowerBoundSignals = 'ScriptWebPartCount' }), (New-Site -Name 'ok'))
+
+        $section = Get-Section -Html (Get-Html -Record $records)
+
+        $section | Should -Match 'No blocker of the modern experience was detected in the <strong>2</strong> assessed site collection\(s\)\.'
+        $section | Should -Match 'The script web part scan reached its cap in <strong>1</strong> site collection\(s\): a script web part may have been missed there\.'
+        $section | Should -Not -Match 'partial'
+    }
+
+    It 'says it next to the blockers, shows the items as "at least" and the text of the site collection with its lower bound' {
+        $records = @(
+            (New-Site -Name 'capped' -Signals @{ ScriptWebPartCount = 3; LowerBoundSignals = 'ScriptWebPartCount' })
+            (New-Site -Name 'exact' -Signals @{ ScriptWebPartCount = 2 })
+            (New-Site -Name 'xslt' -Signals @{ XsltListViewCount = 5 })
+        )
+
+        $section = Get-Section -Html (Get-Html -Record $records)
+
+        $section | Should -Match 'The script web part scan reached its cap in <strong>1</strong> site collection\(s\): a script web part may have been missed there\.'
+        $section | Should -Match '<tr><td>Script web parts</td><td class="num">2</td><td class="num">at least 5 web part\(s\)</td></tr>'
+        $section | Should -Match '<tr><td>XSLT list views</td><td class="num">1</td><td class="num">5 view\(s\)</td></tr>'
+        $section | Should -Match ([regex]::Escape('Script web parts (at least 3)'))
+        $section | Should -Match ([regex]::Escape('Script web parts (2)'))
+    }
+
+    It 'says nothing about a cap when no web part scan reached it, and not for another scan' {
+        $records = @((New-Site -Name 'a' -Signals @{ ScriptWebPartCount = 3; LowerBoundSignals = 'FileVersionCount' }), (New-Site -Name 'b' -Signals @{ ScriptWebPartCount = 1 }))
+
+        $section = Get-Section -Html (Get-Html -Record $records)
+
+        $section | Should -Not -Match 'reached its cap'
+        $section | Should -Not -Match 'at least \d'
+        $section | Should -Match '<td class="num">4 web part\(s\)</td>'
+    }
+}

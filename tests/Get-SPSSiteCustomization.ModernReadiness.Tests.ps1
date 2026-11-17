@@ -490,8 +490,23 @@ Describe 'Get-SPSSiteCustomization script web parts' {
         $pages[2].Reads | Should -Be 0
         $result.Signals.CustomizationInventoryComplete | Should -BeTrue
         $result.Signals.LowerBoundSignals | Should -BeExactly 'ScriptWebPartCount'
+        $result.Signals.ModernBlockers | Should -BeExactly 'Script web parts (at least 2)'
         ($result.Warnings -join ';') | Should -Match 'MaxItemsForWebPartScanPerLibrary'
         ($result.Warnings -join ';') | Should -Match 'the count is a lower bound'
+    }
+
+    It 'does not name the count as a lower bound when the library has exactly as many pages as the cap' {
+        $pages = 1..2 | ForEach-Object { New-TestPage -Url "/sites/team/SitePages/P$_.aspx" -WebParts @((New-TestScriptEditor)) }
+        $library = New-TestLibrary -Batches @((New-TestPageBatch -Pages $pages))
+        $web = New-TestWeb -Lists @($library)
+
+        $result = Get-Signal -Site (New-TestSite -Webs @($web)) -Threshold @{ MaxItemsForWebPartScanPerLibrary = 2 }
+
+        $result.Signals.ScriptWebPartCount | Should -Be 2
+        $result.Signals.CustomizationInventoryComplete | Should -BeTrue
+        $result.Signals.LowerBoundSignals | Should -BeExactly ''
+        $result.Signals.ModernBlockers | Should -BeExactly 'Script web parts (2)'
+        ($result.Warnings -join ';') | Should -Not -Match 'stopped'
     }
 
     It 'names the count as a lower bound when the cap is reached with more pages to come' {

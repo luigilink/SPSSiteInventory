@@ -1,22 +1,23 @@
 ﻿function Get-SPSLowerBoundSignalName {
     <#
         .SYNOPSIS
-        Lists the signals of an inventory record whose count is a lower bound because a scan reached its cap.
+        Lists the signals of a site collection whose count is a lower bound because a scan reached its cap.
 
         .DESCRIPTION
-        The LowerBoundSignals column of the record names those signals, as the names of their columns separated by
-        semicolons (Get-SPSSiteCustomization writes it). This function reads that text the same way for every part
-        of the report: it trims each name, leaves out an empty one and a name that is repeated, and keeps the order.
-        A record that has no such column, such as one written by an earlier version, or an empty one, gives nothing.
+        The LowerBoundSignals column of the inventory record, and the signal of the same name that
+        Get-SPSSiteCustomization returns, name those signals as the names of their columns separated by semicolons.
+        This function reads that text the same way for every part of the report: it trims each name, leaves out an
+        empty one and a name that is repeated, and keeps the order. A record that has no such column, such as one
+        written by an earlier version, gives $null here: a $null and an empty text both give nothing.
 
-        Private because it is an implementation detail of the HTML report. The result can be empty: wrap the call
-        in @() to get an array.
+        Private because it is an implementation detail of the HTML report and of the modern blockers. The result can
+        be empty: wrap the call in @() to get an array.
 
-        .PARAMETER Record
-        The inventory record of a site collection.
+        .PARAMETER Value
+        The text of the LowerBoundSignals column or signal, or $null.
 
         .EXAMPLE
-        Get-SPSLowerBoundSignalName -Record $record
+        Get-SPSLowerBoundSignalName -Value $record.LowerBoundSignals
     #>
     [CmdletBinding()]
     [OutputType([System.String])]
@@ -24,16 +25,13 @@
     (
         [Parameter(Mandatory = $true)]
         [AllowNull()]
+        [AllowEmptyString()]
         [System.Object]
-        $Record
+        $Value
     )
 
-    if ($null -eq $Record -or $null -eq $Record.PSObject.Properties['LowerBoundSignals']) {
-        return
-    }
-
     $seen = [System.Collections.Generic.HashSet[System.String]]::new([System.StringComparer]::Ordinal)
-    foreach ($part in ([System.String]$Record.LowerBoundSignals).Split(';')) {
+    foreach ($part in ([System.String]$Value).Split(';')) {
         $name = $part.Trim()
         if ($name.Length -gt 0 -and $seen.Add($name)) {
             $name

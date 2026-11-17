@@ -81,7 +81,7 @@
         }
     }
     # The counts whose scan reached its cap, named by the LowerBoundSignals column of a record that has one.
-    $lowerBound = @(Get-SPSLowerBoundSignalName -Record $Record)
+    $lowerBound = @(Get-SPSLowerBoundSignalName -Value $Record.LowerBoundSignals)
     $count = {
         param([System.String]$Name, [System.String]$Label, [System.String]$DetailName)
         $value = & $number $Record.$Name

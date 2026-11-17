@@ -15,15 +15,17 @@ BeforeAll {
 }
 
 Describe 'ConvertTo-SPSInventoryHtml and the lower bounds' {
+    # Six signals are tied on purpose: they are counted in a hashtable whose order changes from one process to the next,
+    # so with two of them a missing tie-break by name gave the right order by chance one run in two.
     It 'says how many site collections reached a cap and for which signals, the most frequent first and then by name' {
         $html = ConvertTo-SPSInventoryHtml -InputObject @(
-            (New-SiteRecord -Name 'a' -LowerBound 'SiteNotebookCount; HtmlFileCount')
-            (New-SiteRecord -Name 'b' -LowerBound 'FileVersionCount; HtmlFileCount')
+            (New-SiteRecord -Name 'a' -LowerBound 'SiteNotebookCount; HtmlFileCount; ScriptWebPartCount; AudienceTargetedListCount')
+            (New-SiteRecord -Name 'b' -LowerBound 'FileVersionCount; HtmlFileCount; PublishingPageLayoutCount; AudienceTargetedItemCount')
             (New-SiteRecord -Name 'c' -LowerBound '')
             (New-SiteRecord -Name 'd')
         )
 
-        $html | Should -Match '<div class="summary-total"><strong>2</strong> site collection\(s\) reached the cap of a scan, so some counts are lower bounds there \(shown as &quot;at least&quot; in the detail of the site collection\): HtmlFileCount \(2\), FileVersionCount \(1\), SiteNotebookCount \(1\)\. A cap alone does not make a site collection partial or change its category and wave; raise the caps of LargeContentThresholds to read more\.</div>'
+        $html | Should -Match '<div class="summary-total"><strong>2</strong> site collection\(s\) reached the cap of a scan, so some counts are lower bounds there \(shown as &quot;at least&quot; in the detail of the site collection\): HtmlFileCount \(2\), AudienceTargetedItemCount \(1\), AudienceTargetedListCount \(1\), FileVersionCount \(1\), PublishingPageLayoutCount \(1\), ScriptWebPartCount \(1\), SiteNotebookCount \(1\)\. A cap alone does not make a site collection partial or change its category and wave; raise the caps of LargeContentThresholds to read more\.</div>'
     }
 
     It 'says nothing when no site collection reached a cap, and does not count a web application row' -ForEach @(

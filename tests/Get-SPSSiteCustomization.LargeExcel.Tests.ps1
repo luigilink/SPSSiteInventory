@@ -208,6 +208,18 @@ Describe 'Get-SPSSiteCustomization large Excel files' {
         ($result.Warnings -join ';') | Should -Match 'the count is a lower bound'
     }
 
+    It 'does not name the count as a lower bound when the library has exactly as many workbooks as the cap' {
+        $items = 1..2 | ForEach-Object { New-TestWorkbook ('w{0}.xlsx' -f $_) 20 }
+        $library = New-TestLibrary -Batches @((New-TestBatch -Item $items))
+
+        $result = Get-Signal -Site (New-TestSite -Library @($library)) -Threshold @{ MaxItemsForExcelFileScanPerLibrary = 2 }
+
+        $result.Signals.LargeExcelFileCount | Should -Be 2
+        $result.Signals.CustomizationInventoryComplete | Should -BeTrue
+        $result.Signals.LowerBoundSignals | Should -BeExactly ''
+        ($result.Warnings -join ';') | Should -Not -Match 'stopped'
+    }
+
     It 'names the count as a lower bound when the cap is reached with more workbooks to come, and checks 2000 by default' {
         $first = New-TestLibrary -Batches @((New-TestBatch -Item @((New-TestWorkbook 'a.xlsx' 20), (New-TestWorkbook 'b.xlsx' 20)) -Position 'next'))
         $pagedResult = Get-Signal -Site (New-TestSite -Library @($first)) -Threshold @{ MaxItemsForExcelFileScanPerLibrary = 2 }

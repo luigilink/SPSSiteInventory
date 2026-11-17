@@ -11,8 +11,11 @@
         - Assessed, NotAssessed and WithBlocker: the site collections that were assessed, the ones that
           failed (their records are not looked at) and the assessed ones that have at least one blocker;
         - Kind: one row per kind of blocker, in a fixed order, also when no site collection has it, with
-          its Name, Label, Unit, the number of site collections that have it (SiteCount) and the items
-          behind it in all of them (Items, null for the custom master page, which is a state);
+          its Name, Label, Unit, the number of site collections that have it (SiteCount), the items
+          behind it in all of them (Items, null for the custom master page, which is a state) and the
+          number of site collections where that number is a lower bound (LowerBoundSiteCount);
+        - WebPartCapSiteCount: the assessed site collections whose web part scan reached its cap, which
+          can have a script web part that was not read, also when they have no blocker;
         - Site: the site collections that have a blocker, the most kinds first, then the highest score,
           then by URL, at most MaxSite of them, each with its Url, Title, AssessmentStatus, Category,
           CategoryName, Score, Count (the number of kinds) and Text (what Get-SPSModernBlocker says);
@@ -20,7 +23,9 @@
           is cut.
 
         The counts of a site collection whose assessment is partial are lower bounds, and Site says so
-        through its AssessmentStatus. Web application rows (InventoryScope WebApplication) are ignored.
+        through its AssessmentStatus. So is the number of script web parts of a site collection whose web
+        part scan reached its cap (LowerBoundSignals of its record). Web application rows (InventoryScope
+        WebApplication) are ignored.
         The function is pure: it reads no farm.
 
         Private because it is an implementation detail of the HTML report.
@@ -51,20 +56,25 @@
 
     $signalName = @(
         'CustomMasterPage', 'AlternateCssUrlCount', 'PublishingInfrastructureEnabled', 'PublishingWebCount',
-        'XsltListViewCount', 'ScriptWebPartCount', 'ClassicExperienceOptOutCount', 'ClassicExperienceListCount'
+        'XsltListViewCount', 'ScriptWebPartCount', 'ClassicExperienceOptOutCount', 'ClassicExperienceListCount',
+        'LowerBoundSignals'
     )
 
     # Every kind present, to take their names, their labels and their units, in their order.
     $everyKind = @{}
     foreach ($name in $signalName) { $everyKind[$name] = 1 }
+    $everyKind['LowerBoundSignals'] = ''
     $kindDefinition = @((Get-SPSModernBlocker -Signals $everyKind).Kind)
 
     $kindSite = @{}
     $kindItems = @{}
+    $kindLowerBound = @{}
     foreach ($definition in $kindDefinition) {
         $kindSite[$definition.Name] = 0
         $kindItems[$definition.Name] = 0.0
+        $kindLowerBound[$definition.Name] = 0
     }
+    $webPartCapSite = 0
 
     $assessed = 0
     $notAssessed = 0
@@ -83,6 +93,9 @@
         foreach ($name in $signalName) {
             $signals[$name] = if ($null -ne $record.PSObject.Properties[$name]) { $record.$name } else { $null }
         }
+        if (@(Get-SPSLowerBoundSignalName -Value $signals['LowerBoundSignals']) -contains 'ScriptWebPartCount') {
+            $webPartCapSite++
+        }
         $blocker = Get-SPSModernBlocker -Signals $signals
         if ($blocker.Count -eq 0) {
             continue
@@ -92,6 +105,9 @@
             $kindSite[$kind.Name]++
             if ($null -ne $kind.Items) {
                 $kindItems[$kind.Name] += $kind.Items
+            }
+            if ($kind.LowerBound) {
+                $kindLowerBound[$kind.Name]++
             }
         }
         $site.Add([PSCustomObject]@{
@@ -112,6 +128,7 @@
         Assessed    = $assessed
         NotAssessed = $notAssessed
         WithBlocker = $sorted.Count
+        WebPartCapSiteCount = $webPartCapSite
         Kind        = @(
             foreach ($definition in $kindDefinition) {
                 [PSCustomObject]@{
@@ -120,6 +137,7 @@
                     Unit      = $definition.Unit
                     SiteCount = $kindSite[$definition.Name]
                     Items     = if ($null -eq $definition.Items) { $null } else { $kindItems[$definition.Name] }
+                    LowerBoundSiteCount = $kindLowerBound[$definition.Name]
                 }
             }
         )

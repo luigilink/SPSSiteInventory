@@ -514,7 +514,8 @@ collection not in the modern experience, and what does it take?
   script web parts, an opt-out of the modern list experience and lists forced to classic.
   `ModernBlockerCount` is the number of kinds (0 to 7), not the number of items behind them, and
   `ModernBlockers` is one text for the reports, such as `Custom master page; XSLT list views (3);
-  Script web parts (1)`. It brings the other signals together and is not weighed in either example
+  Script web parts (1)`, or `Script web parts (at least 3)` when the web part scan reached its cap
+  (see `LowerBoundSignals`). It brings the other signals together and is not weighed in either example
   configuration: each blocker already weighs through its own signal, and weighing the aggregate
   would count it twice.
 

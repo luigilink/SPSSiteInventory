@@ -72,7 +72,7 @@
         AssessmentPartial = @{
             Severity    = 'Medium'
             Message     = 'Site assessment is partial and may miss signals.'
-            Remediation = 'Review the warnings of the site record: counts are lower bounds and the category may be understated. A Simple site collection is held in the Needs review wave until it is read in full. Fix the unreadable item or raise the matching cap, then run the inventory again.'
+            Remediation = 'Review the warnings of the site record: counts are lower bounds and the category may be understated. A Simple site collection is held in the Needs review wave until it is read in full. Fix the unreadable item, or raise LargeContentThresholds.MaxAlertRowsPerSite when the warning says that alert rows were cut, then run the inventory again.'
             Reference   = ''
         }
         Workflow2010 = @{

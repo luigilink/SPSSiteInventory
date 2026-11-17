@@ -21,10 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `AudienceTargetedListCount`, `AudienceTargetedItemCount` and `SiteNotebookCount`), separated by
   semicolons, and is empty when there is none. The HTML report shows these counts as "at least" in
   the detail of a site collection, and its summary says how many site collections reached a cap and
-  for which signals. A scan that cannot read (an error, a list that cannot be opened) still makes
-  the site collection `Partial`, and a site collection can be both. The values and the weights of
-  the signals do not change, and the cap of the alert rows (`MaxAlertRowsPerSite`) is not part of
-  this: `SharePointAlertCount` stays exact and the rows that are cut still make the site collection
+  for which signals. The *Modern experience readiness* section and `ModernBlockers` say it for the
+  script web parts: the section tells in how many site collections the web part scan reached its
+  cap, where a script web part may have been missed, and `at least` goes before their number. A scan
+  that cannot read (an error, a list that cannot be opened) still makes the site collection
+  `Partial`, and a site collection can be both. The values and the weights of the signals do not
+  change, and the cap of the alert rows (`MaxAlertRowsPerSite`) is not part of this:
+  `SharePointAlertCount` stays exact and the rows that are cut still make the site collection
   partial. A site collection that was partial only because of a cap is complete now, so a farm
   reports fewer partial site collections and fewer in the `Needs review` wave, and the
   `AssessmentPartial` alert is not raised for them. The Usage and Configuration wiki pages and the
