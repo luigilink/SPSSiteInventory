@@ -41,12 +41,12 @@
         $SharePointAlertSettings = @{},
 
         [Parameter()]
-        [System.Collections.IDictionary]
-        $SolutionAssemblyIndex = $null,
+        [System.String]
+        $TargetMode = 'SharePointOnline',
 
         [Parameter()]
-        [System.String]
-        $TargetMode = 'SharePointOnline'
+        [System.Collections.IDictionary]
+        $SolutionAssemblyIndex = $null
     )
 
     # Fail before any site is read when the alert settings or the target mode are invalid.

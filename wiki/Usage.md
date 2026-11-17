@@ -275,7 +275,9 @@ folder can be moved, zipped and sent. The manifest lists the pages in `Files.Inv
   shows what each package holds, how it compares with the farm solution it matches, and the farm
   solutions that have no inspected package. The *Custom event receivers* section is there when a site collection has some: it
   lists, by assembly, the classes, receivers and site collections behind `EventReceivers`,
-  and the solution that ships the assembly when the packages were inspected. The managed
+  and the solution that ships the assembly when the packages were inspected; a note says how many
+  receivers it accounts for when that is fewer than the `EventReceivers` column (a site collection
+  keeps its first 200 assemblies and classes, and one whose detail could not be built has none). The managed
   metadata, external list, BCS, Secure Store, profile property mapping, farm solution, solution
   package, event receiver and full-trust site tables show at most 200 rows and say how many are
   not shown and which files hold all of them. The content types are not listed in the report,

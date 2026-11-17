@@ -52,6 +52,19 @@ BeforeAll {
 }
 
 Describe 'ConvertTo-SPSInventoryHtml event receivers' {
+    It 'keeps the parameters that it already had where they were, and puts the new one after them, because none has a position and they are positional in the order of declaration' {
+        $common = @('Verbose', 'Debug', 'ErrorAction', 'WarningAction', 'InformationAction', 'ProgressAction', 'ErrorVariable', 'WarningVariable', 'InformationVariable', 'OutVariable', 'OutBuffer', 'PipelineVariable', 'WhatIf', 'Confirm')
+        $name = @((Get-Command -Name ConvertTo-SPSInventoryHtml).Parameters.Keys | Where-Object { $common -notcontains $_ })
+        $before = @(
+            'InputObject', 'EnvName', 'Title', 'GeneratedOn', 'SolutionMap', 'SolutionPackages', 'ContentTypes', 'ManagedMetadataLists', 'Alert', 'ExternalLists',
+            'BcsApplications', 'BcsInventoryComplete', 'SecureStoreApplications', 'SecureStoreInventoryComplete', 'ProfilePropertyMappings', 'ProfileInventoryComplete',
+            'ExcludedPersonalSiteCount', 'ExcludedSiteMasterCount', 'MaxDetailRow', 'TargetMode', 'FileName', 'SplitThreshold', 'RowsPerPage'
+        )
+
+        @($name[0..($before.Count - 1)]) | Should -BeExactly $before
+        $name[$before.Count] | Should -BeExactly 'EventReceiverClasses'
+    }
+
     It 'adds no section and no link when no row is given' -ForEach @(
         @{ Case = 'the parameter is left out'; Row = $null }
         @{ Case = 'an empty list'; Row = @() }
@@ -61,6 +74,41 @@ Describe 'ConvertTo-SPSInventoryHtml event receivers' {
 
         $html | Should -Not -Match 'custom-event-receivers' -Because $Case
         $html | Should -Not -Match 'Custom event receivers</h2>'
+    }
+
+    # A site collection record that carries the EventReceivers column, as the inventory gives it.
+    It 'says how many receivers the table accounts for, with both numbers, when a site collection kept only its first 200 assemblies and classes' {
+        $site = [PSCustomObject]@{ InventoryScope = 'SiteCollection'; Url = 'https://intranet/sites/team'; Title = 'Team'; WebApp = 'Intranet'; AssessmentStatus = 'Complete'; Category = 1; CategoryName = 'Simple'; Wave = 1; WaveName = 'Quick wins'; Score = 0; Reasons = ''; EventReceivers = 205 }
+        $row = 1..200 | ForEach-Object { New-Row -Class ('Contoso.Intranet.C{0:000}' -f $_) -Receivers 1 }
+
+        $section = Get-Section -Html (Get-Report -Row $row -Extra @{ InputObject = @($site) })
+
+        $section | Should -Match '<p><strong>Partial detail:</strong> the site collections have <strong>205</strong> custom event receiver\(s\) in all \(the EventReceivers column\), and this table accounts for <strong>200</strong> of them\.'
+        $section | Should -Match 'keeps the first 200 in the detail, and one whose detail could not be built has none\. The column is exact\.</p>'
+        $section | Should -Match '<strong>200</strong> receiver\(s\)'
+    }
+
+    It 'says it too when the detail of a site collection could not be built, so that the site collection is missing from the table' {
+        $first = [PSCustomObject]@{ InventoryScope = 'SiteCollection'; Url = 'https://intranet/sites/a'; Title = 'A'; WebApp = 'Intranet'; AssessmentStatus = 'Complete'; Category = 1; CategoryName = 'Simple'; Wave = 1; WaveName = 'Quick wins'; Score = 0; Reasons = ''; EventReceivers = 6 }
+        $second = [PSCustomObject]@{ InventoryScope = 'SiteCollection'; Url = 'https://intranet/sites/b'; Title = 'B'; WebApp = 'Intranet'; AssessmentStatus = 'Complete'; Category = 1; CategoryName = 'Simple'; Wave = 1; WaveName = 'Quick wins'; Score = 0; Reasons = ''; EventReceivers = 10 }
+
+        $section = Get-Section -Html (Get-Report -Row @((New-Row -Site 'https://intranet/sites/a' -Receivers 6)) -Extra @{ InputObject = @($first, $second) })
+
+        $section | Should -Match '<strong>16</strong> custom event receiver\(s\) in all \(the EventReceivers column\), and this table accounts for <strong>6</strong> of them'
+    }
+
+    It 'says nothing when the table accounts for all the receivers of the column, and ignores a record that has no number, an empty one, and a web application' -ForEach @(
+        @{ Case = 'the same total'; Receivers = 6; Extra = @() }
+        @{ Case = 'a record without the column'; Receivers = $null; Extra = @() }
+        @{ Case = 'an empty column'; Receivers = ''; Extra = @() }
+        @{ Case = 'a web application record'; Receivers = 6; Extra = @([PSCustomObject]@{ InventoryScope = 'WebApplication'; Url = 'https://intranet'; EventReceivers = 99 }) }
+    ) {
+        $site = [PSCustomObject]@{ InventoryScope = 'SiteCollection'; Url = 'https://intranet/sites/team'; Title = 'Team'; WebApp = 'Intranet'; AssessmentStatus = 'Complete'; Category = 1; CategoryName = 'Simple'; Wave = 1; WaveName = 'Quick wins'; Score = 0; Reasons = '' }
+        if ($null -ne $Receivers) { $site | Add-Member -NotePropertyName EventReceivers -NotePropertyValue $Receivers }
+
+        $section = Get-Section -Html (Get-Report -Row @((New-Row -Receivers 6)) -Extra @{ InputObject = @($site) + @($Extra) })
+
+        $section | Should -Not -Match 'Partial detail' -Because $Case
     }
 
     It 'adds the section, with a link in the navigation' {

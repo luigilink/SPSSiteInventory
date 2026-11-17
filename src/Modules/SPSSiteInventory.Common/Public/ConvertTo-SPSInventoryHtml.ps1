@@ -216,12 +216,6 @@
 
         [Parameter()]
         [AllowEmptyCollection()]
-        [AllowNull()]
-        [System.Object[]]
-        $EventReceiverClasses = @(),
-
-        [Parameter()]
-        [AllowEmptyCollection()]
         [System.Object[]]
         $ContentTypes = @(),
 
@@ -297,7 +291,13 @@
         [Parameter(ParameterSetName = 'Pages')]
         [ValidateRange(50, 5000)]
         [System.Int32]
-        $RowsPerPage = 500
+        $RowsPerPage = 500,
+
+        [Parameter()]
+        [AllowEmptyCollection()]
+        [AllowNull()]
+        [System.Object[]]
+        $EventReceiverClasses = @()
     )
 
     # Category metadata: name and accent colour for each complexity level. A plain
@@ -1457,6 +1457,14 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
         $receiverClassTotal = [int](($receiverAssembly | Measure-Object -Property ClassCount -Sum).Sum)
         $receiverSiteTotal = @($eventReceivers | ForEach-Object { [string]$_.SiteUrl } | Sort-Object -Unique).Count
         $receiverSolutionUnknown = @($receiverAssembly | Where-Object { $_.NotChecked }).Count -gt 0
+        # The rows hold at most 200 assemblies and classes for a site collection, and none for one whose detail could not be built: the column is the total.
+        $receiverSignalTotal = 0
+        foreach ($siteRecord in $siteRecords) {
+            $siteReceiver = 0
+            if ($null -ne $siteRecord.PSObject.Properties['EventReceivers'] -and [System.Int32]::TryParse([System.String]$siteRecord.EventReceivers, [ref]$siteReceiver)) {
+                $receiverSignalTotal += $siteReceiver
+            }
+        }
 
         [void]$sb.AppendLine('<h2 id="custom-event-receivers">Custom event receivers</h2>')
         [void]$sb.AppendLine('<div class="summary">')
@@ -1464,6 +1472,9 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
         [void]$sb.AppendLine('</div>')
         $receiverSolutionNote = if ($receiverSolutionUnknown) { 'The solution that ships an assembly is not known: inspect the WSP packages (-ExportSolutionPackage or -SolutionPackagePath) to name it.' } else { 'The solution is the farm solution of an inspected package that ships the assembly.' }
         [void]$sb.AppendLine(('<p>The custom event receivers that the EventReceivers signal counts, by assembly. SharePoint registers one receiver per event type and per list, so a class that listens to six events on a hundred lists counts 600. Only the receivers of lists and libraries are read, and an assembly whose name starts with Microsoft. is not custom. {0} The event receivers CSV and JSON files give each assembly and class with its receivers and lists, by site collection (up to 200 assemblies and classes for each).</p>' -f $receiverSolutionNote))
+        if ($receiverTotal -lt $receiverSignalTotal) {
+            [void]$sb.AppendLine(('<p><strong>Partial detail:</strong> the site collections have <strong>{0}</strong> custom event receiver(s) in all (the EventReceivers column), and this table accounts for <strong>{1}</strong> of them. A site collection with more than 200 assemblies and classes keeps the first 200 in the detail, and one whose detail could not be built has none. The column is exact.</p>' -f $receiverSignalTotal, $receiverTotal))
+        }
         [void]$sb.AppendLine('<div class="table-scroll">')
         [void]$sb.AppendLine('<table class="eventreceivers">')
         [void]$sb.AppendLine('<thead><tr><th>Assembly</th><th>Version</th><th>Solution</th><th class="num">Classes</th><th class="num">Receivers</th><th class="num">Site collections</th></tr></thead>')

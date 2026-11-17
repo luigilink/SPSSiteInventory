@@ -230,6 +230,60 @@ Describe 'Get-SPSSiteCustomization event receivers' {
         $result.Warnings[0] | Should -Match "The event receivers of site 'https://intranet\.contoso\.com/sites/team' could not be listed by assembly and class: The detail failed\.; EventReceivers stays exact\."
     }
 
+    It 'keeps counting the receivers and the lists, and gives no detail, when the first receiver cannot be grouped, and warns once with the reason' {
+        Mock -ModuleName SPSSiteInventory.Common -CommandName Add-SPSEventReceiverClass -MockWith { throw 'The grouping failed.' }
+        $first = New-TestList -Title 'First' -Url '/sites/team/Lists/First' -Receiver @((New-TestReceiver), (New-TestReceiver -Type 'ItemUpdated'))
+        $second = New-TestList -Title 'Second' -Url '/sites/team/Lists/Second' -Receiver @((New-TestReceiver -Class 'Contoso.Intranet.Other'))
+
+        $result = Get-Signal -Site (New-TestSite -Web @((New-TestWeb -List @($first, $second))))
+
+        $result.Signals.EventReceivers | Should -Be 3
+        $result.Signals.CustomizationInventoryComplete | Should -BeTrue
+        $result.Signals.ContentTypeInventoryComplete | Should -BeTrue
+        @($result.Signals.EventReceiverClasses) | Should -HaveCount 0
+        $result.Signals.EventReceiverExamples | Should -BeExactly ''
+        $result.Warnings | Should -HaveCount 1
+        $result.Warnings[0] | Should -BeExactly "The event receivers of site 'https://intranet.contoso.com/sites/team' could not be listed by assembly and class: The grouping failed.; EventReceivers stays exact."
+        Should -Invoke Add-SPSEventReceiverClass -ModuleName SPSSiteInventory.Common -Times 1 -Exactly
+    }
+
+    It 'discards the detail of the site, and goes on counting, when a receiver in the middle cannot be grouped' {
+        # The groups that were made before the failure stay in the table: dropping the detail has to drop them too.
+        Mock -ModuleName SPSSiteInventory.Common -CommandName Add-SPSEventReceiverClass -MockWith {
+            $group = [PSCustomObject]@{
+                Assembly = [string]$Receiver.Assembly; Class = [string]$Receiver.Class; ReceiverCount = 1
+                List = [System.Collections.Generic.HashSet[string]]::new(); EventType = [System.Collections.Generic.HashSet[string]]::new(); FirstListUrl = '/sites/team/Lists/First'
+            }
+            $Table.Add(('{0}|{1}' -f $Receiver.Assembly, $Receiver.Class), $group)
+            $true
+        }
+        Mock -ModuleName SPSSiteInventory.Common -CommandName Add-SPSEventReceiverClass -ParameterFilter { $Receiver.Class -eq 'Contoso.Intranet.Bad' } -MockWith { throw 'The grouping failed.' }
+        $first = New-TestList -Title 'First' -Url '/sites/team/Lists/First' -Receiver @((New-TestReceiver), (New-TestReceiver -Class 'Contoso.Intranet.Bad'), (New-TestReceiver -Class 'Contoso.Intranet.After'))
+        $second = New-TestList -Title 'Second' -Url '/sites/team/Lists/Second' -Receiver @((New-TestReceiver -Class 'Contoso.Intranet.Later'))
+
+        $result = Get-Signal -Site (New-TestSite -Web @((New-TestWeb -List @($first, $second))))
+
+        $result.Signals.EventReceivers | Should -Be 4
+        $result.Signals.CustomizationInventoryComplete | Should -BeTrue
+        @($result.Signals.EventReceiverClasses) | Should -HaveCount 0
+        $result.Signals.EventReceiverExamples | Should -BeExactly ''
+        $result.Warnings | Should -HaveCount 1
+        $result.Warnings[0] | Should -Match 'could not be listed by assembly and class: The grouping failed\.; EventReceivers stays exact\.$'
+        Should -Invoke Add-SPSEventReceiverClass -ModuleName SPSSiteInventory.Common -Times 2 -Exactly
+    }
+
+    It 'does not warn that rows were left out when the detail failed, only that it failed' {
+        Mock -ModuleName SPSSiteInventory.Common -CommandName Add-SPSEventReceiverClass -MockWith { $false }
+        Mock -ModuleName SPSSiteInventory.Common -CommandName ConvertTo-SPSEventReceiverClassRow -MockWith { throw 'The rows failed.' }
+        $list = New-TestList -Receiver @((New-TestReceiver))
+
+        $result = Get-Signal -Site (New-TestSite -Web @((New-TestWeb -List @($list))))
+
+        $result.Warnings | Should -HaveCount 1
+        $result.Warnings[0] | Should -Match 'could not be listed by assembly and class: The rows failed\.'
+        $result.Warnings[0] | Should -Not -Match 'stopped after'
+    }
+
     It 'gives the rows of a site collection its own URL' {
         $list = New-TestList -Receiver @((New-TestReceiver))
 

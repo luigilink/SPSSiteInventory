@@ -253,11 +253,6 @@
         $ProfileInventoryComplete = $true,
 
         [Parameter()]
-        [AllowEmptyCollection()]
-        [System.Object[]]
-        $EventReceiverClasses = @(),
-
-        [Parameter()]
         [System.String]
         $SolutionJsonPath = '',
 
@@ -287,7 +282,12 @@
 
         [Parameter()]
         [System.String]
-        $TargetMode = 'SharePointOnline'
+        $TargetMode = 'SharePointOnline',
+
+        [Parameter()]
+        [AllowEmptyCollection()]
+        [System.Object[]]
+        $EventReceiverClasses = @()
     )
 
     # Fail before any file is written when the mode is not one of the two.
