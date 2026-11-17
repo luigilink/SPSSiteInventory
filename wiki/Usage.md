@@ -282,7 +282,9 @@ folder can be moved, zipped and sent. The manifest lists the pages in `Files.Inv
   keeps its first 200 assemblies and classes, and one whose detail could not be built has none). The *Workflow
   associations* section is there when a site collection has some: it lists the classic workflow
   associations behind `Workflow2010Count`, the counted ones with the most running instances first,
-  with their web, their list or library and their running instances. The managed
+  with their web, their list or library and their running instances; a note says how many it
+  accounts for when that is fewer than the two columns (a site collection whose detail could not be
+  built is missing). The managed
   metadata, external list, BCS, Secure Store, profile property mapping, farm solution, solution
   package, event receiver, workflow association and full-trust site tables show at most 200 rows and say how many are
   not shown and which files hold all of them. The content types are not listed in the report,

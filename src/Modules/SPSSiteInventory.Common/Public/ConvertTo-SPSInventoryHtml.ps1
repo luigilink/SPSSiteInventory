@@ -1538,12 +1538,28 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
         $workflowCounted = @($workflowAssociationRows | Where-Object { [bool]$_.Counted }).Count
         $workflowRunning = [int](($workflowAssociationRows | Measure-Object -Property RunningInstances -Sum).Sum)
         $workflowSiteTotal = @($workflowAssociationRows | ForEach-Object { [string]$_.SiteUrl } | Sort-Object -Unique).Count
+        # The rows are missing for a site collection whose detail could not be built, and the rows of the previous versions stop at 1000 for each: the columns are the totals.
+        $workflowCountedSignal = 0
+        $workflowRunningSignal = 0
+        foreach ($siteRecord in $siteRecords) {
+            $siteValue = 0
+            if ($null -ne $siteRecord.PSObject.Properties['Workflow2010Count'] -and [System.Int32]::TryParse([System.String]$siteRecord.Workflow2010Count, [ref]$siteValue)) {
+                $workflowCountedSignal += $siteValue
+            }
+            $siteValue = 0
+            if ($null -ne $siteRecord.PSObject.Properties['Workflow2010RunningInstanceCount'] -and [System.Int32]::TryParse([System.String]$siteRecord.Workflow2010RunningInstanceCount, [ref]$siteValue)) {
+                $workflowRunningSignal += $siteValue
+            }
+        }
 
         [void]$sb.AppendLine('<h2 id="workflow-associations">Workflow associations</h2>')
         [void]$sb.AppendLine('<div class="summary">')
         [void]$sb.AppendLine(('<div class="summary-total"><strong>{0}</strong> association(s) &middot; <strong>{1}</strong> counted &middot; <strong>{2}</strong> running instance(s) &middot; <strong>{3}</strong> site collection(s)</div>' -f $workflowAssociationRows.Count, $workflowCounted, $workflowRunning, $workflowSiteTotal))
         [void]$sb.AppendLine('</div>')
         [void]$sb.AppendLine('<p>The SharePoint 2010 workflow associations of the webs, lists and libraries that the Workflow 2010 signals count. An association is counted unless it is a previous version of a workflow, which SharePoint keeps beside the current one: a previous version is not counted, but its running instances are in the running total. The SharePoint 2010 workflow engine is retired in SharePoint Online, so these workflows have to be rebuilt. The counted associations with the most running instances come first. The workflow association CSV and JSON files give every association, by site collection (the rows of the previous versions stop at 1000 for each).</p>')
+        if ($workflowCounted -lt $workflowCountedSignal -or $workflowRunning -lt $workflowRunningSignal) {
+            [void]$sb.AppendLine(('<p><strong>Partial detail:</strong> the site collections have <strong>{0}</strong> workflow association(s) counted and <strong>{1}</strong> running instance(s) in all (the Workflow2010Count and Workflow2010RunningInstanceCount columns), and this table accounts for <strong>{2}</strong> and <strong>{3}</strong> of them. A site collection whose detail could not be built is missing, and the rows of the previous versions stop at 1000 for a site collection. The columns are exact.</p>' -f $workflowCountedSignal, $workflowRunningSignal, $workflowCounted, $workflowRunning))
+        }
         [void]$sb.AppendLine('<div class="table-scroll">')
         [void]$sb.AppendLine('<table class="workflowassociations">')
         [void]$sb.AppendLine('<thead><tr><th>Site collection</th><th>Web</th><th>List or library</th><th>Workflow</th><th>Counted</th><th class="num">Running instances</th></tr></thead>')

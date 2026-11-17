@@ -23,6 +23,15 @@ BeforeAll {
         ConvertTo-SPSInventoryHtml @parameters
     }
 
+    # A site collection record that carries the columns of the signals, as the inventory gives it.
+    function New-SiteRecord {
+        param ([string]$Url = 'https://intranet/sites/team', $Counted = $null, $Running = $null, [string]$Scope = 'SiteCollection')
+        $record = [PSCustomObject]@{ InventoryScope = $Scope; Url = $Url; Title = 'Team'; WebApp = 'Intranet'; AssessmentStatus = 'Complete'; Category = 1; CategoryName = 'Simple'; Wave = 1; WaveName = 'Quick wins'; Score = 0; Reasons = '' }
+        if ($null -ne $Counted) { $record | Add-Member -NotePropertyName Workflow2010Count -NotePropertyValue $Counted }
+        if ($null -ne $Running) { $record | Add-Member -NotePropertyName Workflow2010RunningInstanceCount -NotePropertyValue $Running }
+        $record
+    }
+
     function Get-Section {
         param ([string]$Html)
         [regex]::Match($Html, '(?s)<h2 id="workflow-associations">.*?(?=<h2 |<div class="footer">)').Value
@@ -47,6 +56,19 @@ BeforeAll {
 }
 
 Describe 'ConvertTo-SPSInventoryHtml workflow associations' {
+    It 'puts the new parameter after the ones that it already had, because none has a position and they are positional in the order of declaration' {
+        $common = @('Verbose', 'Debug', 'ErrorAction', 'WarningAction', 'InformationAction', 'ProgressAction', 'ErrorVariable', 'WarningVariable', 'InformationVariable', 'OutVariable', 'OutBuffer', 'PipelineVariable', 'WhatIf', 'Confirm')
+        $name = @((Get-Command -Name ConvertTo-SPSInventoryHtml).Parameters.Keys | Where-Object { $common -notcontains $_ })
+        $before = @(
+            'InputObject', 'EnvName', 'Title', 'GeneratedOn', 'SolutionMap', 'SolutionPackages', 'ContentTypes', 'ManagedMetadataLists', 'Alert', 'ExternalLists',
+            'BcsApplications', 'BcsInventoryComplete', 'SecureStoreApplications', 'SecureStoreInventoryComplete', 'ProfilePropertyMappings', 'ProfileInventoryComplete',
+            'ExcludedPersonalSiteCount', 'ExcludedSiteMasterCount', 'MaxDetailRow', 'TargetMode', 'FileName', 'SplitThreshold', 'RowsPerPage', 'EventReceiverClasses'
+        )
+
+        @($name[0..($before.Count - 1)]) | Should -BeExactly $before
+        $name[$before.Count] | Should -BeExactly 'WorkflowAssociations'
+    }
+
     It 'adds no section and no link when no row is given' -ForEach @(
         @{ Case = 'the parameter is left out'; Row = $null }
         @{ Case = 'an empty list'; Row = @() }
@@ -57,6 +79,46 @@ Describe 'ConvertTo-SPSInventoryHtml workflow associations' {
         $html | Should -Not -Match 'id="workflow-associations"' -Because $Case
         $html | Should -Not -Match 'href="#workflow-associations"' -Because $Case
         $html | Should -Not -Match 'Workflow associations</h2>'
+    }
+
+    It 'says how many associations and running instances the table accounts for, with both numbers, when a site collection is missing from it' {
+        $site = @((New-SiteRecord -Url 'https://intranet/sites/a' -Counted 1 -Running 4), (New-SiteRecord -Url 'https://intranet/sites/b' -Counted 2 -Running 8))
+
+        $section = Get-Section -Html (Get-Report -Row @((New-Row -Site 'https://intranet/sites/a' -Running 4)) -Extra @{ InputObject = $site })
+
+        $section | Should -Match '<p><strong>Partial detail:</strong> the site collections have <strong>3</strong> workflow association\(s\) counted and <strong>12</strong> running instance\(s\) in all \(the Workflow2010Count and Workflow2010RunningInstanceCount columns\), and this table accounts for <strong>1</strong> and <strong>4</strong> of them\.'
+        $section | Should -Match 'A site collection whose detail could not be built is missing, and the rows of the previous versions stop at 1000 for a site collection\. The columns are exact\.</p>'
+    }
+
+    It 'says it too when only the running instances are below the column, because the rows of the previous versions stopped' {
+        $site = @((New-SiteRecord -Counted 1 -Running 9))
+
+        $section = Get-Section -Html (Get-Report -Row @((New-Row -Running 4)) -Extra @{ InputObject = $site })
+
+        $section | Should -Match '<strong>1</strong> workflow association\(s\) counted and <strong>9</strong> running instance\(s\) in all'
+        $section | Should -Match 'this table accounts for <strong>1</strong> and <strong>4</strong> of them'
+    }
+
+    It 'says it too when only the counted associations are below the column, for a site collection whose associations have no running instance' {
+        $site = @((New-SiteRecord -Url 'https://intranet/sites/a' -Counted 1 -Running 4), (New-SiteRecord -Url 'https://intranet/sites/b' -Counted 2 -Running 0))
+
+        $section = Get-Section -Html (Get-Report -Row @((New-Row -Site 'https://intranet/sites/a' -Running 4)) -Extra @{ InputObject = $site })
+
+        $section | Should -Match '<strong>3</strong> workflow association\(s\) counted and <strong>4</strong> running instance\(s\) in all'
+        $section | Should -Match 'this table accounts for <strong>1</strong> and <strong>4</strong> of them'
+    }
+
+    It 'says nothing when the table accounts for all the associations and running instances, and ignores a record that has no number, an empty one, and a web application' -ForEach @(
+        @{ Case = 'the same totals'; Counted = 1; Running = 4; Extra = @() }
+        @{ Case = 'a record without the columns'; Counted = $null; Running = $null; Extra = @() }
+        @{ Case = 'empty columns'; Counted = ''; Running = ''; Extra = @() }
+        @{ Case = 'a web application record'; Counted = 1; Running = 4; Extra = @([PSCustomObject]@{ InventoryScope = 'WebApplication'; Url = 'https://intranet'; Workflow2010Count = 99; Workflow2010RunningInstanceCount = 99 }) }
+    ) {
+        $site = New-SiteRecord -Counted $Counted -Running $Running
+
+        $section = Get-Section -Html (Get-Report -Row @((New-Row -Running 4)) -Extra @{ InputObject = @($site) + @($Extra) })
+
+        $section | Should -Not -Match 'Partial detail' -Because $Case
     }
 
     It 'adds the section, with a link in the navigation' {

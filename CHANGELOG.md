@@ -74,8 +74,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   start or finish during the scan). The rows of the previous versions stop at 1000 for a site
   collection (the counts stay exact, and a warning says so), and the detail never changes the
   counts: a name that cannot be read is a warning, not a workflow with no name. The workflow
-  dataset of the report pack gains `Workflow2010Examples`. The values and the weights of the signals do not change. The
-  Usage, Configuration and Lab Testing wiki pages say it. (#133)
+  dataset of the report pack gains `Workflow2010Examples`. The HTML section says how many associations
+  and running instances its table accounts for when that is fewer than the two columns (a site
+  collection whose detail could not be built is missing). The values and the weights of the signals
+  do not change. The Usage, Configuration and Lab Testing wiki pages say it. (#133)
 
 ## [2.1.0] - 2026-10-30
 

@@ -28,6 +28,19 @@ BeforeAll {
 }
 
 Describe 'Export-SPSInventoryReport workflow associations' {
+    It 'puts the new parameter after the ones that it already had, because none has a position and they are positional in the order of declaration' {
+        $common = @('Verbose', 'Debug', 'ErrorAction', 'WarningAction', 'InformationAction', 'ProgressAction', 'ErrorVariable', 'WarningVariable', 'InformationVariable', 'OutVariable', 'OutBuffer', 'PipelineVariable', 'WhatIf', 'Confirm')
+        $name = @((Get-Command -Name Export-SPSInventoryReport).Parameters.Keys | Where-Object { $common -notcontains $_ })
+        $before = @(
+            'InputObject', 'OutputFolder', 'BaseName', 'EnvName', 'SolutionMap', 'ContentTypes', 'ManagedMetadataLists', 'ExternalLists', 'SharePointAlerts',
+            'BcsApplications', 'BcsInventoryComplete', 'SecureStoreApplications', 'SecureStoreInventoryComplete', 'ProfilePropertyMappings', 'ProfileInventoryComplete',
+            'SolutionJsonPath', 'SolutionPackages', 'ExcludedPersonalSiteCount', 'ExcludedSiteMasterCount', 'HtmlSplitThreshold', 'HtmlRowsPerPage', 'TargetMode', 'EventReceiverClasses'
+        )
+
+        @($name[0..($before.Count - 1)]) | Should -BeExactly $before
+        $name[$before.Count] | Should -BeExactly 'WorkflowAssociations'
+    }
+
     It 'writes the CSV and the JSON file in the output folder, with the base name and the time stamp of the run, and returns their paths' {
         $output = Export-SPSInventoryReport -InputObject @($script:Site) -WorkflowAssociations @((New-Row)) -OutputFolder (Join-Path $TestDrive 'a') -BaseName 'Wf'
 
