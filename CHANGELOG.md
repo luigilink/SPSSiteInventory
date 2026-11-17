@@ -5,6 +5,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-11-17
+
 ### Added
 
 - The main scan offers the offline inspection of the WSP packages. `Invoke-SPSSiteInventory.ps1` has
