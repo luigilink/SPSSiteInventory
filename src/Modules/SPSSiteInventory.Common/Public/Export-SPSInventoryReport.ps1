@@ -268,12 +268,6 @@
         $SolutionJsonPath = '',
 
         [Parameter()]
-        [AllowEmptyCollection()]
-        [AllowNull()]
-        [System.Object[]]
-        $SolutionPackages = @(),
-
-        [Parameter()]
         [System.Int32]
         $ExcludedPersonalSiteCount = 0,
 
@@ -294,6 +288,12 @@
         [Parameter()]
         [System.String]
         $TargetMode = 'SharePointOnline',
+
+        [Parameter()]
+        [AllowEmptyCollection()]
+        [AllowNull()]
+        [System.Object[]]
+        $SolutionPackages = @(),
 
         [Parameter()]
         [AllowEmptyCollection()]

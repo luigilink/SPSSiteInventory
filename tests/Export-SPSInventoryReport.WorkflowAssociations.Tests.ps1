@@ -34,7 +34,7 @@ Describe 'Export-SPSInventoryReport workflow associations' {
         $before = @(
             'InputObject', 'OutputFolder', 'BaseName', 'EnvName', 'SolutionMap', 'ContentTypes', 'ManagedMetadataLists', 'ExternalLists', 'SharePointAlerts',
             'BcsApplications', 'BcsInventoryComplete', 'SecureStoreApplications', 'SecureStoreInventoryComplete', 'ProfilePropertyMappings', 'ProfileInventoryComplete',
-            'SolutionJsonPath', 'SolutionPackages', 'ExcludedPersonalSiteCount', 'ExcludedSiteMasterCount', 'HtmlSplitThreshold', 'HtmlRowsPerPage', 'TargetMode', 'EventReceiverClasses'
+            'SolutionJsonPath', 'ExcludedPersonalSiteCount', 'ExcludedSiteMasterCount', 'HtmlSplitThreshold', 'HtmlRowsPerPage', 'TargetMode', 'SolutionPackages', 'EventReceiverClasses'
         )
 
         @($name[0..($before.Count - 1)]) | Should -BeExactly $before
