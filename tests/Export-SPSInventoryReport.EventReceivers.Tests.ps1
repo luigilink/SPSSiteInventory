@@ -36,7 +36,7 @@ Describe 'Export-SPSInventoryReport event receivers' {
         $before = @(
             'InputObject', 'OutputFolder', 'BaseName', 'EnvName', 'SolutionMap', 'ContentTypes', 'ManagedMetadataLists', 'ExternalLists', 'SharePointAlerts',
             'BcsApplications', 'BcsInventoryComplete', 'SecureStoreApplications', 'SecureStoreInventoryComplete', 'ProfilePropertyMappings', 'ProfileInventoryComplete',
-            'SolutionJsonPath', 'SolutionPackages', 'ExcludedPersonalSiteCount', 'ExcludedSiteMasterCount', 'HtmlSplitThreshold', 'HtmlRowsPerPage', 'TargetMode'
+            'SolutionJsonPath', 'ExcludedPersonalSiteCount', 'ExcludedSiteMasterCount', 'HtmlSplitThreshold', 'HtmlRowsPerPage', 'TargetMode', 'SolutionPackages'
         )
 
         @($name[0..($before.Count - 1)]) | Should -BeExactly $before

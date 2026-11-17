@@ -36,6 +36,30 @@ AfterAll {
 }
 
 Describe 'Export-SPSInventoryReport solution packages' {
+    It 'keeps the position that the parameters of 2.1.0 had and declares -SolutionPackages after them, because none has a position and they are positional in the order of declaration' {
+        $parameter = (Get-Command -Name Export-SPSInventoryReport).Parameters
+        $released = @(
+            'InputObject', 'OutputFolder', 'BaseName', 'EnvName', 'SolutionMap', 'ContentTypes', 'ManagedMetadataLists', 'ExternalLists', 'SharePointAlerts',
+            'BcsApplications', 'BcsInventoryComplete', 'SecureStoreApplications', 'SecureStoreInventoryComplete', 'ProfilePropertyMappings', 'ProfileInventoryComplete',
+            'SolutionJsonPath', 'ExcludedPersonalSiteCount', 'ExcludedSiteMasterCount', 'HtmlSplitThreshold', 'HtmlRowsPerPage', 'TargetMode'
+        )
+
+        for ($index = 0; $index -lt $released.Count; $index++) {
+            $parameter[$released[$index]].ParameterSets['__AllParameterSets'].Position | Should -Be $index -Because $released[$index]
+        }
+        $parameter['SolutionPackages'].ParameterSets['__AllParameterSets'].Position | Should -Be $released.Count
+    }
+
+    It 'binds the arguments of a call of 2.1.0 that gives all its parameters by position' {
+        $output = Export-SPSInventoryReport @($script:Site) (Join-Path $TestDrive 'positional') 'Pos' 'Env' @() @() @() @() @() @() $true @() $true @() $true '' 3 4 5000 100 'SharePointOnPrem'
+
+        $manifest = Get-Content -Path $output.ManifestJsonPath -Raw | ConvertFrom-Json
+        $manifest.Summary.ExcludedPersonalSites | Should -Be 3
+        $manifest.Summary.ExcludedSiteMasters | Should -Be 4
+        $manifest.Summary.TargetMode | Should -BeExactly 'SharePointOnPrem'
+        $manifest.Summary.SolutionPackageCount | Should -BeNullOrEmpty
+    }
+
     It 'writes the three package files in the output folder, with the base name, and returns their paths' {
         $output = Export-SPSInventoryReport -InputObject @($script:Site) -SolutionPackages @($script:Read + $script:Failed) -OutputFolder (Join-Path $TestDrive 'a') -BaseName 'Pkg'
 

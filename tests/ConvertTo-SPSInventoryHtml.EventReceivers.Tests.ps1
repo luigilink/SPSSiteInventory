@@ -52,7 +52,8 @@ BeforeAll {
 }
 
 Describe 'ConvertTo-SPSInventoryHtml event receivers' {
-    It 'keeps the parameters that it already had where they were, and puts the new one after them, because none has a position and they are positional in the order of declaration' {
+    # The function has a parameter set, so none of its parameters is positional: this pins the order of declaration only.
+    It 'declares the new parameter after the ones that it already had' {
         $common = @('Verbose', 'Debug', 'ErrorAction', 'WarningAction', 'InformationAction', 'ProgressAction', 'ErrorVariable', 'WarningVariable', 'InformationVariable', 'OutVariable', 'OutBuffer', 'PipelineVariable', 'WhatIf', 'Confirm')
         $name = @((Get-Command -Name ConvertTo-SPSInventoryHtml).Parameters.Keys | Where-Object { $common -notcontains $_ })
         $before = @(
