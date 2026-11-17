@@ -402,6 +402,7 @@
                 Url = $record.Url
                 WebApp = $record.WebApp
                 AssessmentStatus = $record.AssessmentStatus
+                LowerBoundSignals = $record.LowerBoundSignals
                 Category = $record.Category
                 PublishingInfrastructureEnabled = $record.PublishingInfrastructureEnabled
                 PublishingWebCount = $record.PublishingWebCount
@@ -422,6 +423,7 @@
                 WebApp = $record.WebApp
                 WebAppUrl = $record.WebAppUrl
                 AssessmentStatus = $record.AssessmentStatus
+                LowerBoundSignals = $record.LowerBoundSignals
                 Category = $record.Category
                 BrowserFileHandling = $record.BrowserFileHandling
                 WebAppPolicyCount = $record.WebAppPolicyCount
@@ -441,6 +443,7 @@
                 Url = $record.Url
                 WebApp = $record.WebApp
                 AssessmentStatus = $record.AssessmentStatus
+                LowerBoundSignals = $record.LowerBoundSignals
                 IsLargeSite = $record.IsLargeSite
                 LargeListCount = $record.LargeListCount
                 LargeListExamples = $record.LargeListExamples
@@ -461,6 +464,7 @@
                 Url = $record.Url
                 WebApp = $record.WebApp
                 AssessmentStatus = $record.AssessmentStatus
+                LowerBoundSignals = $record.LowerBoundSignals
                 Category = $record.Category
                 AudienceTargetedListCount = $record.AudienceTargetedListCount
                 AudienceTargetedItemCount = $record.AudienceTargetedItemCount

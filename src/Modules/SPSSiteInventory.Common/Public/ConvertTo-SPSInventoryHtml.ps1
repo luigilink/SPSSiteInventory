@@ -817,6 +817,26 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
     if ($needsReviewCount -gt 0) {
         [void]$sb.AppendLine(('<div class="summary-total"><strong>{0}</strong> {1} site collection(s) with a partial assessment wait in the <strong>Needs review</strong> wave until they are read in full.</div>' -f $needsReviewCount, (ConvertTo-SPSHtmlText -Value $categoryMeta[1].Name)))
     }
+    # A scan that reached its cap leaves a count that is a lower bound, and the site collection stays complete.
+    $lowerBoundSiteCount = 0
+    $lowerBoundTotal = @{}
+    foreach ($lowerBoundSite in $siteRecords) {
+        $lowerBoundName = @(Get-SPSLowerBoundSignalName -Record $lowerBoundSite)
+        if ($lowerBoundName.Count -gt 0) {
+            $lowerBoundSiteCount++
+            foreach ($name in $lowerBoundName) {
+                $lowerBoundTotal[$name] = 1 + [int]$lowerBoundTotal[$name]
+            }
+        }
+    }
+    if ($lowerBoundSiteCount -gt 0) {
+        $lowerBoundText = @(
+            $lowerBoundTotal.Keys |
+                Sort-Object -Property @{ Expression = { $lowerBoundTotal[$_] }; Descending = $true }, @{ Expression = { $_ } } |
+                ForEach-Object { '{0} ({1})' -f $_, $lowerBoundTotal[$_] }
+        ) -join ', '
+        [void]$sb.AppendLine(('<div class="summary-total"><strong>{0}</strong> site collection(s) reached the cap of a scan, so some counts are lower bounds there (shown as &quot;at least&quot; in the detail of the site collection): {1}. A cap alone does not make a site collection partial or change its category and wave; raise the caps of LargeContentThresholds to read more.</div>' -f $lowerBoundSiteCount, (ConvertTo-SPSHtmlText -Value $lowerBoundText)))
+    }
     $excludedParts = @()
     if ($ExcludedPersonalSiteCount -gt 0) {
         $excludedParts += '<strong>{0}</strong> personal site(s)' -f $ExcludedPersonalSiteCount

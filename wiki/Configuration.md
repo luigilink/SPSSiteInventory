@@ -275,7 +275,9 @@ Large-content parity signals are threshold-driven:
   `LargeExcelFiles` alert says whom to warn) and weighs nothing in either example configuration. The
   source farm can open larger workbooks in the browser, which is why the size is a setting.
   At most `LargeContentThresholds.MaxItemsForExcelFileScanPerLibrary` workbooks are checked in each
-  library; when it is reached, the count is a lower bound and the assessment is marked partial.
+  library; when it is reached, the count is a lower bound (`LargeExcelFileCount` is then in
+  `LowerBoundSignals`) and a warning says where the scan stopped, but the site collection is not marked
+  partial.
 
 Collaboration signals describe features that migrate without the data that makes them work. They are
 reported (the `AudienceTargeting` and `SiteNotebook` alerts say what to do) and weigh nothing in either
@@ -293,7 +295,9 @@ example configuration, because the content itself migrates:
   distribution list is shown by its common name and a SharePoint group by its name. Hidden lists and the
   system catalogs are skipped. At most `LargeContentThresholds.MaxItemsForAudienceTargetingScanPerList`
   items are read in each list that has the column, whatever their value; when it is reached, the counts
-  are lower bounds and the assessment is marked partial with a warning. The column is not filtered on,
+  are lower bounds (`AudienceTargetedListCount` and `AudienceTargetedItemCount` are then in
+  `LowerBoundSignals`) and a warning says where the scan stopped, but the site collection is not marked
+  partial. The column is not filtered on,
   because how a query behaves on it is not documented: the pages of the list are read in order of ID, with
   the override of the list view threshold (run the scan as the farm account), and the value is tested by the
   inventory. The audience targeting of web parts, of navigation links and of pages is not reported, as in
@@ -307,7 +311,8 @@ example configuration, because the content itself migrates:
   translated. A notebook whose name does not end in `Notebook` is not counted, as in SMAT, so a site whose
   language gives its notebook another name is not found. At most
   `LargeContentThresholds.MaxItemsForNotebookScanPerLibrary` folders of the library are read; when it is
-  reached, the count is a lower bound and the assessment is marked partial with a warning.
+  reached, the count is a lower bound (`SiteNotebookCount` is then in `LowerBoundSignals`) and a warning
+  says where the scan stopped, but the site collection is not marked partial.
 - `CustomizedProfilePageCount` — 1 when the site collection is a My Site host (the template
   `SPSMSITEHOST`) and its profile page, `Person.aspx` at the root of its root web, is customized
   (unghosted), the case that the SMAT Customized Profile Pages scan starts from;
@@ -330,8 +335,9 @@ Publishing and customized-page signals describe classic publishing dependencies:
   scanned. A layout is identified by its normalized path, so two layouts that share a
   file name in different Master Page Gallery folders count separately. At most
   `LargeContentThresholds.MaxItemsForPublishingPageScanPerLibrary` pages are read per
-  Pages library, so the value is a lower bound when that cap is reached (the
-  assessment is then marked partial with a warning).
+  Pages library, so the value is a lower bound when that cap is reached (it is then in
+  `LowerBoundSignals`, and a warning says where the scan stopped; the site collection is not marked
+  partial).
 - `CustomizedPageCount` — customized (unghosted) pages at the root of each web, for
   example a `default.aspx` edited with SharePoint Designer. Migration reverts them to
   their default state and owners must reapply the customization. Files last modified
@@ -488,8 +494,9 @@ collection not in the modern experience, and what does it take?
   SharePoint Framework (SPFx). `ScriptWebPartExamples` lists up to five of them as
   `page URL (Script Editor)` or `page URL (Content Editor)`. At most
   `LargeContentThresholds.MaxItemsForWebPartScanPerLibrary` pages are read in each library (200
-  by default); a library with more makes the site collection partial, with a warning that names
-  the setting. The web parts of the list view and form pages are not read.
+  by default); a library with more leaves `ScriptWebPartCount` a lower bound (it is then in
+  `LowerBoundSignals`), with a warning that names the setting, and does not make the site collection
+  partial. The web parts of the list view and form pages are not read.
 - `ClassicExperienceOptOutCount` — the site collection and the webs that opted out of the modern
   list and library experience: the site collection feature
   `E3540C7D-6BEA-403C-A224-1A12EAFEE4C4` and the web feature
@@ -775,6 +782,14 @@ LargeContentThresholds = @{
 }
 ```
 
+The `MaxItemsFor...` settings cap what a scan reads. A scan that stops at its cap did not fail: it read
+what it was allowed to read, so its count is a lower bound. The record names those signals in
+`LowerBoundSignals` (the HTML report shows them as "at least" and counts the site collections in its
+summary), the run warns where the scan stopped and which setting to raise, and the site collection stays
+`Complete`: it keeps its category and its wave. A scan that cannot read (an error, a list that cannot be
+opened) still makes the site collection `Partial`, and a site collection can be both. The cap of the alert
+rows, `MaxAlertRowsPerSite`, is not of that kind: the count stays exact and the rows are cut.
+
 - `LargeSiteSizeGB` — marks `IsLargeSite` when `SizeGB` reaches this value.
 - `LargeListItemCount` — minimum list size for `LargeListCount`.
 - `LargeListViewRowLimit` — minimum view row limit for `LargeListViewCount`.
@@ -782,36 +797,43 @@ LargeContentThresholds = @{
   in examples (site-wide checked-out files are always counted).
 - `FileVersionCount` — minimum file-version count for `FileVersionCount`.
 - `MaxItemsForVersionScanPerLibrary` — cap for per-library file-version scanning.
-  When the cap is reached, assessment stays usable but is marked partial with a warning.
+  When the cap is reached, `FileVersionCount` is a lower bound (it is then in `LowerBoundSignals`), a
+  warning says where the scan stopped, and the site collection is not marked partial.
 - `MaxItemsForPublishingPageScanPerLibrary` — cap for the page-layout scan of each
   publishing Pages library. `PublishingPageCount` still uses the library item count, so
-  only the layout summary is affected when the cap is reached.
+  only the layout summary is affected when the cap is reached: `PublishingPageLayoutCount` is then a
+  lower bound (it is in `LowerBoundSignals`) and the site collection is not marked partial.
 - `MaxItemsForHtmlFileScanPerLibrary` — cap for the `.htm`/`.html` file count of each
   document library in Permissive web applications. When it is reached, the count is a
-  lower bound and the assessment is marked partial with a warning. The query filters on
+  lower bound (`HtmlFileCount` is then in `LowerBoundSignals`), a warning says where the scan
+  stopped, and the site collection is not marked partial. The query filters on
   the file type column, which is not indexed, so it asks SharePoint to override the list
   view threshold; run the scan as the farm account.
 - `MaxItemsForWebPartScanPerLibrary` — cap for the pages whose web parts are read, in each Site
   Pages and Pages library, to count `ScriptWebPartCount` (the home page of each web is always
   read). Reading the web parts of a page is the costliest of the scans, so the default is 200
-  pages. When a library has more, the count is a lower bound and the assessment is marked
-  partial with a warning. The query filters on the file type column, which is not indexed, so it
+  pages. When a library has more, `ScriptWebPartCount` is a lower bound (it is then in
+  `LowerBoundSignals`), a warning says where the scan stopped, and the site collection is not marked
+  partial. The query filters on the file type column, which is not indexed, so it
   asks SharePoint to override the list view threshold; run the scan as the farm account.
 - `LargeExcelFileSizeMB` — minimum size, in MB, of a workbook for `LargeExcelFileCount`. The default,
   10, is the size above which SharePoint Online asks the user to open a workbook in Excel instead of
   the browser. A value that is not a number above 0 is replaced by the default.
 - `MaxItemsForExcelFileScanPerLibrary` — cap for the workbooks (`.xlsx`) checked in each document
-  library, whatever their size. When it is reached, the count is a lower bound and the assessment is
-  marked partial with a warning. The query filters on the file type column, which is not indexed, so it
+  library, whatever their size. When it is reached, the count is a lower bound (`LargeExcelFileCount` is
+  then in `LowerBoundSignals`), a warning says where the scan stopped, and the site collection is not
+  marked partial. The query filters on the file type column, which is not indexed, so it
   asks SharePoint to override the list view threshold; run the scan as the farm account.
 - `MaxItemsForAudienceTargetingScanPerList` — cap for the items read in each list that has the audience
   targeting column, to count `AudienceTargetedItemCount`, whatever their value. When it is reached, the
-  counts are lower bounds and the assessment is marked partial with a warning. The query reads the pages
-  of the list in order of ID, with the override of the list view threshold; run the scan as the farm
-  account.
+  counts are lower bounds (`AudienceTargetedListCount` and `AudienceTargetedItemCount` are then in
+  `LowerBoundSignals`), a warning says where the scan stopped, and the site collection is not marked
+  partial. The query reads the pages of the list in order of ID, with the override of the list view
+  threshold; run the scan as the farm account.
 - `MaxItemsForNotebookScanPerLibrary` — cap for the folders of the Site Assets library read to find the
-  site notebooks. When it is reached, the count is a lower bound and the assessment is marked partial with
-  a warning.
+  site notebooks. When it is reached, `SiteNotebookCount` is a lower bound (it is then in
+  `LowerBoundSignals`), a warning says where the scan stopped, and the site collection is not marked
+  partial.
 - `MaxAlertRowsPerSite` — cap for the SharePoint alert rows exported per site
   collection. `SharePointAlertCount` stays exact; when the cap is reached the rows are cut,
   the assessment is marked partial and a warning names the setting.
@@ -859,8 +881,10 @@ Two other buckets of wave 0 do not come from the mapping:
   collection of another category keeps the wave of its category, because what could not be
   read can only raise its score; the wave plan of the HTML report counts the partial site
   collections of each wave. To plan a site collection that is in this bucket, fix what the
-  warnings of its record say (an unreadable item, or a cap such as
-  `LargeContentThresholds.MaxItemsForVersionScanPerLibrary`) and run the inventory again.
+  warnings of its record say (an unreadable item) and run the inventory again. A scan that only
+  reached its cap, such as `LargeContentThresholds.MaxItemsForVersionScanPerLibrary`, does not put a
+  site collection here: it is complete, keeps its category and its wave, and names the counts that are
+  lower bounds in `LowerBoundSignals`.
 
 ## Tuning
 

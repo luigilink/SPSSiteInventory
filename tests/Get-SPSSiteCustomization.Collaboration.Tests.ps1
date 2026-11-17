@@ -266,28 +266,54 @@ Describe 'Get-SPSSiteCustomization audience targeting' {
         Should -Invoke Resolve-SPSAudienceName -ModuleName SPSSiteInventory.Common -Times 1 -Exactly -ParameterFilter { @($AudienceId).Count -eq 2 -and $AudienceId -contains $script:IdSales -and $AudienceId -contains $script:IdMarketing }
     }
 
-    It 'stops at the cap of items, marks the collection partial and names the setting' {
+    It 'stops at the cap of items, keeps the collection complete, names the counts as lower bounds and names the setting' {
         $items = @(1..3 | ForEach-Object { New-TestItem @{ Target_x0020_Audiences = ';;;;Owners' } })
         $list = New-TestList -Fields @((New-TargetingField)) -Batches @((New-TestBatch -Item $items))
 
         $result = Get-Signal -Site (New-TestSite -List @($list)) -Threshold @{ MaxItemsForAudienceTargetingScanPerList = 2 }
 
         $result.Signals.AudienceTargetedItemCount | Should -Be 2
-        $result.Signals.CustomizationInventoryComplete | Should -BeFalse
+        $result.Signals.CustomizationInventoryComplete | Should -BeTrue
+        $result.Signals.LowerBoundSignals | Should -BeExactly 'AudienceTargetedListCount; AudienceTargetedItemCount'
         ($result.Warnings -join ';') | Should -Match "Audience targeting scan stopped on 'Announcements'"
         ($result.Warnings -join ';') | Should -Match 'MaxItemsForAudienceTargetingScanPerList'
     }
 
-    It 'is complete when the list has exactly as many items as the cap, and partial when another page follows' {
+    It 'has no lower bound when the list has exactly as many items as the cap, and has them when another page follows' {
         $two = @(1..2 | ForEach-Object { New-TestItem @{ Target_x0020_Audiences = ';;;;Owners' } })
         $exact = New-TestList -Fields @((New-TargetingField)) -Batches @((New-TestBatch -Item $two))
         $paged = New-TestList -Fields @((New-TargetingField)) -Batches @((New-TestBatch -Item $two -Position 'next'), (New-TestBatch -Item @()))
 
-        (Get-Signal -Site (New-TestSite -List @($exact)) -Threshold @{ MaxItemsForAudienceTargetingScanPerList = 2 }).Signals.CustomizationInventoryComplete | Should -BeTrue
+        $exactResult = Get-Signal -Site (New-TestSite -List @($exact)) -Threshold @{ MaxItemsForAudienceTargetingScanPerList = 2 }
         $pagedResult = Get-Signal -Site (New-TestSite -List @($paged)) -Threshold @{ MaxItemsForAudienceTargetingScanPerList = 2 }
 
-        $pagedResult.Signals.CustomizationInventoryComplete | Should -BeFalse
+        $exactResult.Signals.CustomizationInventoryComplete | Should -BeTrue
+        $exactResult.Signals.LowerBoundSignals | Should -BeExactly ''
+        $pagedResult.Signals.CustomizationInventoryComplete | Should -BeTrue
+        $pagedResult.Signals.LowerBoundSignals | Should -BeExactly 'AudienceTargetedListCount; AudienceTargetedItemCount'
         $paged.Queries | Should -HaveCount 1
+    }
+
+    It 'is partial and has lower bounds when a list reaches the cap and another cannot be read' {
+        $items = @(1..3 | ForEach-Object { New-TestItem @{ Target_x0020_Audiences = ';;;;Owners' } })
+        $capped = New-TestList -Title 'Capped' -Url '/sites/team/Lists/Capped' -Fields @((New-TargetingField)) -Batches @((New-TestBatch -Item $items))
+        $broken = New-TestList -Title 'Broken' -Url '/sites/team/Lists/Broken' -Fields @((New-TargetingField)) -ErrorText 'The query exceeds the list view threshold.'
+
+        $result = Get-Signal -Site (New-TestSite -List @($capped, $broken)) -Threshold @{ MaxItemsForAudienceTargetingScanPerList = 2 }
+
+        $result.Signals.CustomizationInventoryComplete | Should -BeFalse
+        $result.Signals.LowerBoundSignals | Should -BeExactly 'AudienceTargetedListCount; AudienceTargetedItemCount'
+        ($result.Warnings -join ';') | Should -Match "Audience targeting scan stopped on 'Capped'"
+        ($result.Warnings -join ';') | Should -Match "Could not scan the audience targeting on 'Broken'"
+    }
+
+    It 'does not name a lower bound when a list cannot be read and no scan reached its cap' {
+        $broken = New-TestList -Title 'Broken' -Url '/sites/team/Lists/Broken' -Fields @((New-TargetingField)) -ErrorText 'The query exceeds the list view threshold.'
+
+        $result = Get-Signal -Site (New-TestSite -List @($broken))
+
+        $result.Signals.CustomizationInventoryComplete | Should -BeFalse
+        $result.Signals.LowerBoundSignals | Should -BeExactly ''
     }
 
     It 'falls back to 2000 items when the cap is not a usable number' -ForEach @(
@@ -446,15 +472,30 @@ Describe 'Get-SPSSiteCustomization site notebooks' {
         $assets.Queries[1].Position | Should -Be 'p1'
     }
 
-    It 'stops at the cap of folders, marks the collection partial and names the setting' {
+    It 'stops at the cap of folders, keeps the collection complete, names the count as a lower bound and names the setting' {
         $assets = New-TestSiteAssets -Batches @((New-TestBatch -Item @(1..3 | ForEach-Object { New-TestNotebook -Name "Site $_ Notebook" })))
 
         $result = Get-Signal -Site (New-TestSite -List @($assets)) -Threshold @{ MaxItemsForNotebookScanPerLibrary = 2 }
 
         $result.Signals.SiteNotebookCount | Should -Be 2
-        $result.Signals.CustomizationInventoryComplete | Should -BeFalse
+        $result.Signals.CustomizationInventoryComplete | Should -BeTrue
+        $result.Signals.LowerBoundSignals | Should -BeExactly 'SiteNotebookCount'
         ($result.Warnings -join ';') | Should -Match 'Site notebook scan stopped on'
         ($result.Warnings -join ';') | Should -Match 'MaxItemsForNotebookScanPerLibrary'
+    }
+
+    It 'names the lower bounds of two scans in a fixed order, whatever the order of the lists' {
+        # The fakes answer each batch once, so each site gets its own.
+        $newList = { New-TestList -Fields @((New-TargetingField)) -Batches @((New-TestBatch -Item @(1..3 | ForEach-Object { New-TestItem @{ Target_x0020_Audiences = ';;;;Owners' } }))) }
+        $newAssets = { New-TestSiteAssets -Batches @((New-TestBatch -Item @(1..3 | ForEach-Object { New-TestNotebook -Name "Site $_ Notebook" }))) }
+        $threshold = @{ MaxItemsForAudienceTargetingScanPerList = 2; MaxItemsForNotebookScanPerLibrary = 2 }
+
+        $listFirst = Get-Signal -Site (New-TestSite -List @((& $newList), (& $newAssets))) -Threshold $threshold
+        $assetsFirst = Get-Signal -Site (New-TestSite -List @((& $newAssets), (& $newList))) -Threshold $threshold
+
+        $listFirst.Signals.LowerBoundSignals | Should -BeExactly 'AudienceTargetedListCount; AudienceTargetedItemCount; SiteNotebookCount'
+        $assetsFirst.Signals.LowerBoundSignals | Should -BeExactly 'AudienceTargetedListCount; AudienceTargetedItemCount; SiteNotebookCount'
+        $assetsFirst.Signals.CustomizationInventoryComplete | Should -BeTrue
     }
 
     It 'marks the collection partial when the library cannot be listed' {

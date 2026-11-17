@@ -68,15 +68,17 @@
     # - FileVersionCount
     #
     # File-version counting scans document-library items. To keep runtime predictable,
-    # MaxItemsForVersionScanPerLibrary caps per-library scanning; when hit, the scan is
-    # marked partial and a warning is emitted. MaxItemsForPublishingPageScanPerLibrary
-    # applies the same cap to the page-layout scan of publishing Pages libraries, and
-    # MaxItemsForHtmlFileScanPerLibrary to the .htm/.html file count (collected only in
-    # web applications that use Permissive browser file handling).
+    # MaxItemsForVersionScanPerLibrary caps per-library scanning; when hit, a warning is
+    # emitted and the count is a lower bound (the signal is named in the LowerBoundSignals
+    # column), but the site stays complete: it is not marked partial and keeps its category
+    # and wave. MaxItemsForPublishingPageScanPerLibrary applies the same cap to the
+    # page-layout scan of publishing Pages libraries, and MaxItemsForHtmlFileScanPerLibrary
+    # to the .htm/.html file count (collected only in web applications that use Permissive
+    # browser file handling). A scan that cannot read still marks the site partial.
     #
     # ScriptWebPartCount reads the web parts of the home page of each web and of the pages of
     # its Site Pages and Pages libraries: MaxItemsForWebPartScanPerLibrary caps how many pages
-    # of each library are read, and a library above it makes the site marked partial.
+    # of each library are read, and a library above it leaves the count a lower bound.
     #
     # LargeExcelFileCount counts the Excel workbooks (.xlsx) of at least LargeExcelFileSizeMB (10 MB:
     # the size above which SharePoint Online asks the user to open a workbook in Excel instead of the
@@ -84,7 +86,7 @@
     #
     # AudienceTargetedItemCount counts the list items that target an audience (the Target Audiences
     # column); MaxItemsForAudienceTargetingScanPerList caps how many items are read in each list that
-    # has the column, and a list above it makes the site marked partial. SiteNotebookCount counts the
+    # has the column, and a list above it leaves the counts lower bounds. SiteNotebookCount counts the
     # site notebooks of the Site Assets library; MaxItemsForNotebookScanPerLibrary caps how many
     # folders of that library are read.
     #

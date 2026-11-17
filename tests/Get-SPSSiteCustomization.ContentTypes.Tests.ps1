@@ -660,7 +660,7 @@ Describe 'Get-SPSSiteCustomization content types' {
         $signals.PublishingPageLayoutExamples | Should -Be 'BlankWebPartPage.aspx (1)'
     }
 
-    It 'marks a capped publishing page scan as partial and keeps the layouts already read' {
+    It 'marks a capped publishing page scan as a lower bound, keeps the layouts already read and leaves the collection complete' {
         $pages = Get-TestPagesList -ItemCount 3 -Batches @(
             Get-TestPageBatch -Layouts @('/_catalogs/masterpage/A.aspx, A', '/_catalogs/masterpage/B.aspx, B') -Position 'next'
             Get-TestPageBatch -Layouts @('/_catalogs/masterpage/C.aspx, C')
@@ -679,9 +679,11 @@ Describe 'Get-SPSSiteCustomization content types' {
 
         $signals.PublishingPageCount | Should -Be 3
         $signals.PublishingPageLayoutCount | Should -Be 2
-        $signals.CustomizationInventoryComplete | Should -BeFalse
+        $signals.CustomizationInventoryComplete | Should -BeTrue
+        $signals.LowerBoundSignals | Should -BeExactly 'PublishingPageLayoutCount'
         ($warnings -join ';') | Should -Match 'Publishing page layout scan stopped'
         ($warnings -join ';') | Should -Match 'MaxItemsForPublishingPageScanPerLibrary'
+        ($warnings -join ';') | Should -Match 'the count is a lower bound'
         $pages.Queries | Should -HaveCount 1
     }
 
@@ -703,11 +705,12 @@ Describe 'Get-SPSSiteCustomization content types' {
 
         $signals.PublishingPageLayoutCount | Should -Be 1
         $signals.PublishingPageLayoutExamples | Should -Be 'A.aspx (1)'
-        $signals.CustomizationInventoryComplete | Should -BeFalse
+        $signals.CustomizationInventoryComplete | Should -BeTrue
+        $signals.LowerBoundSignals | Should -BeExactly 'PublishingPageLayoutCount'
         ($warnings -join ';') | Should -Match 'Publishing page layout scan stopped'
     }
 
-    It 'does not flag a publishing page scan as partial when the cap equals the library size' {
+    It 'does not flag a publishing page scan as a lower bound when the cap equals the library size' {
         $pages = Get-TestPagesList -ItemCount 2 -Batches @(
             Get-TestPageBatch -Layouts @('/_catalogs/masterpage/A.aspx, A', '/_catalogs/masterpage/B.aspx, B')
         )
@@ -725,6 +728,7 @@ Describe 'Get-SPSSiteCustomization content types' {
 
         $signals.PublishingPageLayoutCount | Should -Be 2
         $signals.CustomizationInventoryComplete | Should -BeTrue
+        $signals.LowerBoundSignals | Should -BeExactly ''
     }
 
     It 'marks unreadable publishing pages as partial while keeping the Pages item count' {
@@ -1274,7 +1278,7 @@ Describe 'Get-SPSSiteCustomization content types' {
         $tasks.HtmlQueries | Should -HaveCount 0
     }
 
-    It 'caps the HTML file scan and marks it partial' {
+    It 'caps the HTML file scan, marks the count as a lower bound and leaves the collection complete' {
         $library = Get-TestLibrary -HtmlBatches @(
             Get-TestHtmlBatch -Urls @('/sites/team/Docs/a.htm', '/sites/team/Docs/b.htm', '/sites/team/Docs/c.htm')
         )
@@ -1290,7 +1294,8 @@ Describe 'Get-SPSSiteCustomization content types' {
         $signals = Get-SPSSiteCustomization -Site $site -ScanHtmlFile -LargeContentThresholds @{ MaxItemsForHtmlFileScanPerLibrary = 2 } -WarningVariable warnings -WarningAction SilentlyContinue
 
         $signals.HtmlFileCount | Should -Be 2
-        $signals.CustomizationInventoryComplete | Should -BeFalse
+        $signals.CustomizationInventoryComplete | Should -BeTrue
+        $signals.LowerBoundSignals | Should -BeExactly 'HtmlFileCount'
         ($warnings -join ';') | Should -Match 'HTML file scan stopped'
         ($warnings -join ';') | Should -Match 'MaxItemsForHtmlFileScanPerLibrary'
     }
@@ -1611,7 +1616,7 @@ Describe 'Get-SPSSiteCustomization content types' {
         $signals.CheckedOutFileExamples | Should -Match 'Shared Documents \(1\)'
     }
 
-    It 'uses paged item retrieval for version scans and marks partial when capped' {
+    It 'uses paged item retrieval for version scans and marks the count as a lower bound when capped' {
         $web = Get-TestWeb -Definitions @() -Bindings @()
         $web.Lists[0].Title = 'Architecture'
         $web.Lists[0].ItemCount = 12000
@@ -1679,8 +1684,10 @@ Describe 'Get-SPSSiteCustomization content types' {
 
         $signals.FileVersionCount | Should -Be 2
         $signals.FileVersionExamples | Should -Match '/sites/team/Architecture/a\.docx \(60\)'
-        $signals.CustomizationInventoryComplete | Should -BeFalse
+        $signals.CustomizationInventoryComplete | Should -BeTrue
+        $signals.LowerBoundSignals | Should -BeExactly 'FileVersionCount'
         ($warnings -join '; ') | Should -Match 'File-version scan stopped'
+        ($warnings -join '; ') | Should -Match 'the count is a lower bound'
     }
 
     It 'keeps collected checkout keys when checkout paging fails mid-stream' {

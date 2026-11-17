@@ -72,6 +72,12 @@ Describe 'The inventory record' {
         }
     }
 
+    It 'has a field for the signals whose count is a lower bound, in both records, and documents it in the usage page' {
+        $script:Record[0] | Should -Contain 'LowerBoundSignals'
+        $script:Record[1] | Should -Contain 'LowerBoundSignals'
+        $script:Usage | Should -Match '(?m)^\| `LowerBoundSignals` \|'
+    }
+
     It 'has a field for the large Excel files, in both records, documents it and keeps it out of the score of both examples' {
         foreach ($signal in @('LargeExcelFileCount', 'LargeExcelFileExamples')) {
             $script:Record[0] | Should -Contain $signal

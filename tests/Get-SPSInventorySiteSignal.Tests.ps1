@@ -297,3 +297,46 @@ Describe 'Get-SPSInventorySiteSignal' {
         $labels | Should -Be @('Custom master page', 'Alternate CSS URL (webs)', 'XSLT list views', 'Script web parts', 'Opted out of modern lists', 'Lists forced to classic', 'Customized pages', 'FBA configured')
     }
 }
+
+Describe 'Get-SPSInventorySiteSignal and the counts that are lower bounds' {
+    It 'shows <Field> as "at least" its number when its scan reached its cap' -ForEach @(
+        @{ Field = 'FileVersionCount'; Label = 'High-version files' }
+        @{ Field = 'PublishingPageLayoutCount'; Label = 'Page layouts in use' }
+        @{ Field = 'ScriptWebPartCount'; Label = 'Script web parts' }
+        @{ Field = 'HtmlFileCount'; Label = 'HTML files' }
+        @{ Field = 'LargeExcelFileCount'; Label = 'Large Excel files' }
+        @{ Field = 'AudienceTargetedItemCount'; Label = 'Audience-targeted items' }
+        @{ Field = 'SiteNotebookCount'; Label = 'Site notebooks' }
+    ) {
+        $signal = @(Get-Signal -Record (New-RecordWith @{ $Field = 5; LowerBoundSignals = $Field }))
+
+        $signal | Should -HaveCount 1
+        $signal[0].Label | Should -Be $Label
+        $signal[0].Value | Should -BeExactly 'at least 5'
+    }
+
+    It 'shows the number alone for a count that is not named, and for a record without the column or with an empty one' {
+        $other = @(Get-Signal -Record (New-RecordWith @{ FileVersionCount = 5; HtmlFileCount = 2; LowerBoundSignals = 'HtmlFileCount' }))
+
+        ($other | Where-Object Label -eq 'High-version files').Value | Should -BeExactly '5'
+        ($other | Where-Object Label -eq 'HTML files').Value | Should -BeExactly 'at least 2'
+        @(Get-Signal -Record (New-RecordWith @{ FileVersionCount = 5; LowerBoundSignals = '' }))[0].Value | Should -BeExactly '5'
+        @(Get-Signal -Record (New-RecordWith @{ FileVersionCount = 5 }))[0].Value | Should -BeExactly '5'
+    }
+
+    It 'reads several names separated by semicolons and spaces' {
+        $signal = @(Get-Signal -Record (New-RecordWith @{ FileVersionCount = 5; HtmlFileCount = 2; ScriptWebPartCount = 1; LowerBoundSignals = 'FileVersionCount;  HtmlFileCount ; ' }))
+
+        ($signal | Where-Object Label -eq 'High-version files').Value | Should -BeExactly 'at least 5'
+        ($signal | Where-Object Label -eq 'HTML files').Value | Should -BeExactly 'at least 2'
+        ($signal | Where-Object Label -eq 'Script web parts').Value | Should -BeExactly '1'
+    }
+
+    It 'raises nothing for a lower bound whose count is 0, and does not say that the inventory is incomplete' {
+        @(Get-Signal -Record (New-RecordWith @{ LowerBoundSignals = 'FileVersionCount; HtmlFileCount' })) | Should -HaveCount 0
+        $signal = @(Get-Signal -Record (New-RecordWith @{ FileVersionCount = 5; LowerBoundSignals = 'FileVersionCount' }))
+
+        $signal | Should -HaveCount 1
+        @($signal | Where-Object Label -like '*incomplete*') | Should -HaveCount 0
+    }
+}

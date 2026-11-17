@@ -195,26 +195,31 @@ Describe 'Get-SPSSiteCustomization large Excel files' {
         @($result.Signals.LargeExcelFileExamples -split '; ') | Should -HaveCount 5
     }
 
-    It 'stops at the cap of each library, marks the collection partial and names the setting' {
+    It 'stops at the cap of each library, keeps the collection complete, names the count as a lower bound and names the setting' {
         $items = 1..3 | ForEach-Object { New-TestWorkbook ('w{0}.xlsx' -f $_) 20 }
         $library = New-TestLibrary -Batches @((New-TestBatch -Item $items))
 
         $result = Get-Signal -Site (New-TestSite -Library @($library)) -Threshold @{ MaxItemsForExcelFileScanPerLibrary = 2 }
 
         $result.Signals.LargeExcelFileCount | Should -Be 2
-        $result.Signals.CustomizationInventoryComplete | Should -BeFalse
+        $result.Signals.CustomizationInventoryComplete | Should -BeTrue
+        $result.Signals.LowerBoundSignals | Should -BeExactly 'LargeExcelFileCount'
         ($result.Warnings -join ';') | Should -Match 'MaxItemsForExcelFileScanPerLibrary'
+        ($result.Warnings -join ';') | Should -Match 'the count is a lower bound'
     }
 
-    It 'marks the collection partial when the cap is reached with more workbooks to come, and checks 2000 by default' {
+    It 'names the count as a lower bound when the cap is reached with more workbooks to come, and checks 2000 by default' {
         $first = New-TestLibrary -Batches @((New-TestBatch -Item @((New-TestWorkbook 'a.xlsx' 20), (New-TestWorkbook 'b.xlsx' 20)) -Position 'next'))
-        (Get-Signal -Site (New-TestSite -Library @($first)) -Threshold @{ MaxItemsForExcelFileScanPerLibrary = 2 }).Signals.CustomizationInventoryComplete | Should -BeFalse
+        $pagedResult = Get-Signal -Site (New-TestSite -Library @($first)) -Threshold @{ MaxItemsForExcelFileScanPerLibrary = 2 }
+        $pagedResult.Signals.LowerBoundSignals | Should -BeExactly 'LargeExcelFileCount'
+        $pagedResult.Signals.CustomizationInventoryComplete | Should -BeTrue
 
         $many = 1..2001 | ForEach-Object { New-TestWorkbook ('w{0}.xlsx' -f $_) 20 }
         $big = New-TestLibrary -Batches @((New-TestBatch -Item $many))
         $result = Get-Signal -Site (New-TestSite -Library @($big))
         $result.Signals.LargeExcelFileCount | Should -Be 2000
-        $result.Signals.CustomizationInventoryComplete | Should -BeFalse
+        $result.Signals.CustomizationInventoryComplete | Should -BeTrue
+        $result.Signals.LowerBoundSignals | Should -BeExactly 'LargeExcelFileCount'
     }
 
     It 'marks the collection partial and names the library when the workbooks cannot be listed' {

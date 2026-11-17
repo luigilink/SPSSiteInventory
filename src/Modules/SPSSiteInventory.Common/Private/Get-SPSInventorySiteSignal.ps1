@@ -8,7 +8,9 @@
         so it shows a handful of columns for each site collection and, when a row is opened,
         only the signals that the site collection raises: a count above zero, a flag that is
         set, a lock, a review that is required or an inventory that is incomplete. A signal
-        that is at zero is left out instead of being repeated on every row.
+        that is at zero is left out instead of being repeated on every row. A count that is
+        a lower bound, because its scan reached its cap (the LowerBoundSignals column), is
+        shown as "at least" the number.
 
         Each signal has a Label, a Value (a number, Yes, or a short text) and a Detail (the
         examples or the reason that go with it, or an empty string). The signals come in a fixed
@@ -78,12 +80,16 @@
             & $add $Label 'Yes' $detail
         }
     }
+    # The counts whose scan reached its cap, named by the LowerBoundSignals column of a record that has one.
+    $lowerBound = @(Get-SPSLowerBoundSignalName -Record $Record)
     $count = {
         param([System.String]$Name, [System.String]$Label, [System.String]$DetailName)
         $value = & $number $Record.$Name
         if ($value -gt 0) {
             $detail = if ($DetailName) { [string]$Record.$DetailName } else { '' }
-            & $add $Label (& $formatNumber $value) $detail
+            $valueText = & $formatNumber $value
+            if ($lowerBound -contains $Name) { $valueText = 'at least ' + $valueText }
+            & $add $Label $valueText $detail
         }
     }
 
@@ -193,7 +199,8 @@
     & $count 'SiteNotebookCount' 'Site notebooks' 'SiteNotebookExamples'
     & $count 'CustomizedProfilePageCount' 'Customized profile page' 'CustomizedProfilePageExamples'
 
-    # Completeness of the inventory: a figure above is a lower bound when one of these is False.
+    # Completeness of the inventory: a figure above can be a lower bound when one of these is False. The counts
+    # that only reached the cap of their scan are marked "at least" and leave the inventory complete.
     foreach ($check in @(
             @{ Name = 'SiteInventoryComplete'; Label = 'Site inventory incomplete' }
             @{ Name = 'CustomizationInventoryComplete'; Label = 'Customization inventory incomplete' }

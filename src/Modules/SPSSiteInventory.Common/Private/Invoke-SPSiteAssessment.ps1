@@ -190,6 +190,7 @@
                     ContentTypeInventoryComplete = $contentTypeComplete
                     AssessmentStatus = $assessmentStatus
                     AssessmentWarnings = $groupedWarnings -join '; '
+                    LowerBoundSignals = $signals['LowerBoundSignals']
                     Workflow2010Count = $signals['Workflow2010Count']
                     Workflow2010RunningInstanceCount = $signals['Workflow2010RunningInstanceCount']
                     Workflow2010Examples = $signals['Workflow2010Examples']
@@ -310,6 +311,7 @@
                     ContentTypeInventoryComplete = $false
                     AssessmentStatus = 'Failed'
                     AssessmentWarnings = $groupedWarnings -join '; '
+                    LowerBoundSignals = ''
                     Workflow2010Count = $null
                     Workflow2010RunningInstanceCount = $null
                     Workflow2010Examples = $null

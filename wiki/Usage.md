@@ -146,6 +146,7 @@ CSV/JSON rows describe site collections and any web-application enumeration fail
 | `InventoryScope` | `SiteCollection` for site rows or `WebApplication` for enumeration failure rows |
 | `SiteInventoryComplete` / `SiteInventoryWarnings` | Whether identity, size and root-web metadata were collected; warning text describes missing data |
 | `CustomizationInventoryComplete` | False means one or more customization signals may be missing |
+| `LowerBoundSignals` | The signals, as column names separated by `; `, whose count is a lower bound because a scan reached the cap of its `LargeContentThresholds` setting (`FileVersionCount`, `PublishingPageLayoutCount`, `ScriptWebPartCount`, `HtmlFileCount`, `LargeExcelFileCount`, `AudienceTargetedListCount`, `AudienceTargetedItemCount` and `SiteNotebookCount`), or empty. The site collection is not `Partial` because of it and keeps its category and its wave, a warning says where the scan stopped, and the HTML report shows these counts as "at least". A scan that cannot read still makes the site collection `Partial` |
 | `Workflow2010Count` | Active SharePoint 2010 workflow associations (legacy engine, retired in SPO); historical "previous version" associations are excluded when detectable |
 | `Workflow2013Count` | SharePoint 2013 workflow subscriptions (Workflow Manager) |
 | `Workflow2010RunningInstanceCount` | Active SharePoint 2010 workflow runtime instances where counters are exposed, with those of the previous versions of a workflow, which can still run |
