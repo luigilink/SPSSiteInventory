@@ -212,7 +212,10 @@ Workflows are split by platform because their migration cost differs:
   `Workflow2010Count` to `BlockingSignals` if you want any legacy workflow to force
   **Blocking (4)**.
 - `Workflow2010RunningInstanceCount` — active runtime instances on the 2010
-  platform where per-association counters are available.
+  platform where per-association counters are available, with those of the previous
+  versions of a workflow, which can still run. The `Workflow2010Examples` column, the
+  *Workflow associations* section of the HTML report and the `*-workflow-associations-*`
+  files say which workflows are behind the two counts (see [Usage](Usage)).
 - `Workflow2013Count` — SharePoint 2013 workflows (Workflow Manager). A lighter, more
   direct remediation, so they are weighted less than their 2010 counterparts. They
   were nevertheless **retired in SharePoint Online** on 2 April 2026, so every one

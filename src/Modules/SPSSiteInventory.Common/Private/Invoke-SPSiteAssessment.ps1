@@ -58,6 +58,7 @@
     $externalLists = [System.Collections.Generic.List[object]]::new()
     $sharePointAlerts = [System.Collections.Generic.List[object]]::new()
     $eventReceiverClasses = [System.Collections.Generic.List[object]]::new()
+    $workflowAssociations = [System.Collections.Generic.List[object]]::new()
     $scored = [System.Collections.Generic.List[object]]::new()
     $siteTotal = $Inventory.Count
     $siteIndex = 0
@@ -132,6 +133,9 @@
                 foreach ($eventReceiverClass in $signals.EventReceiverClasses) {
                     $eventReceiverClasses.Add($eventReceiverClass)
                 }
+                foreach ($workflowAssociation in $signals.WorkflowAssociations) {
+                    $workflowAssociations.Add($workflowAssociation)
+                }
 
                 $result = Measure-SPSSiteComplexity -Signals $signals -Scoring $Scoring -TargetMode $TargetMode
                 $customizationComplete = $true
@@ -188,6 +192,7 @@
                     AssessmentWarnings = $groupedWarnings -join '; '
                     Workflow2010Count = $signals['Workflow2010Count']
                     Workflow2010RunningInstanceCount = $signals['Workflow2010RunningInstanceCount']
+                    Workflow2010Examples = $signals['Workflow2010Examples']
                     Workflow2013Count = $signals['Workflow2013Count']
                     Workflow2013RunningInstanceCount = $signals['Workflow2013RunningInstanceCount']
                     AppInstanceCount = $signals['AppInstanceCount']
@@ -307,6 +312,7 @@
                     AssessmentWarnings = $groupedWarnings -join '; '
                     Workflow2010Count = $null
                     Workflow2010RunningInstanceCount = $null
+                    Workflow2010Examples = $null
                     Workflow2013Count = $null
                     Workflow2013RunningInstanceCount = $null
                     AppInstanceCount = $null
@@ -405,5 +411,6 @@
         ExternalLists = $externalLists.ToArray()
         SharePointAlerts = $sharePointAlerts.ToArray()
         EventReceiverClasses = $eventReceiverClasses.ToArray()
+        WorkflowAssociations = $workflowAssociations.ToArray()
     }
 }

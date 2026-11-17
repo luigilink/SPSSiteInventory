@@ -32,7 +32,17 @@
           2010 workflow platform, whose engine is retired in SharePoint Online, so those
           workflows always need a rebuild).
         - Workflow2010RunningInstanceCount counts active 2010 workflow instances where
-          runtime counters are exposed by the platform.
+          runtime counters are exposed by the platform, with those of the previous versions
+          of a workflow, which SharePoint keeps as associations of their own and which are
+          not in Workflow2010Count.
+        - Workflow2010Examples names up to five of the associations behind these counts (the
+          workflow, its list or library and web, and its running instances), and
+          WorkflowAssociations holds one row for each association, for the workflow
+          association report. The rows of the counted associations add up to
+          Workflow2010Count and all the rows add up to Workflow2010RunningInstanceCount; the
+          rows of the previous versions stop at 1000 for a site collection, and the counts
+          stay exact. When the rows cannot be built, the site keeps its counts, and a warning gives
+          the reason.
         - Workflow2013Count counts Workflow Manager subscriptions (the SharePoint 2013
           platform), read through WorkflowServicesManager. This is best-effort: when
           Workflow Manager is not connected the count stays at 0 rather than failing.
@@ -289,6 +299,8 @@
     $signals = @{
         Workflow2010Count        = 0
         Workflow2010RunningInstanceCount = 0
+        Workflow2010Examples     = ''
+        WorkflowAssociations     = @()
         Workflow2013Count        = 0
         Workflow2013RunningInstanceCount = 0
         AppInstanceCount         = 0
@@ -370,6 +382,13 @@
     $eventReceiverTable = [System.Collections.Generic.Dictionary[System.String, System.Object]]::new([System.StringComparer]::OrdinalIgnoreCase)
     $maxEventReceiverGroup = 200
     $eventReceiverGroupsLeftOut = $false
+    $workflowTable = [PSCustomObject]@{
+        Current  = [System.Collections.Generic.List[object]]::new()
+        Previous = [System.Collections.Generic.List[object]]::new()
+    }
+    $maxWorkflowPreviousVersion = 1000
+    $workflowRowsLeftOut = $false
+    $workflowRowError = ''
     $largeListExamples = [System.Collections.Generic.List[string]]::new()
     $largeListViewExamples = [System.Collections.Generic.List[string]]::new()
     $checkedOutFileExamples = [System.Collections.Generic.List[string]]::new()
@@ -838,6 +857,22 @@
                 $webWorkflowAssociations = @(Get-SPSActiveWorkflowAssociations -WorkflowAssociations $allWebWorkflowAssociations)
                 $signals.Workflow2010Count += $webWorkflowAssociations.Count
                 $signals.Workflow2010RunningInstanceCount += Get-SPSWorkflowAssociationRunningCount -WorkflowAssociations $allWebWorkflowAssociations
+                # The rows only describe the counts above: a row that cannot be built never changes them.
+                try {
+                    foreach ($association in $allWebWorkflowAssociations) {
+                        if ($null -eq $association) {
+                            continue
+                        }
+                        if (-not (Add-SPSWorkflowAssociationRow -Table $workflowTable -Association $association -ActiveAssociation $webWorkflowAssociations -SiteUrl ([System.String]$Site.Url) -WebUrl ([System.String]$web.Url) -Scope Web -MaximumPreviousVersion $maxWorkflowPreviousVersion)) {
+                            $workflowRowsLeftOut = $true
+                        }
+                    }
+                }
+                catch {
+                    if (-not $workflowRowError) {
+                        $workflowRowError = $_.Exception.Message
+                    }
+                }
 
                 try {
                     $webLists = $web.Lists
@@ -866,6 +901,21 @@
                         $listWorkflowAssociations = @(Get-SPSActiveWorkflowAssociations -WorkflowAssociations $allListWorkflowAssociations)
                         $signals.Workflow2010Count += $listWorkflowAssociations.Count
                         $signals.Workflow2010RunningInstanceCount += Get-SPSWorkflowAssociationRunningCount -WorkflowAssociations $allListWorkflowAssociations
+                        try {
+                            foreach ($association in $allListWorkflowAssociations) {
+                                if ($null -eq $association) {
+                                    continue
+                                }
+                                if (-not (Add-SPSWorkflowAssociationRow -Table $workflowTable -Association $association -ActiveAssociation $listWorkflowAssociations -SiteUrl ([System.String]$Site.Url) -WebUrl ([System.String]$web.Url) -Scope List -ListTitle ([System.String]$list.Title) -ListUrl ([System.String]$list.RootFolder.ServerRelativeUrl) -MaximumPreviousVersion $maxWorkflowPreviousVersion)) {
+                                    $workflowRowsLeftOut = $true
+                                }
+                            }
+                        }
+                        catch {
+                            if (-not $workflowRowError) {
+                                $workflowRowError = $_.Exception.Message
+                            }
+                        }
 
                         # Count only custom event receivers. Out-of-the-box lists carry many
                         # native receivers from Microsoft assemblies that are not a migration
@@ -1747,6 +1797,28 @@
     }
     if ($eventReceiverGroupsLeftOut) {
         Write-Warning -Message "Event receiver rows stopped after $maxEventReceiverGroup assemblies and classes on site '$($Site.Url)'; EventReceivers stays exact."
+    }
+
+    # The detail never changes the signals: when it cannot be built, the site keeps its counts and has no rows for it.
+    try {
+        $workflowRows = @(
+            @($workflowTable.Current) + @($workflowTable.Previous) |
+                Sort-Object -Property @{ Expression = { $_.WebUrl } }, @{ Expression = { $_.Scope -ne 'Web' } }, @{ Expression = { $_.ListTitle } }, @{ Expression = { $_.WorkflowName } }
+        )
+        $workflowExamples = Get-SPSWorkflowAssociationExample -Row $workflowRows
+        $signals.WorkflowAssociations = $workflowRows
+        $signals.Workflow2010Examples = $workflowExamples
+    }
+    catch {
+        if (-not $workflowRowError) {
+            $workflowRowError = $_.Exception.Message
+        }
+    }
+    if ($workflowRowError) {
+        Write-Warning -Message "The workflow associations of site '$($Site.Url)' could not be fully listed: $workflowRowError; Workflow2010Count and Workflow2010RunningInstanceCount stay exact."
+    }
+    if ($workflowRowsLeftOut) {
+        Write-Warning -Message "Workflow association rows of previous versions stopped after $maxWorkflowPreviousVersion on site '$($Site.Url)'; Workflow2010Count and Workflow2010RunningInstanceCount stay exact."
     }
 
     $signals.SubsiteCount = $subsites.Count

@@ -142,7 +142,8 @@
             $parts = @()
             if ($workflowCount -gt 0) { $parts += '{0} workflow(s)' -f (& $formatNumber $workflowCount) }
             if ($runningCount -gt 0) { $parts += '{0} running instance(s)' -f (& $formatNumber $runningCount) }
-            & $add ('Workflow {0}' -f $version) ($parts -join ', ') ''
+            $workflowDetail = if ($version -eq '2010') { [string]$Record.Workflow2010Examples } else { '' }
+            & $add ('Workflow {0}' -f $version) ($parts -join ', ') $workflowDetail
         }
     }
     & $count 'InfoPathFormCount' 'InfoPath forms' ''

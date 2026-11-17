@@ -959,6 +959,7 @@ function Get-SPSLabScenario {
             }
             Expect      = @(
                 (Get-SPSLabExpectation Workflow2010Count ge 1)
+                (Get-SPSLabExpectation Workflow2010Examples match 'Lab approval \(list LabWorkflowList, [^)]+\): \d+ running instance\(s\)')
                 (Get-SPSLabExpectation -Alert 'Workflow2010')
             )
         })

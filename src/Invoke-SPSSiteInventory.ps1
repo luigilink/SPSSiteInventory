@@ -283,6 +283,7 @@ try {
     $externalLists = @($assessment.ExternalLists)
     $sharePointAlerts = @($assessment.SharePointAlerts)
     $eventReceiverClasses = @($assessment.EventReceiverClasses)
+    $workflowAssociations = @($assessment.WorkflowAssociations)
     if ($targetMode -eq 'SharePointOnline' -and
         @($scored | Where-Object { $_.HasNoAccessLock }).Count -gt 0 -and
         @($settings.Scoring.BlockingSignals) -notcontains 'HasNoAccessLock' -and
@@ -365,7 +366,7 @@ try {
     if ($solutionPackages.Count -gt 0) {
         $packageExportParams['SolutionPackages'] = @($solutionPackages)
     }
-    $output = Export-SPSInventoryReport -InputObject @($scored) -OutputFolder $outputFolder.Path -BaseName ('SPSSiteInventory-' + $settings.EnvName) -EnvName $settings.EnvName -SolutionMap @($solutionMap) -ContentTypes $contentTypes -ManagedMetadataLists $managedMetadataLists -ExternalLists $externalLists -SharePointAlerts $sharePointAlerts -EventReceiverClasses $eventReceiverClasses -BcsApplications @($bcs.Applications) -BcsInventoryComplete ([bool]$bcs.Complete) -SecureStoreApplications @($secureStore.Applications) -SecureStoreInventoryComplete ([bool]$secureStore.Complete) -ProfilePropertyMappings @($profileMappings.Mappings) -ProfileInventoryComplete ([bool]$profileMappings.Complete) -SolutionJsonPath $solutionOutput.JsonPath -ExcludedPersonalSiteCount ([int]$exclusion.PersonalSites) -ExcludedSiteMasterCount ([int]$exclusion.SiteMasters) -HtmlSplitThreshold $reportOption.HtmlSplitThreshold -HtmlRowsPerPage $reportOption.HtmlRowsPerPage -TargetMode $targetMode @packageExportParams
+    $output = Export-SPSInventoryReport -InputObject @($scored) -OutputFolder $outputFolder.Path -BaseName ('SPSSiteInventory-' + $settings.EnvName) -EnvName $settings.EnvName -SolutionMap @($solutionMap) -ContentTypes $contentTypes -ManagedMetadataLists $managedMetadataLists -ExternalLists $externalLists -SharePointAlerts $sharePointAlerts -EventReceiverClasses $eventReceiverClasses -WorkflowAssociations $workflowAssociations -BcsApplications @($bcs.Applications) -BcsInventoryComplete ([bool]$bcs.Complete) -SecureStoreApplications @($secureStore.Applications) -SecureStoreInventoryComplete ([bool]$secureStore.Complete) -ProfilePropertyMappings @($profileMappings.Mappings) -ProfileInventoryComplete ([bool]$profileMappings.Complete) -SolutionJsonPath $solutionOutput.JsonPath -ExcludedPersonalSiteCount ([int]$exclusion.PersonalSites) -ExcludedSiteMasterCount ([int]$exclusion.SiteMasters) -HtmlSplitThreshold $reportOption.HtmlSplitThreshold -HtmlRowsPerPage $reportOption.HtmlRowsPerPage -TargetMode $targetMode @packageExportParams
 
     Add-SPSInventoryEvent -Message "Inventory complete. CSV: $($output.CsvPath) | JSON: $($output.JsonPath) | HTML: $($output.HtmlPath)" -Level Information
     if (@($output.HtmlPagePaths).Count -gt 0) {
@@ -381,6 +382,7 @@ try {
     Add-SPSInventoryEvent -Message "Secure Store report. CSV: $($output.SecureStoreCsvPath) | JSON: $($output.SecureStoreJsonPath)" -Level Information
     Add-SPSInventoryEvent -Message "Profile property mappings report. CSV: $($output.ProfileMappingsCsvPath) | JSON: $($output.ProfileMappingsJsonPath)" -Level Information
     Add-SPSInventoryEvent -Message "Event receiver report. CSV: $($output.EventReceiversCsvPath) | JSON: $($output.EventReceiversJsonPath)" -Level Information
+    Add-SPSInventoryEvent -Message "Workflow association report. CSV: $($output.WorkflowAssociationsCsvPath) | JSON: $($output.WorkflowAssociationsJsonPath)" -Level Information
     if ($solutionPackages.Count -gt 0) {
         Add-SPSInventoryEvent -Message "Solution package report. CSV: $($output.SolutionPackagesCsvPath) | Assemblies: $($output.SolutionAssembliesCsvPath) | JSON: $($output.SolutionPackagesJsonPath)" -Level Information
     }

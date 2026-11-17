@@ -228,6 +228,21 @@ Describe 'The lab scenarios' {
         $master.Expect[0].Value | Should -BeTrue
     }
 
+    It 'expect the workflow of the workflow scenario in the examples of the inventory' {
+        $workflow = $script:Scenario | Where-Object { $_.Name -eq 'workflow-2010' }
+
+        $workflow.Expect | Should -HaveCount 3
+        $workflow.Expect[0].Property | Should -BeExactly 'Workflow2010Count'
+        $workflow.Expect[1].Property | Should -BeExactly 'Workflow2010Examples'
+        $workflow.Expect[1].Operator | Should -BeExactly 'match'
+        $example = 'Lab approval (list LabWorkflowList, https://lab/sites/spslab-one): 0 running instance(s)'
+        (Test-SPSLabExpectation -Expectation $workflow.Expect[1] -Record ([PSCustomObject]@{ Workflow2010Examples = $example }) -Alert @()).Status | Should -Be 'PASS'
+        (Test-SPSLabExpectation -Expectation $workflow.Expect[1] -Record ([PSCustomObject]@{ Workflow2010Examples = 'Other (list LabWorkflowList, https://lab/sites/spslab-one): 0 running instance(s)' }) -Alert @()).Status | Should -Be 'FAIL'
+        (Test-SPSLabExpectation -Expectation $workflow.Expect[1] -Record ([PSCustomObject]@{ Workflow2010Examples = 'Lab approval (web https://lab/sites/spslab-one): 0 running instance(s)' }) -Alert @()).Status | Should -Be 'FAIL'
+        (Test-SPSLabExpectation -Expectation $workflow.Expect[1] -Record ([PSCustomObject]@{ Workflow2010Examples = '' }) -Alert @()).Status | Should -Be 'FAIL'
+        (Test-SPSLabExpectation -Expectation $workflow.Expect[1] -Record ([PSCustomObject]@{ Workflow2010Examples = $null }) -Alert @()).Status | Should -Be 'FAIL'
+    }
+
     It 'meet the expectations on the columns with the values that the inventory writes' {
         $receiver = $script:Scenario | Where-Object { $_.Name -eq 'event-receiver' }
         $master = $script:Scenario | Where-Object { $_.Name -eq 'custom-master' }

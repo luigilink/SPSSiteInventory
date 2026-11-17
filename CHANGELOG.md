@@ -51,6 +51,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `NotChecked`, `None`, `AssemblyNameAndKey`, `AssemblyName`). The value of `EventReceivers` and its
   weight do not change; only the receivers of lists and libraries are read, as before. The Usage,
   Configuration and Inspecting WSP packages wiki pages say it. (#132)
+- The report says what the `Workflow2010Count` and `Workflow2010RunningInstanceCount` signals count.
+  The totals did not say which workflows they were, so the site owners could not be told which list
+  or library to look at, and the counts could not be checked. A site collection now has
+  `Workflow2010Examples` (up to five associations, the counted ones with the most running instances
+  first: the workflow, its list or library and its web, and its running instances), the HTML detail
+  of a site collection shows it, and the report has a *Workflow associations* section (up to 200
+  rows). `Export-SPSInventoryReport` has a new `-WorkflowAssociations` parameter that writes
+  `*-workflow-associations-*` CSV and JSON files, one row for each classic workflow association of
+  a web, a list or a library, and lists them in the manifest (`Files.WorkflowAssociationsCsv`,
+  `Files.WorkflowAssociationsJson`). `Counted` says whether the association is in
+  `Workflow2010Count`: a previous version of a workflow, which SharePoint keeps as an association of
+  its own, is not, but its running instances are in `Workflow2010RunningInstanceCount`, so the
+  counted rows of a site collection add up to the first count and all its rows to the second. The
+  rows of the previous versions stop at 1000 for a site collection (the counts stay exact, and a
+  warning says so), and the detail never changes the counts. The workflow dataset of the report
+  pack gains `Workflow2010Examples`. The values and the weights of the signals do not change. The
+  Usage, Configuration and Lab Testing wiki pages say it. (#133)
 
 ## [2.1.0] - 2026-10-30
 
