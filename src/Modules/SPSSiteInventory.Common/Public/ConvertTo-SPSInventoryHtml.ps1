@@ -488,6 +488,8 @@
     $hasProfileMappingSection = $PSBoundParameters.ContainsKey('ProfilePropertyMappings')
     $hasReadinessSection = $isOnPrem -and $total -gt 0
     $readiness = if ($hasReadinessSection) { Get-SPSModernReadiness -InputObject $siteRecords } else { $null }
+    $scoreDriver = Get-SPSScoreDriver -InputObject $siteRecords
+    $hasScoreSection = $scoreDriver.Scored -gt 0
 
     $encTitle = ConvertTo-SPSHtmlText -Value $Title
     $encEnv = ConvertTo-SPSHtmlText -Value $EnvName
@@ -770,6 +772,9 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
     if ($waveKeys.Count -gt 0) {
         [void]$navigation.AppendLine(('<a href="#wave-plan">{0}</a>' -f $waveNavLabel))
     }
+    if ($hasScoreSection) {
+        [void]$navigation.AppendLine('<a href="#score-drivers">Score drivers</a>')
+    }
     [void]$navigation.AppendLine('<a href="#inventory-table">Inventory table</a>')
     if ($solutions.Count -gt 0) {
         [void]$navigation.AppendLine('<a href="#farm-solutions">Farm solutions</a>')
@@ -1040,6 +1045,58 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
             $waveLabel = if ($agg.Wave -eq 0) { '-' } else { [string]$agg.Wave }
             $partialLabel = if ($agg.PartialCount -gt 0) { [string]$agg.PartialCount } else { '-' }
             [void]$sb.AppendLine(('<tr><td class="num">{0}</td><td>{1}</td><td class="num">{2}</td><td class="num">{3}</td><td class="num">{4}</td></tr>' -f $waveLabel, (ConvertTo-SPSHtmlText -Value $agg.Name), $agg.Count, (ConvertTo-SPSHtmlText -Value (ConvertTo-SPSSizeText -SizeGB $agg.SizeGB)), $partialLabel))
+        }
+        [void]$sb.AppendLine('</tbody>')
+        [void]$sb.AppendLine('</table>')
+        [void]$sb.AppendLine('</div>')
+    }
+
+    # Score drivers: which signals make the score, and what decides each category. A signal that holds most of the score
+    # decides the category of the site collections that have it, which the other sections do not show.
+    if ($hasScoreSection) {
+        $formatShare = {
+            param([System.Double]$Share)
+            if ($Share -lt 0.005) { return '<1%' }
+            return '{0}%' -f [System.Math]::Round($Share * 100, 0, [System.MidpointRounding]::AwayFromZero).ToString($invariant)
+        }
+        [void]$sb.AppendLine('<h2 id="score-drivers">Score drivers</h2>')
+        [void]$sb.AppendLine('<p>The score of a site collection is the sum of the signals that it raises, each one multiplied by its weight (the Scoring section of the settings), and its category follows from the score, unless a blocking signal sets it. This section says what weighs in this inventory, by category and by signal.</p>')
+        $topSignal = $scoreDriver.Signal[0]
+        if ($topSignal.Share -ge 0.5) {
+            [void]$sb.AppendLine(('<div class="note warn"><strong>{0}</strong> holds <strong>{1}</strong> of the score of the inventory and weighs most in <strong>{2}</strong> of the <strong>{3}</strong> site collection(s) that have a score: it decides most of their categories. If the categories do not spread, review its weight in the Scoring section of the settings.</div>' -f (ConvertTo-SPSHtmlText -Value $topSignal.Name), (ConvertTo-SPSHtmlText -Value (& $formatShare $topSignal.Share)), $topSignal.TopSiteCount, $scoreDriver.Scored))
+        }
+        [void]$sb.AppendLine('<div class="table-scroll">')
+        [void]$sb.AppendLine('<table class="waves">')
+        [void]$sb.AppendLine('<thead><tr><th>Category</th><th class="num">Site collections</th><th class="num">Score</th><th>Signals that weigh most</th><th>Blocked by</th></tr></thead>')
+        [void]$sb.AppendLine('<tbody>')
+        foreach ($scoreCategory in $scoreDriver.Category) {
+            $scoreRange = if ($scoreCategory.MinScore -eq $scoreCategory.MaxScore) {
+                $scoreCategory.MinScore.ToString('0.##', $invariant)
+            }
+            else {
+                '{0} to {1}' -f $scoreCategory.MinScore.ToString('0.##', $invariant), $scoreCategory.MaxScore.ToString('0.##', $invariant)
+            }
+            # A signal under 1% of the category adds nothing to the answer.
+            $categorySignal = @($scoreCategory.Signal | Where-Object { $_.Share -ge 0.005 })
+            $categorySignalText = if ($categorySignal.Count -gt 0) { (@($categorySignal | ForEach-Object { '{0} {1}' -f $_.Name, (& $formatShare $_.Share) }) -join ', ') } else { '-' }
+            $categoryBlockingText = if ($scoreCategory.Blocking.Count -gt 0) { (@($scoreCategory.Blocking | ForEach-Object { '{0} ({1})' -f $_.Name, $_.SiteCount }) -join ', ') } else { '-' }
+            [void]$sb.AppendLine(('<tr><td><span class="badge b{0}">{1}</span></td><td class="num">{2}</td><td class="num">{3}</td><td>{4}</td><td>{5}</td></tr>' -f $scoreCategory.Category, (ConvertTo-SPSHtmlText -Value $scoreCategory.CategoryName), $scoreCategory.SiteCount, $scoreRange, (ConvertTo-SPSHtmlText -Value $categorySignalText), (ConvertTo-SPSHtmlText -Value $categoryBlockingText)))
+        }
+        [void]$sb.AppendLine('</tbody>')
+        [void]$sb.AppendLine('</table>')
+        [void]$sb.AppendLine('</div>')
+        $shownSignal = @($scoreDriver.Signal | Select-Object -First 10)
+        $signalListNote = 'What each signal added to the score, the one that added the most first.'
+        if ($scoreDriver.Signal.Count -gt $shownSignal.Count) {
+            $signalListNote = 'The <strong>{0}</strong> signals that added the most to the score are listed, of <strong>{1}</strong>.' -f $shownSignal.Count, $scoreDriver.Signal.Count
+        }
+        [void]$sb.AppendLine(('<p class="muted">{0} <em>Weighs most in</em> counts the site collections where the signal added more than any other.</p>' -f $signalListNote))
+        [void]$sb.AppendLine('<div class="table-scroll">')
+        [void]$sb.AppendLine('<table class="waves">')
+        [void]$sb.AppendLine('<thead><tr><th>Signal</th><th class="num">Site collections</th><th class="num">Share of the score</th><th class="num">Weighs most in</th></tr></thead>')
+        [void]$sb.AppendLine('<tbody>')
+        foreach ($scoreSignal in $shownSignal) {
+            [void]$sb.AppendLine(('<tr><td>{0}</td><td class="num">{1}</td><td class="num">{2}</td><td class="num">{3}</td></tr>' -f (ConvertTo-SPSHtmlText -Value $scoreSignal.Name), $scoreSignal.SiteCount, (ConvertTo-SPSHtmlText -Value (& $formatShare $scoreSignal.Share)), $scoreSignal.TopSiteCount))
         }
         [void]$sb.AppendLine('</tbody>')
         [void]$sb.AppendLine('</table>')
@@ -2110,6 +2167,9 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
         }
         if ($waveKeys.Count -gt 0) {
             [void]$nav.AppendLine(('<a href="{0}#wave-plan">{1}</a>' -f $entryLink, $waveNavLabel))
+        }
+        if ($hasScoreSection) {
+            [void]$nav.AppendLine(('<a href="{0}#score-drivers">Score drivers</a>' -f $entryLink))
         }
         [void]$nav.AppendLine(('<a href="{0}#inventory-table">Inventory table</a>' -f $entryLink))
         foreach ($bucket in $bucketList) {

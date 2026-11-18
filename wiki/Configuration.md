@@ -201,7 +201,9 @@ Scoring = @{
 
 Each key is a **signal** collected by `Get-SPSSiteCustomization`. The weight is multiplied
 by the signal value (booleans count as 1 when true) and summed into the site's score. Set a
-weight to `0` (or omit the key) to ignore a signal.
+weight to `0` (or omit the key) to ignore a signal. A signal with a large weight and a large
+value can hold most of the score: the *Score drivers* section of the HTML report gives the share of
+each signal, and says when one signal holds half of it or more (see [Usage](Usage)).
 
 Workflows are split by platform because their migration cost differs:
 

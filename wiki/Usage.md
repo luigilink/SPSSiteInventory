@@ -302,6 +302,18 @@ folder can be moved, zipped and sent. The manifest lists the pages in `Files.Inv
   - The **migration wave plan** gives, for each wave, the number of site collections, their
     content and how many of them are partial. The `Needs review` wave holds the Simple site
     collections whose assessment is partial, and the summary says how many wait there.
+  - The **score drivers** section says what makes the score, which the categories hide: one signal
+    with a large weight and a large value can hold most of it, and then decides the category of the
+    site collections that have it. A first table gives, for each category, its site collections, its
+    lowest and highest score, the signals that weigh most in it with their share (those under 1% are
+    left out) and the blocking signals that set it. A second table gives the ten signals that add the
+    most to the score: the site collections that raise it, its share of the score and the site
+    collections where it adds more than any other signal (*Weighs most in*). When one signal holds
+    half of the score or more, a note says so. If that is not what you want, change its weight in the
+    [Scoring section](Configuration#scoring-section) of the settings. The numbers come from the
+    `Reasons` column, which says what each signal added to the score of a site collection, so the
+    section has nothing to configure. A partial assessment gives a score that is a lower bound, as
+    everywhere else, and a failed one has no score and is not counted.
 - **Site collections** is the inventory table, right after the wave plan. Each site collection
   has one row with its title and URL, category, score, wave, size, template, last modification,
   status and reasons, **worst first** (not assessed, Blocking, Complex, Moderate, then Simple, by
