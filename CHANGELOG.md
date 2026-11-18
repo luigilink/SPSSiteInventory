@@ -5,6 +5,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-11-18
+
 ### Added
 
 - The scan says how long it takes, so that the duration of a large farm can be estimated from a small
