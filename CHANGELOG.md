@@ -26,15 +26,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The HTML report has a *Score drivers* section, between the migration wave plan and the inventory
   table, with a link in the navigation. A signal that has a large weight and a large value can hold
   most of the score, which nothing in the report showed: on a real farm one signal was about 90% of
-  the score, and the categories had nothing between them. The section gives, for each category, its site collections, its lowest and highest
-  score, the signals that weigh most in it with their share, and the blocking signals that set it, and,
-  for each signal (the ten that weigh most), its site collections, its share of the score and the site
-  collections where it weighs most. When one signal holds half of the score or more, a note says so and
-  points to its weight in the Scoring section of the settings. The numbers are read from the `Reasons`
-  of the records, which already say what each signal added, so the inventory files, the scores and the
-  categories do not change, and the section needs no setting. The `Reasons` round each contribution to
-  two decimals, so the site collections whose score has no readable signal (every contribution is
-  `+0`) are counted in a note and left out of the shares. (#138)
+  the score, and the categories had nothing between them. The section gives, for each category, its
+  site collections, its lowest and highest score, the signals that weigh most in it with their share,
+  and the blocking signals that set it, and, for each signal (the ten that weigh most), its site
+  collections, its share of the score and the site collections where it weighs most. When one signal
+  holds half of the score or more, a note says so and points to its weight in the Scoring section of
+  the settings. The numbers are read from the `Reasons` of the records, which already say what each
+  signal added, so the inventory files, the scores and the categories do not change, and the section
+  needs no setting. The `Reasons` round each contribution to two decimals, so the site collections
+  whose score has no readable signal (every contribution is `+0`) are counted in a note and left out
+  of the shares (the section is there for that note even when no signal can be read at all). (#138)
 
 ### Changed
 

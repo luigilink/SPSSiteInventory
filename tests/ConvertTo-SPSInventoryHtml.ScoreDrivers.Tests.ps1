@@ -230,4 +230,28 @@ Describe 'The Score drivers section of the HTML report' {
 
         $section | Should -Not -Match 'without a signal that can be read'
     }
+
+    It 'explains the scores that no signal explains when no contribution can be read at all, with the table of the categories and without the table of the signals' {
+        $records = @(
+            (New-Site -Name 'a' -Category 1 -CategoryName 'Simple' -Score 0.01 -Reasons 'PublishingPageCount=4 (+0); SizeGB=0.2 (+0)')
+            (New-Site -Name 'b' -Category 1 -CategoryName 'Simple' -Score 0.01 -Reasons 'PublishingPageCount=4 (+0)')
+        )
+
+        $html = Get-Html -Record $records
+        $section = Get-Section -Html $html
+
+        $section | Should -Not -BeNullOrEmpty
+        $html | Should -Match '<a href="#score-drivers">Score drivers</a>'
+        $section | Should -Match '<p class="muted"><strong>2</strong> site collection\(s\) have a score without a signal that can be read'
+        $section | Should -Match '<tr><td><span class="badge b1">Simple</span></td><td class="num">2</td><td class="num">0.01</td><td>-</td><td>-</td></tr>'
+        $section | Should -Not -Match '<th>Signal</th>'
+        $section | Should -Not -Match 'holds <strong>'
+    }
+
+    It 'still has no section when no site collection has a score at all' {
+        $html = Get-Html -Record @((New-Site -Name 'a' -Category 1 -CategoryName 'Simple' -Score 0 -Reasons ''))
+
+        $html | Should -Not -Match 'id="score-drivers"'
+        $html | Should -Not -Match 'href="#score-drivers"'
+    }
 }
