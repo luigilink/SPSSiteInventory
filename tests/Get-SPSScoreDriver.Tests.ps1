@@ -77,6 +77,38 @@ Describe 'Get-SPSScoreDriver by signal' {
         $result.Scored | Should -Be 1
     }
 
+    It 'does not count a contribution that the reasons rounded to zero as a signal, and counts the site collection as unresolved' {
+        # Four pages at 0.001 and 0.2 GB at 0.02 make a score of 0.01, and both contributions are written as (+0).
+        $result = Get-Driver -Record @(
+            (New-Site -Name 'tiny' -Score 0.01 -Category 1 -CategoryName 'Simple' -Reasons 'PageCount=4 (+0); SizeGB=0.2 (+0)')
+            (New-Site -Name 'raising' -Score 2 -Reasons 'Signal=2 (+2)')
+        )
+
+        $result.Assessed | Should -Be 2
+        $result.Scored | Should -Be 1
+        $result.Unresolved | Should -Be 1
+        $result.TotalScore | Should -Be 2
+        @($result.Signal | ForEach-Object { $_.Name }) | Should -Be @('Signal')
+        $result.Signal[0].SiteCount | Should -Be 1
+        $result.Signal[0].TopSiteCount | Should -Be 1
+        $result.Category[0].Signal | Should -HaveCount 0
+        $result.Category[0].SiteCount | Should -Be 1
+    }
+
+    It 'keeps the contributions that can be read in a site collection that also has rounded ones' {
+        $result = Get-Driver -Record @((New-Site -Name 'mixed' -Score 3.01 -Reasons 'Signal=3 (+3); PageCount=4 (+0)'))
+
+        $result.Scored | Should -Be 1
+        $result.Unresolved | Should -Be 0
+        @($result.Signal | ForEach-Object { $_.Name }) | Should -Be @('Signal')
+    }
+
+    It 'does not count a site collection without a score as unresolved' {
+        $result = Get-Driver -Record @((New-Site -Name 'plain' -Score 0 -Category 1 -CategoryName 'Simple' -Reasons ''))
+
+        $result.Unresolved | Should -Be 0
+    }
+
     It 'reads the numbers with the invariant culture, as the reasons are written, whatever the culture of the server' {
         $previous = [System.Threading.Thread]::CurrentThread.CurrentCulture
         try {

@@ -1051,8 +1051,7 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
         [void]$sb.AppendLine('</div>')
     }
 
-    # Score drivers: which signals make the score, and what decides each category. A signal that holds most of the score
-    # decides the category of the site collections that have it, which the other sections do not show.
+    # Score drivers: which signals make the score, by category and by signal, which the other sections do not show.
     if ($hasScoreSection) {
         $formatShare = {
             param([System.Double]$Share)
@@ -1063,7 +1062,7 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
         [void]$sb.AppendLine('<p>The score of a site collection is the sum of the signals that it raises, each one multiplied by its weight (the Scoring section of the settings), and its category follows from the score, unless a blocking signal sets it. This section says what weighs in this inventory, by category and by signal.</p>')
         $topSignal = $scoreDriver.Signal[0]
         if ($topSignal.Share -ge 0.5) {
-            [void]$sb.AppendLine(('<div class="note warn"><strong>{0}</strong> holds <strong>{1}</strong> of the score of the inventory and weighs most in <strong>{2}</strong> of the <strong>{3}</strong> site collection(s) that have a score: it decides most of their categories. If the categories do not spread, review its weight in the Scoring section of the settings.</div>' -f (ConvertTo-SPSHtmlText -Value $topSignal.Name), (ConvertTo-SPSHtmlText -Value (& $formatShare $topSignal.Share)), $topSignal.TopSiteCount, $scoreDriver.Scored))
+            [void]$sb.AppendLine(('<div class="note warn"><strong>{0}</strong> holds <strong>{1}</strong> of the score of the inventory and weighs most in <strong>{2}</strong> of the <strong>{3}</strong> site collection(s) that have a score. If this is not what you expect, review its weight in the Scoring section of the settings.</div>' -f (ConvertTo-SPSHtmlText -Value $topSignal.Name), (ConvertTo-SPSHtmlText -Value (& $formatShare $topSignal.Share)), $topSignal.TopSiteCount, $scoreDriver.Scored))
         }
         [void]$sb.AppendLine('<div class="table-scroll">')
         [void]$sb.AppendLine('<table class="waves">')
@@ -1076,11 +1075,15 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
             else {
                 '{0} to {1}' -f $scoreCategory.MinScore.ToString('0.##', $invariant), $scoreCategory.MaxScore.ToString('0.##', $invariant)
             }
-            # A signal under 1% of the category adds nothing to the answer.
-            $categorySignal = @($scoreCategory.Signal | Where-Object { $_.Share -ge 0.005 })
+            # A signal under 1% of the category adds nothing to the answer: the cut-off is on the share itself, not on
+            # the rounded percentage that is shown.
+            $categorySignal = @($scoreCategory.Signal | Where-Object { $_.Share -ge 0.01 })
             $categorySignalText = if ($categorySignal.Count -gt 0) { (@($categorySignal | ForEach-Object { '{0} {1}' -f $_.Name, (& $formatShare $_.Share) }) -join ', ') } else { '-' }
             $categoryBlockingText = if ($scoreCategory.Blocking.Count -gt 0) { (@($scoreCategory.Blocking | ForEach-Object { '{0} ({1})' -f $_.Name, $_.SiteCount }) -join ', ') } else { '-' }
-            [void]$sb.AppendLine(('<tr><td><span class="badge b{0}">{1}</span></td><td class="num">{2}</td><td class="num">{3}</td><td>{4}</td><td>{5}</td></tr>' -f $scoreCategory.Category, (ConvertTo-SPSHtmlText -Value $scoreCategory.CategoryName), $scoreCategory.SiteCount, $scoreRange, (ConvertTo-SPSHtmlText -Value $categorySignalText), (ConvertTo-SPSHtmlText -Value $categoryBlockingText)))
+            # The name of the category follows the target mode, as everywhere else in the report; the name of the record
+            # is only the fallback for a category number that the report does not know.
+            $scoreCategoryName = if ($categoryMeta.Contains([int]$scoreCategory.Category)) { $categoryMeta[[int]$scoreCategory.Category].Name } else { [string]$scoreCategory.CategoryName }
+            [void]$sb.AppendLine(('<tr><td><span class="badge b{0}">{1}</span></td><td class="num">{2}</td><td class="num">{3}</td><td>{4}</td><td>{5}</td></tr>' -f $scoreCategory.Category, (ConvertTo-SPSHtmlText -Value $scoreCategoryName), $scoreCategory.SiteCount, $scoreRange, (ConvertTo-SPSHtmlText -Value $categorySignalText), (ConvertTo-SPSHtmlText -Value $categoryBlockingText)))
         }
         [void]$sb.AppendLine('</tbody>')
         [void]$sb.AppendLine('</table>')
@@ -1101,6 +1104,9 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
         [void]$sb.AppendLine('</tbody>')
         [void]$sb.AppendLine('</table>')
         [void]$sb.AppendLine('</div>')
+        if ($scoreDriver.Unresolved -gt 0) {
+            [void]$sb.AppendLine(('<p class="muted"><strong>{0}</strong> site collection(s) have a score without a signal that can be read in their reasons (a signal that adds less than 0.005 is written as 0). They are in the category table, and not in the shares of the signals.</p>' -f $scoreDriver.Unresolved))
+        }
     }
 
     # Inventory table: one compact row per site collection, worst first. Opening a row shows the

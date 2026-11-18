@@ -1,4 +1,4 @@
-﻿# The HTML report has a Score drivers section: which signals make the score, and what decides each category. No farm is needed.
+﻿# The HTML report has a Score drivers section: which signals make the score, by category and by signal. No farm is needed.
 BeforeAll {
     $repoRoot = Split-Path -Path $PSScriptRoot -Parent
     Import-Module -Name (Join-Path $repoRoot 'src/Modules/SPSSiteInventory.Common/SPSSiteInventory.Common.psd1') -Force
@@ -25,7 +25,7 @@ BeforeAll {
         $Html.Substring($start, $end - $start)
     }
 
-    # A farm where one signal decides: the receivers are 105 of the 128.5 points that the signals add (82%).
+    # A farm where one signal weighs most: the receivers are 105 of the 128.5 points that the signals add (82%).
     $script:Sites = @(
         (New-Site -Name 'simple' -Category 1 -CategoryName 'Simple' -Score 0.5 -Reasons 'CustomPermissionLevelCount=5 (+0.5)')
         (New-Site -Name 'complex-a' -Score 100 -Reasons 'EventReceivers=60 (+90); Workflow2010Count=2 (+6); ScriptWebPartCount=2 (+3); CustomMasterPage=1 (+1)')
@@ -67,7 +67,7 @@ Describe 'The Score drivers section of the HTML report' {
     It 'tells which signal holds most of the score, and in how many site collections it weighs most' {
         $section = Get-Section -Html (Get-Html -Record $script:Sites)
 
-        $section | Should -Match '<div class="note warn"><strong>EventReceivers</strong> holds <strong>82%</strong> of the score of the inventory and weighs most in <strong>2</strong> of the <strong>4</strong> site collection\(s\) that have a score: it decides most of their categories\.'
+        $section | Should -Match '<div class="note warn"><strong>EventReceivers</strong> holds <strong>82%</strong> of the score of the inventory and weighs most in <strong>2</strong> of the <strong>4</strong> site collection\(s\) that have a score\. If this is not what you expect, review its weight in the Scoring section of the settings\.</div>'
     }
 
     It 'says nothing of the kind when no signal holds half of the score' {
@@ -141,9 +141,9 @@ Describe 'The Score drivers section of the HTML report' {
         $section | Should -Not -Match 'signals that added the most to the score are listed'
     }
 
-    It 'encodes the names of the signals, of the categories and of the blocking signals' {
+    It 'encodes the names of the signals, of a category that the report does not know and of the blocking signals' {
         $records = @(
-            (New-Site -Name 'a' -Score 5 -CategoryName 'C<b>at' -Reasons 'X<script>alert(1)</script>=1 (+5)')
+            (New-Site -Name 'a' -Category 9 -Score 5 -CategoryName 'C<b>at' -Reasons 'X<script>alert(1)</script>=1 (+5)')
             (New-Site -Name 'b' -Category 4 -CategoryName 'Blocking' -Score 5 -Reasons 'Y=1 (+5); blocking: B<i>x')
         )
 
@@ -172,5 +172,62 @@ Describe 'The Score drivers section of the HTML report' {
             $page.Html | Should -Match '(?s)report\.html#wave-plan.+?<a href="report\.html#score-drivers">Score drivers</a>.+?report\.html#inventory-table'
             $page.Html | Should -Not -Match '<h2 id="score-drivers">'
         }
+    }
+
+    It 'says what weighs most without claiming that it decides the categories' {
+        $section = Get-Section -Html (Get-Html -Record $script:Sites)
+
+        $section | Should -Match 'holds <strong>82%</strong>'
+        $section | Should -Not -Match 'decides'
+    }
+
+    It 'applies the 1% cut-off of a category to the share itself, not to the rounded percentage' {
+        # 1 of 128 is 0.78%: it is shown as 1% in the signal table, but it is under the cut-off of the category row.
+        $section = Get-Section -Html (Get-Html -Record @((New-Site -Name 'a' -Score 128 -Reasons 'Main=1 (+127); Near=1 (+1)')))
+
+        $section | Should -Match '<td>Main 99%</td>'
+        $section | Should -Not -Match '<td>Main 99%, Near'
+        $section | Should -Match '<tr><td>Near</td><td class="num">1</td><td class="num">1%</td><td class="num">0</td></tr>'
+    }
+
+    It 'keeps a signal that is just above 1% of the category' {
+        $section = Get-Section -Html (Get-Html -Record @((New-Site -Name 'a' -Score 100 -Reasons 'Main=1 (+99); Edge=1 (+1)')))
+
+        $section | Should -Match '<td>Main 99%, Edge 1%</td>'
+    }
+
+    It 'names the category as the target mode does, whatever the name that the record holds' {
+        $online = Get-Section -Html (Get-Html -Record $script:Sites -Mode 'SharePointOnline')
+        $onPrem = Get-Section -Html (Get-Html -Record $script:Sites -Mode 'SharePointOnPrem')
+
+        $online | Should -Match '<span class="badge b3">Complex</span>'
+        $onPrem | Should -Match '<span class="badge b3">Rebuild \(SPFx\)</span>'
+        $onPrem | Should -Not -Match '<span class="badge b3">Complex</span>'
+    }
+
+    It 'falls back to the name of the record for a category number that the report does not know' {
+        $records = @((New-Site -Name 'odd' -Category 9 -CategoryName 'Custom' -Score 5 -Reasons 'Signal=1 (+5)'))
+
+        $section = Get-Section -Html (Get-Html -Record $records)
+
+        $section | Should -Match '<span class="badge b9">Custom</span>'
+    }
+
+    It 'says how many site collections have a score without a signal that can be read' {
+        $records = @(
+            (New-Site -Name 'tiny' -Category 1 -CategoryName 'Simple' -Score 0.01 -Reasons 'PageCount=4 (+0); SizeGB=0.2 (+0)')
+            (New-Site -Name 'raising' -Score 5 -Reasons 'Signal=1 (+5)')
+        )
+
+        $section = Get-Section -Html (Get-Html -Record $records)
+
+        $section | Should -Match '<p class="muted"><strong>1</strong> site collection\(s\) have a score without a signal that can be read'
+        $section | Should -Not -Match '<tr><td>PageCount</td>'
+    }
+
+    It 'does not show the note about unreadable scores when every score can be explained' {
+        $section = Get-Section -Html (Get-Html -Record $script:Sites)
+
+        $section | Should -Not -Match 'without a signal that can be read'
     }
 }
