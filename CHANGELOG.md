@@ -5,6 +5,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- A scan that stops at its cap no longer makes the site collection `Partial`. The file version, page
+  layout, web part, HTML file, Excel file, audience targeting and site notebook scans each read at
+  most `LargeContentThresholds.MaxItemsFor...` items of a library or of a list, and reaching that
+  cap marked the whole site collection partial: on a real farm, 7 site collections out of 34 were
+  partial for the file version scan alone, and a Simple one waited in the `Needs review` wave for a
+  known limit although all its other signals were read. Reaching a cap means "at least this many",
+  so the count is now a lower bound, and the site collection stays `Complete`, keeps its category
+  and its wave, and has the warning that says where the scan stopped. The new `LowerBoundSignals`
+  column of the inventory, and of the `*-publishing-*`, `*-permissions-*`, `*-large-content-*` and
+  `*-collaboration-*` files, names the signals whose count is a lower bound (`FileVersionCount`,
+  `PublishingPageLayoutCount`, `ScriptWebPartCount`, `HtmlFileCount`, `LargeExcelFileCount`,
+  `AudienceTargetedListCount`, `AudienceTargetedItemCount` and `SiteNotebookCount`), separated by
+  semicolons, and is empty when there is none. The HTML report shows these counts as "at least" in
+  the detail of a site collection, and its summary says how many site collections reached a cap and
+  for which signals. The *Modern experience readiness* section and `ModernBlockers` say it for the
+  script web parts: the section tells in how many site collections the web part scan reached its
+  cap, where a script web part may have been missed, and `at least` goes before their number. A scan
+  that cannot read (an error, a list that cannot be opened) still makes the site collection
+  `Partial`, and a site collection can be both. The values and the weights of the signals do not
+  change, and the cap of the alert rows (`MaxAlertRowsPerSite`) is not part of this:
+  `SharePointAlertCount` stays exact and the rows that are cut still make the site collection
+  partial. A site collection that was partial only because of a cap is complete now, so a farm
+  reports fewer partial site collections and fewer in the `Needs review` wave, and the
+  `AssessmentPartial` alert is not raised for them. The Usage and Configuration wiki pages and the
+  example configuration files say it. (#137)
+
 ## [2.2.0] - 2026-11-17
 
 ### Added

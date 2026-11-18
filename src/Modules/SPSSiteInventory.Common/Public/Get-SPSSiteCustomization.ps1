@@ -148,8 +148,8 @@
         shown by its name when the User Profile service can give it, and by its ID when it cannot (the
         audience may have been deleted); a distribution list by its common name and a SharePoint group
         by its name. Hidden lists and the system catalogs are left out, and at most
-        MaxItemsForAudienceTargetingScanPerList items are read in each list: a list above it makes the
-        collection partial, and its counts are lower bounds.
+        MaxItemsForAudienceTargetingScanPerList items are read in each list: a list above it leaves the
+        counts as lower bounds (see LowerBoundSignals) and does not make the collection partial.
 
         SiteNotebookCount counts the site notebooks: the OneNote notebooks of the Site Assets library
         (a folder that SharePoint marks as a notebook) whose name ends in Notebook, as the SMAT scan
@@ -189,6 +189,15 @@
         Measure-SPSSiteComplexity. CustomizationInventoryComplete is false when a signal
         cannot be read; partial results are returned with warnings rather than aborting
         collection of the remaining site data.
+
+        A scan that stops at its cap (the MaxItemsFor settings of LargeContentThresholds) did not
+        fail: it read what it was allowed to read. Its count is a lower bound, a warning says where
+        the scan stopped, and the collection stays complete. LowerBoundSignals names the signals
+        whose count is a lower bound (FileVersionCount, PublishingPageLayoutCount,
+        ScriptWebPartCount, HtmlFileCount, LargeExcelFileCount, AudienceTargetedListCount,
+        AudienceTargetedItemCount and SiteNotebookCount), in that order and separated by a
+        semicolon, or is empty. A scan that cannot read still marks the collection partial, and
+        one that reached its cap in a library and failed in another is both.
 
         ContentTypes contains web definitions and list bindings, including standard
         types. ContentTypeCount counts distinct web-definition IDs in the collection;
@@ -374,6 +383,7 @@
         UsesCustomFarmFeature    = $false
         UsesFullTrustCode        = $false
         CustomizationInventoryComplete = $true
+        LowerBoundSignals        = ''
         ContentTypeCount         = 0
         ListContentTypeBindingCount = 0
         ContentTypeInventoryComplete = $true
@@ -451,6 +461,8 @@
     $maxNotebookScan = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'MaxItemsForNotebookScanPerLibrary' -DefaultValue 2000 -MinimumValue 1)
     $maxHtmlFileScan = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'MaxItemsForHtmlFileScanPerLibrary' -DefaultValue 2000 -MinimumValue 1)
     $maxAlertRows = [int](Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'MaxAlertRowsPerSite' -DefaultValue 5000 -MinimumValue 1)
+    # A scan that reaches its cap leaves a count that is a lower bound: the signal is named here, and the site collection stays complete.
+    $lowerBoundSignal = [System.Collections.Generic.HashSet[System.String]]::new([System.StringComparer]::Ordinal)
     # Names SharePoint provisions with a None type, in English; PermissionLevels.BuiltInNames adds localized ones.
     $builtInPermissionLevelNames = @(
         'View Only', 'Approve', 'Manage Hierarchy', 'Restricted Read', 'Restricted Interfaces for Translation',
@@ -1220,8 +1232,8 @@
                                 }
 
                                 if ($hasUnscannedItems) {
-                                    $signals.CustomizationInventoryComplete = $false
-                                    Write-Warning -Message "File-version scan stopped on '$listTitle' in web '$($web.Url)' after $maxItemsForVersionScan item(s). Increase LargeContentThresholds.MaxItemsForVersionScanPerLibrary to scan more items."
+                                    [void]$lowerBoundSignal.Add('FileVersionCount')
+                                    Write-Warning -Message "File-version scan stopped on '$listTitle' in web '$($web.Url)' after $maxItemsForVersionScan item(s). Increase LargeContentThresholds.MaxItemsForVersionScanPerLibrary to scan more items; the count is a lower bound."
                                 }
                             }
                         }
@@ -1292,8 +1304,8 @@
                                 } while ($null -ne $pagePosition -and $pageScanCount -lt $maxPublishingPageScan)
 
                                 if ($hasUnscannedPages) {
-                                    $signals.CustomizationInventoryComplete = $false
-                                    Write-Warning -Message "Publishing page layout scan stopped on '$listTitle' in web '$($web.Url)' after $maxPublishingPageScan item(s). Increase LargeContentThresholds.MaxItemsForPublishingPageScanPerLibrary to scan more pages."
+                                    [void]$lowerBoundSignal.Add('PublishingPageLayoutCount')
+                                    Write-Warning -Message "Publishing page layout scan stopped on '$listTitle' in web '$($web.Url)' after $maxPublishingPageScan item(s). Increase LargeContentThresholds.MaxItemsForPublishingPageScanPerLibrary to scan more pages; the count is a lower bound."
                                 }
                                 # A failed field read comes back as $null, so a library where no page reports a layout is suspect.
                                 if ($pageScanCount -gt 0 -and $pagesWithLayout -eq 0) {
@@ -1351,8 +1363,8 @@
                                 } while ($null -ne $webPartPagePosition -and $webPartPageScanCount -lt $maxWebPartPageScan)
 
                                 if ($hasUnscannedWebParts) {
-                                    $signals.CustomizationInventoryComplete = $false
-                                    Write-Warning -Message "Web part scan stopped on '$listTitle' in web '$($web.Url)' after $maxWebPartPageScan page(s). Increase LargeContentThresholds.MaxItemsForWebPartScanPerLibrary to read more pages."
+                                    [void]$lowerBoundSignal.Add('ScriptWebPartCount')
+                                    Write-Warning -Message "Web part scan stopped on '$listTitle' in web '$($web.Url)' after $maxWebPartPageScan page(s). Increase LargeContentThresholds.MaxItemsForWebPartScanPerLibrary to read more pages; the count is a lower bound."
                                 }
                             }
                             catch {
@@ -1455,8 +1467,8 @@
                                 } while ($null -ne $htmlPosition -and $htmlScanCount -lt $maxHtmlFileScan)
 
                                 if ($hasUnscannedHtml) {
-                                    $signals.CustomizationInventoryComplete = $false
-                                    Write-Warning -Message "HTML file scan stopped on '$listTitle' in web '$($web.Url)' after $maxHtmlFileScan file(s). Increase LargeContentThresholds.MaxItemsForHtmlFileScanPerLibrary to count more files."
+                                    [void]$lowerBoundSignal.Add('HtmlFileCount')
+                                    Write-Warning -Message "HTML file scan stopped on '$listTitle' in web '$($web.Url)' after $maxHtmlFileScan file(s). Increase LargeContentThresholds.MaxItemsForHtmlFileScanPerLibrary to count more files; the count is a lower bound."
                                 }
                             }
                             catch {
@@ -1507,8 +1519,8 @@
                                 } while ($null -ne $excelPosition -and $excelScanCount -lt $maxExcelFileScan)
 
                                 if ($hasUnscannedExcel) {
-                                    $signals.CustomizationInventoryComplete = $false
-                                    Write-Warning -Message "Excel file scan stopped on '$listTitle' in web '$($web.Url)' after $maxExcelFileScan workbook(s). Increase LargeContentThresholds.MaxItemsForExcelFileScanPerLibrary to check more workbooks."
+                                    [void]$lowerBoundSignal.Add('LargeExcelFileCount')
+                                    Write-Warning -Message "Excel file scan stopped on '$listTitle' in web '$($web.Url)' after $maxExcelFileScan workbook(s). Increase LargeContentThresholds.MaxItemsForExcelFileScanPerLibrary to check more workbooks; the count is a lower bound."
                                 }
                             }
                             catch {
@@ -1573,7 +1585,8 @@
                                     } while ($null -ne $audiencePosition -and $audienceScanCount -lt $maxAudienceScan)
 
                                     if ($hasUnscannedAudienceItems) {
-                                        $signals.CustomizationInventoryComplete = $false
+                                        [void]$lowerBoundSignal.Add('AudienceTargetedListCount')
+                                        [void]$lowerBoundSignal.Add('AudienceTargetedItemCount')
                                         Write-Warning -Message "Audience targeting scan stopped on '$listTitle' in web '$($web.Url)' after $maxAudienceScan item(s). Increase LargeContentThresholds.MaxItemsForAudienceTargetingScanPerList to check more items; the counts are lower bounds."
                                     }
                                 }
@@ -1644,7 +1657,7 @@
                                 } while ($null -ne $notebookPosition -and $notebookScanCount -lt $maxNotebookScan)
 
                                 if ($hasUnscannedNotebookFolders) {
-                                    $signals.CustomizationInventoryComplete = $false
+                                    [void]$lowerBoundSignal.Add('SiteNotebookCount')
                                     Write-Warning -Message "Site notebook scan stopped on '$listTitle' in web '$($web.Url)' after $maxNotebookScan folder(s). Increase LargeContentThresholds.MaxItemsForNotebookScanPerLibrary to check more folders; the count is a lower bound."
                                 }
                             }
@@ -1917,6 +1930,12 @@
             Sort-Object -Property @{ Expression = { $_.PageCount }; Descending = $true }, @{ Expression = { $_.Name } } |
             Select-Object -First 5 |
             ForEach-Object { '{0} ({1})' -f $_.Name, $_.PageCount }
+    ) -join '; '
+    # The names come in a fixed order, so that two runs of the same farm give the same text.
+    $signals.LowerBoundSignals = @(
+        'FileVersionCount', 'PublishingPageLayoutCount', 'ScriptWebPartCount', 'HtmlFileCount', 'LargeExcelFileCount',
+        'AudienceTargetedListCount', 'AudienceTargetedItemCount', 'SiteNotebookCount' |
+            Where-Object { $lowerBoundSignal.Contains($_) }
     ) -join '; '
     $modernBlockers = Get-SPSModernBlocker -Signals $signals
     $signals.ModernBlockerCount = $modernBlockers.Count

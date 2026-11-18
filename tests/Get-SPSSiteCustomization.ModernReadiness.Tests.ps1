@@ -479,7 +479,7 @@ Describe 'Get-SPSSiteCustomization script web parts' {
         $result.Signals.ScriptWebPartCount | Should -Be 2
     }
 
-    It 'stops at the cap of each library, marks the collection partial and names the setting' {
+    It 'stops at the cap of each library, keeps the collection complete, names the count as a lower bound and names the setting' {
         $pages = 1..3 | ForEach-Object { New-TestPage -Url "/sites/team/SitePages/P$_.aspx" -WebParts @((New-TestScriptEditor)) }
         $library = New-TestLibrary -Batches @((New-TestPageBatch -Pages $pages))
         $web = New-TestWeb -Lists @($library)
@@ -488,19 +488,53 @@ Describe 'Get-SPSSiteCustomization script web parts' {
 
         $result.Signals.ScriptWebPartCount | Should -Be 2
         $pages[2].Reads | Should -Be 0
-        $result.Signals.CustomizationInventoryComplete | Should -BeFalse
+        $result.Signals.CustomizationInventoryComplete | Should -BeTrue
+        $result.Signals.LowerBoundSignals | Should -BeExactly 'ScriptWebPartCount'
+        $result.Signals.ModernBlockers | Should -BeExactly 'Script web parts (at least 2)'
         ($result.Warnings -join ';') | Should -Match 'MaxItemsForWebPartScanPerLibrary'
+        ($result.Warnings -join ';') | Should -Match 'the count is a lower bound'
     }
 
-    It 'marks the collection partial when the cap is reached with more pages to come' {
+    It 'does not name the count as a lower bound when the library has exactly as many pages as the cap' {
+        $pages = 1..2 | ForEach-Object { New-TestPage -Url "/sites/team/SitePages/P$_.aspx" -WebParts @((New-TestScriptEditor)) }
+        $library = New-TestLibrary -Batches @((New-TestPageBatch -Pages $pages))
+        $web = New-TestWeb -Lists @($library)
+
+        $result = Get-Signal -Site (New-TestSite -Webs @($web)) -Threshold @{ MaxItemsForWebPartScanPerLibrary = 2 }
+
+        $result.Signals.ScriptWebPartCount | Should -Be 2
+        $result.Signals.CustomizationInventoryComplete | Should -BeTrue
+        $result.Signals.LowerBoundSignals | Should -BeExactly ''
+        $result.Signals.ModernBlockers | Should -BeExactly 'Script web parts (2)'
+        ($result.Warnings -join ';') | Should -Not -Match 'stopped'
+    }
+
+    It 'names the count as a lower bound when the cap is reached with more pages to come' {
         $pages = 1..2 | ForEach-Object { New-TestPage -Url "/sites/team/SitePages/P$_.aspx" }
         $library = New-TestLibrary -Batches @((New-TestPageBatch -Pages $pages -Position 'next'))
         $web = New-TestWeb -Lists @($library)
 
         $result = Get-Signal -Site (New-TestSite -Webs @($web)) -Threshold @{ MaxItemsForWebPartScanPerLibrary = 2 }
 
-        $result.Signals.CustomizationInventoryComplete | Should -BeFalse
+        $result.Signals.CustomizationInventoryComplete | Should -BeTrue
+        $result.Signals.LowerBoundSignals | Should -BeExactly 'ScriptWebPartCount'
         $library.Queries | Should -HaveCount 1
+    }
+
+    It 'is partial and a lower bound when a page cannot be read and the cap is reached' {
+        $pages = @(
+            (New-TestPage -Url '/sites/team/SitePages/Broken.aspx' -Unreadable)
+            (New-TestPage -Url '/sites/team/SitePages/Good.aspx' -WebParts @((New-TestScriptEditor)))
+            (New-TestPage -Url '/sites/team/SitePages/Left.aspx' -WebParts @((New-TestScriptEditor)))
+        )
+        $library = New-TestLibrary -Batches @((New-TestPageBatch -Pages $pages))
+        $web = New-TestWeb -Lists @($library)
+
+        $result = Get-Signal -Site (New-TestSite -Webs @($web)) -Threshold @{ MaxItemsForWebPartScanPerLibrary = 2 }
+
+        $result.Signals.ScriptWebPartCount | Should -Be 1
+        $result.Signals.CustomizationInventoryComplete | Should -BeFalse
+        $result.Signals.LowerBoundSignals | Should -BeExactly 'ScriptWebPartCount'
     }
 
     It 'reads 200 pages of each library by default' {
@@ -512,7 +546,8 @@ Describe 'Get-SPSSiteCustomization script web parts' {
 
         $pages[199].Reads | Should -Be 1
         $pages[200].Reads | Should -Be 0
-        $result.Signals.CustomizationInventoryComplete | Should -BeFalse
+        $result.Signals.CustomizationInventoryComplete | Should -BeTrue
+        $result.Signals.LowerBoundSignals | Should -BeExactly 'ScriptWebPartCount'
     }
 
     It 'marks the collection partial, names the page and still reads the others, when a page cannot be read' {

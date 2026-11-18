@@ -58,7 +58,7 @@
 
     $override = [ordered]@{
         AssessmentPartial = @{
-            Remediation = 'Review the warnings of the site record: counts are lower bounds and the category may be understated. A Modern-ready site collection is held in the Needs review wave until it is read in full. Fix the unreadable item or raise the matching cap, then run the inventory again.'
+            Remediation = 'Review the warnings of the site record: counts are lower bounds and the category may be understated. A Modern-ready site collection is held in the Needs review wave until it is read in full. Fix the unreadable item, or raise LargeContentThresholds.MaxAlertRowsPerSite when the warning says that alert rows were cut, then run the inventory again.'
         }
         Workflow2010 = @{
             Message     = 'SharePoint 2010 workflows are deprecated in SharePoint Server Subscription Edition: Microsoft stopped supporting them on 14 July 2026.'

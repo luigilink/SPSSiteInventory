@@ -115,3 +115,37 @@ Describe 'Get-SPSModernBlocker' {
         ((Get-Blocker -Signals @{ PublishingInfrastructureEnabled = $true }).Kind | Where-Object Name -eq 'Publishing').Items | Should -Be 0
     }
 }
+
+Describe 'Get-SPSModernBlocker and a web part scan that reached its cap' {
+    It 'says that the number of script web parts is a lower bound when LowerBoundSignals names ScriptWebPartCount' {
+        $result = Get-Blocker -Signals @{ ScriptWebPartCount = 3; LowerBoundSignals = 'FileVersionCount; ScriptWebPartCount' }
+
+        $result.Summary | Should -BeExactly 'Script web parts (at least 3)'
+        $result.Kind[0].Items | Should -Be 3
+        $result.Kind[0].LowerBound | Should -BeTrue
+    }
+
+    It 'gives the number alone when another scan reached its cap, or none' -ForEach @(
+        @{ Case = 'another scan'; Text = 'FileVersionCount; HtmlFileCount' }
+        @{ Case = 'no scan'; Text = '' }
+        @{ Case = 'a null'; Text = $null }
+    ) {
+        $result = Get-Blocker -Signals @{ ScriptWebPartCount = 3; LowerBoundSignals = $Text }
+
+        $result.Summary | Should -BeExactly 'Script web parts (3)' -Because $Case
+        $result.Kind[0].LowerBound | Should -BeFalse -Because $Case
+    }
+
+    It 'names no kind for a lower bound whose count is 0, and says no lower bound for the other kinds' {
+        (Get-Blocker -Signals @{ ScriptWebPartCount = 0; LowerBoundSignals = 'ScriptWebPartCount' }).Count | Should -Be 0
+
+        $result = Get-Blocker -Signals @{
+            CustomMasterPage = $true; AlternateCssUrlCount = 2; PublishingWebCount = 3; XsltListViewCount = 4
+            ClassicExperienceOptOutCount = 2; ClassicExperienceListCount = 1
+            LowerBoundSignals = 'ScriptWebPartCount; XsltListViewCount; AlternateCssUrlCount; ClassicExperienceListCount'
+        }
+
+        $result.Count | Should -Be 6
+        @($result.Kind | Where-Object { $_.LowerBound }) | Should -HaveCount 0
+    }
+}

@@ -72,6 +72,25 @@ Describe 'The inventory record' {
         }
     }
 
+    It 'names the signals of the capped scans in the order of the scans, and each one is a field of the record' {
+        $customization = Join-Path (Split-Path -Path $PSScriptRoot -Parent) 'src/Modules/SPSSiteInventory.Common/Public/Get-SPSSiteCustomization.ps1'
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile($customization, [ref]$null, [ref]$null)
+        $assignment = @($ast.FindAll({ param ($node) $node -is [System.Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -eq '$signals.LowerBoundSignals' }, $true))
+        $assignment | Should -HaveCount 1
+        $name = @($assignment[0].FindAll({ param ($node) $node -is [System.Management.Automation.Language.StringConstantExpressionAst] -and $node.Parent -is [System.Management.Automation.Language.ArrayLiteralAst] }, $true) | ForEach-Object { [System.String]$_.Value })
+
+        $name | Should -Be @('FileVersionCount', 'PublishingPageLayoutCount', 'ScriptWebPartCount', 'HtmlFileCount', 'LargeExcelFileCount', 'AudienceTargetedListCount', 'AudienceTargetedItemCount', 'SiteNotebookCount')
+        foreach ($signal in $name) {
+            $script:Record[0] | Should -Contain $signal -Because "$signal is named in LowerBoundSignals, so it must be a field of the record"
+        }
+    }
+
+    It 'has a field for the signals whose count is a lower bound, in both records, and documents it in the usage page' {
+        $script:Record[0] | Should -Contain 'LowerBoundSignals'
+        $script:Record[1] | Should -Contain 'LowerBoundSignals'
+        $script:Usage | Should -Match '(?m)^\| `LowerBoundSignals` \|'
+    }
+
     It 'has a field for the large Excel files, in both records, documents it and keeps it out of the score of both examples' {
         foreach ($signal in @('LargeExcelFileCount', 'LargeExcelFileExamples')) {
             $script:Record[0] | Should -Contain $signal

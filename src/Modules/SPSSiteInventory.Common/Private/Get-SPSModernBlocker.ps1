@@ -21,7 +21,12 @@
         a semicolon, with how many webs, views, web parts or lists are behind each when it is a
         count, and Kind, one object per kind found with its Name, its Label, the number of Items
         behind it (null for a custom master page, which is a state and not a count), the Unit of
-        those items and its Text. A signal that is missing counts as 0.
+        those items, LowerBound (true when the number is a lower bound, see below) and its Text.
+        A signal that is missing counts as 0.
+
+        When the web part scan of the site collection reached its cap (LowerBoundSignals names
+        ScriptWebPartCount), the number of script web parts is a lower bound: the kind says so,
+        and its Text reads "Script web parts (at least 3)".
 
         The function is pure: it reads no SharePoint object, so it can be tested without a farm.
 
@@ -30,7 +35,7 @@
 
         .PARAMETER Signals
         The signals collected for the site collection (see Get-SPSSiteCustomization), or the fields
-        of its inventory record put in a hashtable.
+        of its inventory record put in a hashtable. LowerBoundSignals is read when it is there.
 
         .EXAMPLE
         (Get-SPSModernBlocker -Signals @{ CustomMasterPage = $true; XsltListViewCount = 3 }).Summary
@@ -49,43 +54,46 @@
         return '{0} {1}' -f $Count, $(if ($Count -eq 1) { $Singular } else { $Plural })
     }
 
+    $lowerBound = @(Get-SPSLowerBoundSignalName -Value $Signals['LowerBoundSignals'])
     $kinds = [System.Collections.Generic.List[object]]::new()
 
     $customMasterPage = [double](ConvertTo-SPSSignalNumber -Value $Signals['CustomMasterPage'])
     if ($customMasterPage -gt 0) {
-        $kinds.Add([PSCustomObject]@{ Name = 'CustomMasterPage'; Label = 'Custom master page'; Items = $null; Unit = ''; Text = 'Custom master page' })
+        $kinds.Add([PSCustomObject]@{ Name = 'CustomMasterPage'; Label = 'Custom master page'; Items = $null; Unit = ''; LowerBound = $false; Text = 'Custom master page' })
     }
 
     $alternateCss = [double](ConvertTo-SPSSignalNumber -Value $Signals['AlternateCssUrlCount'])
     if ($alternateCss -gt 0) {
-        $kinds.Add([PSCustomObject]@{ Name = 'AlternateCssUrl'; Label = 'Alternate CSS URL'; Items = $alternateCss; Unit = 'web(s)'; Text = ('Alternate CSS URL ({0})' -f (& $quantity $alternateCss 'web' 'webs')) })
+        $kinds.Add([PSCustomObject]@{ Name = 'AlternateCssUrl'; Label = 'Alternate CSS URL'; Items = $alternateCss; Unit = 'web(s)'; LowerBound = $false; Text = ('Alternate CSS URL ({0})' -f (& $quantity $alternateCss 'web' 'webs')) })
     }
 
     $publishingInfrastructure = [double](ConvertTo-SPSSignalNumber -Value $Signals['PublishingInfrastructureEnabled'])
     $publishingWeb = [double](ConvertTo-SPSSignalNumber -Value $Signals['PublishingWebCount'])
     if ($publishingInfrastructure -gt 0 -or $publishingWeb -gt 0) {
         $publishingText = if ($publishingWeb -gt 0) { 'Publishing features ({0})' -f (& $quantity $publishingWeb 'web' 'webs') } else { 'Publishing features' }
-        $kinds.Add([PSCustomObject]@{ Name = 'Publishing'; Label = 'Publishing features'; Items = $publishingWeb; Unit = 'web(s)'; Text = $publishingText })
+        $kinds.Add([PSCustomObject]@{ Name = 'Publishing'; Label = 'Publishing features'; Items = $publishingWeb; Unit = 'web(s)'; LowerBound = $false; Text = $publishingText })
     }
 
     $xsltView = [double](ConvertTo-SPSSignalNumber -Value $Signals['XsltListViewCount'])
     if ($xsltView -gt 0) {
-        $kinds.Add([PSCustomObject]@{ Name = 'XsltListView'; Label = 'XSLT list views'; Items = $xsltView; Unit = 'view(s)'; Text = ('XSLT list views ({0})' -f $xsltView) })
+        $kinds.Add([PSCustomObject]@{ Name = 'XsltListView'; Label = 'XSLT list views'; Items = $xsltView; Unit = 'view(s)'; LowerBound = $false; Text = ('XSLT list views ({0})' -f $xsltView) })
     }
 
     $scriptWebPart = [double](ConvertTo-SPSSignalNumber -Value $Signals['ScriptWebPartCount'])
     if ($scriptWebPart -gt 0) {
-        $kinds.Add([PSCustomObject]@{ Name = 'ScriptWebPart'; Label = 'Script web parts'; Items = $scriptWebPart; Unit = 'web part(s)'; Text = ('Script web parts ({0})' -f $scriptWebPart) })
+        $scriptWebPartCapped = $lowerBound -contains 'ScriptWebPartCount'
+        $scriptWebPartText = if ($scriptWebPartCapped) { 'Script web parts (at least {0})' -f $scriptWebPart } else { 'Script web parts ({0})' -f $scriptWebPart }
+        $kinds.Add([PSCustomObject]@{ Name = 'ScriptWebPart'; Label = 'Script web parts'; Items = $scriptWebPart; Unit = 'web part(s)'; LowerBound = $scriptWebPartCapped; Text = $scriptWebPartText })
     }
 
     $optOut = [double](ConvertTo-SPSSignalNumber -Value $Signals['ClassicExperienceOptOutCount'])
     if ($optOut -gt 0) {
-        $kinds.Add([PSCustomObject]@{ Name = 'ClassicExperienceOptOut'; Label = 'Opted out of modern lists'; Items = $optOut; Unit = 'opt-out(s)'; Text = ('Opted out of modern lists ({0})' -f $optOut) })
+        $kinds.Add([PSCustomObject]@{ Name = 'ClassicExperienceOptOut'; Label = 'Opted out of modern lists'; Items = $optOut; Unit = 'opt-out(s)'; LowerBound = $false; Text = ('Opted out of modern lists ({0})' -f $optOut) })
     }
 
     $classicList = [double](ConvertTo-SPSSignalNumber -Value $Signals['ClassicExperienceListCount'])
     if ($classicList -gt 0) {
-        $kinds.Add([PSCustomObject]@{ Name = 'ClassicExperienceList'; Label = 'Lists forced to classic'; Items = $classicList; Unit = 'list(s)'; Text = ('Lists forced to classic ({0})' -f $classicList) })
+        $kinds.Add([PSCustomObject]@{ Name = 'ClassicExperienceList'; Label = 'Lists forced to classic'; Items = $classicList; Unit = 'list(s)'; LowerBound = $false; Text = ('Lists forced to classic ({0})' -f $classicList) })
     }
 
     return [PSCustomObject]@{

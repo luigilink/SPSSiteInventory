@@ -817,6 +817,26 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
     if ($needsReviewCount -gt 0) {
         [void]$sb.AppendLine(('<div class="summary-total"><strong>{0}</strong> {1} site collection(s) with a partial assessment wait in the <strong>Needs review</strong> wave until they are read in full.</div>' -f $needsReviewCount, (ConvertTo-SPSHtmlText -Value $categoryMeta[1].Name)))
     }
+    # A scan that reached its cap leaves a count that is a lower bound, and the site collection stays complete.
+    $lowerBoundSiteCount = 0
+    $lowerBoundTotal = @{}
+    foreach ($lowerBoundSite in $siteRecords) {
+        $lowerBoundName = @(Get-SPSLowerBoundSignalName -Value $lowerBoundSite.LowerBoundSignals)
+        if ($lowerBoundName.Count -gt 0) {
+            $lowerBoundSiteCount++
+            foreach ($name in $lowerBoundName) {
+                $lowerBoundTotal[$name] = 1 + [int]$lowerBoundTotal[$name]
+            }
+        }
+    }
+    if ($lowerBoundSiteCount -gt 0) {
+        $lowerBoundText = @(
+            $lowerBoundTotal.Keys |
+                Sort-Object -Property @{ Expression = { $lowerBoundTotal[$_] }; Descending = $true }, @{ Expression = { $_ } } |
+                ForEach-Object { '{0} ({1})' -f $_, $lowerBoundTotal[$_] }
+        ) -join ', '
+        [void]$sb.AppendLine(('<div class="summary-total"><strong>{0}</strong> site collection(s) reached the cap of a scan, so some counts are lower bounds there (shown as &quot;at least&quot; in the detail of the site collection): {1}. A cap alone does not make a site collection partial or change its category and wave; raise the caps of LargeContentThresholds to read more.</div>' -f $lowerBoundSiteCount, (ConvertTo-SPSHtmlText -Value $lowerBoundText)))
+    }
     $excludedParts = @()
     if ($ExcludedPersonalSiteCount -gt 0) {
         $excludedParts += '<strong>{0}</strong> personal site(s)' -f $ExcludedPersonalSiteCount
@@ -943,11 +963,17 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
         if ($readiness.NotAssessed -gt 0) {
             $failedNote = ' <strong>{0}</strong> site collection(s) whose assessment failed are not counted.' -f $readiness.NotAssessed
         }
+        # A web part scan that reached its cap did not read every page: a script web part may be left, and the count of those found is a lower bound.
+        $webPartCapNote = ''
+        if ($readiness.WebPartCapSiteCount -gt 0) {
+            $webPartCapNote = ' The script web part scan reached its cap in <strong>{0}</strong> site collection(s): a script web part may have been missed there.' -f $readiness.WebPartCapSiteCount
+        }
         if ($readiness.WithBlocker -eq 0) {
             $partialNote = ''
             if ($partialCount -gt 0) {
                 $partialNote = ' The assessment of <strong>{0}</strong> site collection(s) is partial: a blocker may have been missed there.' -f $partialCount
             }
+            $partialNote += $webPartCapNote
             if ($readiness.Assessed -eq 0) {
                 [void]$sb.AppendLine(('<p class="muted">No site collection was assessed, so no blocker of the modern experience was detected.{0}</p>' -f $failedNote))
             }
@@ -960,6 +986,7 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
             if ($partialCount -gt 0) {
                 $readinessNote += ' The counts of a site collection whose assessment is partial are lower bounds.'
             }
+            $readinessNote += $webPartCapNote
             [void]$sb.AppendLine(('<p><strong>{0}</strong> of <strong>{1}</strong> assessed site collection(s) have at least one blocker of the modern experience: something that keeps a page or a list in the classic experience, and that has to be rebuilt to leave it. A blocker is counted once per kind, so a site collection with a custom master page and 40 XSLT list views has two.{2}</p>' -f $readiness.WithBlocker, $readiness.Assessed, $readinessNote))
             [void]$sb.AppendLine('<div class="table-scroll">')
             [void]$sb.AppendLine('<table class="waves">')
@@ -967,6 +994,7 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
             [void]$sb.AppendLine('<tbody>')
             foreach ($kind in $readiness.Kind) {
                 $itemsText = if ($null -eq $kind.Items) { '-' } elseif ($kind.SiteCount -eq 0) { '-' } else { '{0} {1}' -f ([double]$kind.Items).ToString('0.##', $invariant), $kind.Unit }
+                if ($kind.LowerBoundSiteCount -gt 0 -and $itemsText -ne '-') { $itemsText = 'at least ' + $itemsText }
                 [void]$sb.AppendLine(('<tr><td>{0}</td><td class="num">{1}</td><td class="num">{2}</td></tr>' -f (ConvertTo-SPSHtmlText -Value $kind.Label), $kind.SiteCount, (ConvertTo-SPSHtmlText -Value $itemsText)))
             }
             [void]$sb.AppendLine('</tbody>')
