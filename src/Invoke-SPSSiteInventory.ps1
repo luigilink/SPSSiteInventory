@@ -91,6 +91,18 @@ $commonModule = Import-Module -Name (Join-Path -Path $PSScriptRoot -ChildPath 'M
 $context = Initialize-SPSScript -ScriptName 'Invoke-SPSSiteInventory' -ScriptRoot $PSScriptRoot
 
 try {
+    # The run is timed as a whole and phase by phase: the log says how long each phase took, and the manifest has the durations.
+    $scanStartedAt = Get-Date
+    $scanWatch = [System.Diagnostics.Stopwatch]::StartNew()
+    $phaseWatch = [System.Diagnostics.Stopwatch]::StartNew()
+    $phaseTiming = [System.Collections.Generic.List[object]]::new()
+    $endPhase = {
+        param ([System.String]$Name, [System.String]$Detail = '')
+        & $commonModule {
+            param ($PhaseName, $Watch, $Rows, $PhaseDetail)
+            Complete-SPSScanPhase -Name $PhaseName -Stopwatch $Watch -Timing $Rows -Detail $PhaseDetail
+        } $Name $phaseWatch $phaseTiming $Detail
+    }
     Add-SPSInventoryEvent -Message "SPSSiteInventory $($context.Version) started by $($context.CurrentUser) on $($context.ServerTarget)." -Level Information
     Add-SPSInventoryEvent -Message "Loading settings from '$ConfigPath'." -Level Information
     $settings = Get-SPSInventorySetting -Path $ConfigPath
@@ -109,6 +121,7 @@ try {
     Add-SPSInventoryEvent -Message ("Report folder: '{0}'{1}." -f $outputFolder.Path, $(if ($outputFolder.IsDefault) { ' (OutputFolder is empty: the Reports folder next to the script)' } else { '' })) -Level Information
 
     Import-SPSSharePointCommand
+    & $endPhase 'Loading the settings and the SharePoint commands'
 
     Add-SPSInventoryEvent -Message 'Building farm-solution map.' -Level Information
     $solutionMapParams = @{ CustomSolutionPrefix = $settings.CustomSolutionPrefix }
@@ -121,6 +134,7 @@ try {
     $solutionMap = Get-SPSFarmSolutionMap @solutionMapParams
     $customFeatureId = @($solutionMap | Where-Object { $_.IsCustom } | ForEach-Object { $_.FeatureIds } | Sort-Object -Unique)
     $fullTrustFeatureId = @($solutionMap | Where-Object { $_.IsFullTrustCode } | ForEach-Object { $_.FeatureIds } | Sort-Object -Unique)
+    & $endPhase 'Building the farm-solution map' ('{0} solution(s)' -f @($solutionMap).Count)
 
     # The packages are read now, so that a wrong path shows before the scan, and a failure here must not stop the site report.
     $solutionPackages = @()
@@ -196,6 +210,10 @@ try {
         }
     }
 
+    if ($ExportSolutionPackage -or $packagePath.Count -gt 0) {
+        & $endPhase 'Inspecting the solution packages' ('{0} package(s)' -f $solutionPackages.Count)
+    }
+
     Add-SPSInventoryEvent -Message 'Enumerating site collections.' -Level Information
     $templateParity = if ($settings.ContainsKey('TemplateParity')) {
         $settings.TemplateParity
@@ -225,6 +243,7 @@ try {
     } $reportSettings
     $exclusion = @{ PersonalSites = 0; SiteMasters = 0 }
     $inventory = @(Get-SPSSiteInventory -WebApplicationUrl $settings.WebApplicationUrl -TemplateParity $templateParity -IncludePersonalSite:$scopeOption.IncludePersonalSites -IncludeSiteMaster:$scopeOption.IncludeSiteMasters -Exclusion $exclusion)
+    & $endPhase 'Enumerating the site collections' ('{0} site collection(s)' -f @($inventory).Count)
     if ($exclusion.PersonalSites -gt 0 -or $exclusion.SiteMasters -gt 0) {
         $leftOut = @()
         $includeSetting = @()
@@ -277,6 +296,7 @@ try {
         }
         Invoke-SPSiteAssessment -Inventory $Inventory -CustomFeatureId $CustomFeatureId -FullTrustFeatureId $FullTrustFeatureId -Scoring $Scoring -LargeContentThresholds $LargeContentThresholds -PermissionLevels $PermissionLevels -SharePointAlertSettings $SharePointAlertSettings -SolutionAssemblyIndex $solutionAssemblyIndex -TargetMode $TargetMode
     } $inventory $customFeatureId $fullTrustFeatureId $settings.Scoring $largeContentThresholds $permissionLevels $sharePointAlertSettings $targetMode $solutionPackages
+    & $endPhase 'Collecting the customization signals' ('{0} site collection(s)' -f @($assessment.SiteDuration).Count)
     $scored = @($assessment.Inventory)
     $contentTypes = @($assessment.ContentTypes)
     $managedMetadataLists = @($assessment.ManagedMetadataLists)
@@ -329,6 +349,7 @@ try {
     foreach ($bcsWarning in @($bcs.Warnings)) {
         Add-SPSInventoryEvent -Message $bcsWarning -Level Warning
     }
+    & $endPhase 'Reading the Business Connectivity Services definitions'
 
     # Secure Store target applications are farm-wide too; a failure here must not stop the site report either.
     Add-SPSInventoryEvent -Message 'Reading Secure Store target applications.' -Level Information
@@ -342,6 +363,7 @@ try {
     foreach ($secureStoreWarning in @($secureStore.Warnings)) {
         Add-SPSInventoryEvent -Message $secureStoreWarning -Level Warning
     }
+    & $endPhase 'Reading the Secure Store target applications'
 
     # The profile property mappings of the User Profile service are farm-wide too; a failure here must not stop the site report either.
     Add-SPSInventoryEvent -Message 'Reading the profile property mappings.' -Level Information
@@ -355,6 +377,7 @@ try {
     foreach ($profileWarning in @($profileMappings.Warnings)) {
         Add-SPSInventoryEvent -Message $profileWarning -Level Warning
     }
+    & $endPhase 'Reading the profile property mappings'
 
     if (@($sharePointAlerts | Where-Object { -not [string]::IsNullOrEmpty([string]$_.UserLoginName) }).Count -gt 0) {
         Add-SPSInventoryEvent -Message 'The SharePoint alerts files contain the login names of the alert owners, which are personal data. Set SharePointAlerts.IncludeUserLogin to $false in the settings to leave them out.' -Level Information
@@ -366,7 +389,15 @@ try {
     if ($solutionPackages.Count -gt 0) {
         $packageExportParams['SolutionPackages'] = @($solutionPackages)
     }
-    $output = Export-SPSInventoryReport -InputObject @($scored) -OutputFolder $outputFolder.Path -BaseName ('SPSSiteInventory-' + $settings.EnvName) -EnvName $settings.EnvName -SolutionMap @($solutionMap) -ContentTypes $contentTypes -ManagedMetadataLists $managedMetadataLists -ExternalLists $externalLists -SharePointAlerts $sharePointAlerts -EventReceiverClasses $eventReceiverClasses -WorkflowAssociations $workflowAssociations -BcsApplications @($bcs.Applications) -BcsInventoryComplete ([bool]$bcs.Complete) -SecureStoreApplications @($secureStore.Applications) -SecureStoreInventoryComplete ([bool]$secureStore.Complete) -ProfilePropertyMappings @($profileMappings.Mappings) -ProfileInventoryComplete ([bool]$profileMappings.Complete) -SolutionJsonPath $solutionOutput.JsonPath -ExcludedPersonalSiteCount ([int]$exclusion.PersonalSites) -ExcludedSiteMasterCount ([int]$exclusion.SiteMasters) -HtmlSplitThreshold $reportOption.HtmlSplitThreshold -HtmlRowsPerPage $reportOption.HtmlRowsPerPage -TargetMode $targetMode @packageExportParams
+    # The manifest is written by the export, so its durations stop here: the time to write the reports is in the log only.
+    $scanTiming = [PSCustomObject]@{
+        StartedAt = $scanStartedAt.ToString('o')
+        ScanSeconds = [System.Math]::Round($scanWatch.Elapsed.TotalSeconds, 1)
+        Phase = @($phaseTiming.ToArray())
+        Site = @($assessment.SiteDuration)
+    }
+    $output = Export-SPSInventoryReport -InputObject @($scored) -OutputFolder $outputFolder.Path -BaseName ('SPSSiteInventory-' + $settings.EnvName) -EnvName $settings.EnvName -SolutionMap @($solutionMap) -ContentTypes $contentTypes -ManagedMetadataLists $managedMetadataLists -ExternalLists $externalLists -SharePointAlerts $sharePointAlerts -EventReceiverClasses $eventReceiverClasses -WorkflowAssociations $workflowAssociations -BcsApplications @($bcs.Applications) -BcsInventoryComplete ([bool]$bcs.Complete) -SecureStoreApplications @($secureStore.Applications) -SecureStoreInventoryComplete ([bool]$secureStore.Complete) -ProfilePropertyMappings @($profileMappings.Mappings) -ProfileInventoryComplete ([bool]$profileMappings.Complete) -SolutionJsonPath $solutionOutput.JsonPath -ExcludedPersonalSiteCount ([int]$exclusion.PersonalSites) -ExcludedSiteMasterCount ([int]$exclusion.SiteMasters) -HtmlSplitThreshold $reportOption.HtmlSplitThreshold -HtmlRowsPerPage $reportOption.HtmlRowsPerPage -TargetMode $targetMode -Timing $scanTiming @packageExportParams
+    & $endPhase 'Writing the reports'
 
     Add-SPSInventoryEvent -Message "Inventory complete. CSV: $($output.CsvPath) | JSON: $($output.JsonPath) | HTML: $($output.HtmlPath)" -Level Information
     if (@($output.HtmlPagePaths).Count -gt 0) {
@@ -389,6 +420,8 @@ try {
     elseif (-not $ExportSolutionPackage -and $packagePath.Count -eq 0 -and @($solutionMap).Count -gt 0) {
         Add-SPSInventoryEvent -Message ('The farm-solution report only gives what SharePoint says about each solution. The WSP packages say more: the strong name of every assembly, the features of a solution that is not deployed, the receivers and the .NET framework. To inspect them, run this script again with -ExportSolutionPackage: it saves the packages of the farm solutions in a temporary folder, reads them and removes the folder as soon as they are read, so that none goes in the reports folder. To inspect packages that you already have, give their folder to -SolutionPackagePath, or use Get-SPSSolutionPackageInfo alone. See the wiki page "Inspecting WSP packages offline".') -Level Information
     }
+    $scanSeconds = [System.Math]::Round($scanWatch.Elapsed.TotalSeconds, 1)
+    Add-SPSInventoryEvent -Message (& $commonModule { param ($Rows, $Total) Format-SPSScanTiming -Phase $Rows -Seconds $Total } $phaseTiming.ToArray() $scanSeconds) -Level Information
 }
 catch {
     Add-SPSInventoryEvent -Message "Inventory failed: $($_.Exception.Message)" -Level Error

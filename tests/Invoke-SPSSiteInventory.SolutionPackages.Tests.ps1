@@ -247,7 +247,7 @@ Describe 'Invoke-SPSSiteInventory.ps1 and the solution packages' {
         $export = @(Get-CommandText -Name 'Export-SPSInventoryReport')
 
         $export | Should -HaveCount 1
-        $export[0].Extent.Text | Should -Match '-TargetMode \$targetMode @packageExportParams$'
+        $export[0].Extent.Text | Should -Match '-TargetMode \$targetMode -Timing \$scanTiming @packageExportParams$'
         $script:Text | Should -Match "\`$packageExportParams = @\{\}\s+if \(\`$solutionPackages\.Count -gt 0\) \{\s+\`$packageExportParams\['SolutionPackages'\] = @\(\`$solutionPackages\)"
         $script:Text.IndexOf('$packageExportParams = @{}') | Should -BeLessThan $script:Text.IndexOf('$output = Export-SPSInventoryReport')
     }
