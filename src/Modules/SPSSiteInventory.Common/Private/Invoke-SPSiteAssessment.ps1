@@ -6,6 +6,11 @@
         .DESCRIPTION
         Processes the site records from Get-SPSSiteInventory. A failed site is retained
         without a score and does not prevent the remaining sites from being assessed.
+
+        Each site collection is timed, from the moment it is opened to the moment it is disposed of: the log gets
+        a line with its duration, and the result has them all in SiteDuration (the URL, the seconds and the
+        assessment status of each, in the order they were read; a web application failure row is not a site
+        collection and has none). The log ends with the average and the three slowest.
     #>
     [CmdletBinding()]
     [OutputType([System.Management.Automation.PSCustomObject])]
@@ -62,11 +67,13 @@
     $scored = [System.Collections.Generic.List[object]]::new()
     $siteTotal = $Inventory.Count
     $siteIndex = 0
+    $siteDuration = [System.Collections.Generic.List[object]]::new()
     $largeSiteSizeThresholdGb = Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'LargeSiteSizeGB' -DefaultValue 100 -MinimumValue 0
 
     try {
         foreach ($item in $Inventory) {
             $siteIndex++
+            $scoredBefore = $scored.Count
             $inventoryScope = 'SiteCollection'
             if ($null -ne $item.PSObject.Properties['InventoryScope']) {
                 $inventoryScope = [string]$item.InventoryScope
@@ -88,6 +95,8 @@
                 $siteWarnings.Add("Site inventory partial: $($item.SiteInventoryWarnings)")
             }
 
+            # The duration starts here, so that the progress line of the log (and the first write of the Event Log) is not in it.
+            $siteWatch = [System.Diagnostics.Stopwatch]::StartNew()
             try {
                 if ($inventoryScope -eq 'WebApplication') {
                     throw "Site collection enumeration failed for web application '$($item.WebApp)': $($item.SiteInventoryWarnings)"
@@ -399,11 +408,31 @@
                         $null = Add-SPSInventoryEvent -Message "Could not dispose site collection '$($item.Url)': $($_.Exception.Message)" -Level Warning
                     }
                 }
+                # The duration includes the opening and the disposal of the site collection. A row that could not even be written counts as failed.
+                if ($inventoryScope -ne 'WebApplication') {
+                    $siteWatch.Stop()
+                    $siteSeconds = [System.Math]::Round($siteWatch.Elapsed.TotalSeconds, 1)
+                    $siteStatus = if ($scored.Count -gt $scoredBefore) { [System.String]$scored[$scored.Count - 1].AssessmentStatus } else { 'Failed' }
+                    $siteDuration.Add([PSCustomObject]@{ Url = [System.String]$item.Url; Seconds = $siteSeconds; AssessmentStatus = $siteStatus })
+                    Add-SPSInventoryEvent -Message ('Site collection {0}/{1} done in {2} ({3}): {4}' -f $siteIndex, $siteTotal, (Format-SPSDuration -Seconds $siteSeconds), $siteStatus, $item.Url) -Level Information | Out-Host
+                }
             }
         }
     }
     finally {
         Write-Progress -Id 2 -Activity 'Collecting customization and scoring site collections' -Completed
+    }
+
+    if ($siteDuration.Count -gt 0) {
+        $slowest = @(
+            $siteDuration |
+                Sort-Object -Property @{ Expression = { $_.Seconds }; Descending = $true }, @{ Expression = { $_.Url } } |
+                Select-Object -First 3 |
+                ForEach-Object { '{0} ({1})' -f $_.Url, (Format-SPSDuration -Seconds $_.Seconds) }
+        )
+        # The average of the durations that are recorded, so that the log of each site and the rows that are not site collections are not in it.
+        $averageSeconds = ($siteDuration | Measure-Object -Property Seconds -Average).Average
+        Add-SPSInventoryEvent -Message ('{0} site collection(s) read, {1} on average. The slowest: {2}.' -f $siteDuration.Count, (Format-SPSDuration -Seconds $averageSeconds), ($slowest -join ', ')) -Level Information | Out-Host
     }
 
     [PSCustomObject]@{
@@ -414,5 +443,6 @@
         SharePointAlerts = $sharePointAlerts.ToArray()
         EventReceiverClasses = $eventReceiverClasses.ToArray()
         WorkflowAssociations = $workflowAssociations.ToArray()
+        SiteDuration = $siteDuration.ToArray()
     }
 }

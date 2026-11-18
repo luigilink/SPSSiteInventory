@@ -15,6 +15,8 @@ The orchestrator:
 5. collects customization signals, content-type definitions and list bindings, and scores each site;
 6. exports CSV, JSON and a self-contained HTML report to the configured output folder.
 
+The scan is timed (see [How long a scan takes](#how-long-a-scan-takes)).
+
 Add `-ExportSolutionPackage` to inspect the WSP packages of the farm in the same run: the scan saves them in a temporary folder, reads them and removes the folder as soon as they are read, so that none goes in the reports folder. Add `-SolutionPackagePath <folder>` for packages that you already have (see [Inspecting WSP packages offline](Solution-Packages#from-the-main-scan)). Without either, the scan ends by telling how, when the farm has solutions.
 
 Progress is reported for both site-collection enumeration and per-site assessment.
@@ -29,6 +31,42 @@ wave of its category. Failed site assessments have no category or score and are 
 in the `Not assessed` wave. Review collector warning details, transcript progress and
 the report's status fields before planning migration waves.
 
+## How long a scan takes
+
+The scan is timed, as a whole and phase by phase, so that the duration of a large farm can be
+estimated from a small one. The log says it:
+
+- one line for each site collection when its signals are collected, with its number, how long it
+  took (from the moment it is opened to the moment it is released, without the lines of the log), its assessment status and its
+  URL, for example `Site collection 5/34 done in 38 s (Complete): https://intranet/sites/team`. A
+  site collection that failed has its line too, and the number counts the rows of a web application
+  whose site list could not be read, which are not site collections and have no line;
+- when the collection ends, one line with the number of site collections, the average of their
+  durations and the three slowest;
+- one line when each phase ends, such as `Collecting the customization signals: done in 18 min 20 s
+  (34 site collection(s)).` The phases are loading the settings and the SharePoint commands, the
+  farm-solution map, the inspection of the solution packages (only when they are inspected), the
+  enumeration of the site collections, the collection of the signals, the processing of the results
+  (the migration waves), the three farm-wide reads (BCS, Secure Store, profile property mappings) and
+  the writing of the reports;
+- the last line of the log gives the total and the phases: `Scan finished in 19 min 04 s. By phase: ...`.
+
+Durations under 10 seconds keep a decimal (`3.4 s`); longer ones are written as `38 s`,
+`2 min 05 s` or `1 h 03 min 12 s`, whatever the language of the server.
+
+The manifest has the same durations as numbers in a `Timing` object:
+
+| Field | Meaning |
+| --- | --- |
+| `StartedAt` | When the run started (ISO 8601). |
+| `ScanSeconds` | Seconds from the start of the run until the first report is written. The time that the reports take is not in it, because the manifest is one of them: the last line of the log has it. |
+| `Phase` | One row for each phase that ended before the reports, with its `Name` and its `Seconds`, in the order they ran. |
+| `Site` | One row for each site collection, with its `Url`, its `Seconds` and its `AssessmentStatus`, in the order they were read. |
+
+`Timing` is a new field of the manifest, so `ReportPackVersion` stays `1.0`. `Export-SPSInventoryReport`
+gives `Timing` the value of its `-Timing` parameter, and `null` without it. The inventory files and the
+HTML report do not hold the durations.
+
 ## Output files
 
 Each run writes the site inventory in three timestamped formats, a modular JSON
@@ -39,7 +77,7 @@ report pack, plus a dedicated farm-solution report, to the output folder:
 | `*.csv` | Site inventory for review in Excel; one row per site collection. |
 | `*.json` | Site inventory for downstream automation (for example feeding migration wave planning). |
 | `*.html` | A shareable, self-contained report to read: summary and risk indicators, alerts, migration wave plan, a compact table of the site collections (worst first, one row to open for the details) and the detail sections. A farm with more than 3000 site collections gets an entry page and table pages in the same folder, named after it (`*-sites-<category>-<n>.html`): see [Reading the HTML report](#reading-the-html-report) and the [`Report` section](Configuration#report-section). |
-| `*-manifest-*.json` | Report-pack manifest with the layout version (`ReportPackVersion`), generation metadata, top-level counters and file references. |
+| `*-manifest-*.json` | Report-pack manifest with the layout version (`ReportPackVersion`), generation metadata, top-level counters, the durations of the scan (`Timing`) and file references. |
 | `*-sites-*.json` | Site inventory dataset used by the dashboard/report-pack consumers. |
 | `*-auth-*.json` | Authentication-by-web-application dataset (zone/provider summary + collection counts). |
 | `*-workflows-*.json` | Workflow/template-focused dataset (`Workflow2010Count`, `Workflow2010Examples`, `Workflow2013Count`, running-instance counts, template-compatibility and template-language review fields, status, category). |
