@@ -1101,7 +1101,10 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
             $hasCappedSignal = @($shownSignal | Where-Object { $_.CappedSiteCount -gt 0 }).Count -gt 0
             $cappedNote = if ($hasCappedSignal) { ' <em>Capped in</em> counts the site collections where the cap of the signal (<code>Caps</code> in the Scoring section of the settings) cut what it added.' } else { '' }
             $cappedHeader = if ($hasCappedSignal) { '<th class="num">Capped in</th>' } else { '' }
-            [void]$sb.AppendLine(('<p class="muted">{0} <em>Weighs most in</em> counts the site collections where the signal added more than any other.{1}</p>' -f $signalListNote, $cappedNote))
+            # A weight below 0 takes points off the score: its share is negative, and the shares are parts of the sizes of what the signals contributed.
+            $hasNegativeSignal = @($shownSignal | Where-Object { $_.Total -lt 0 }).Count -gt 0
+            $negativeNote = if ($hasNegativeSignal) { ' A negative share is that of a signal that took points off the score (a weight below 0): the shares are parts of the sum of the sizes of what the signals contributed, and the signals are ordered by that size.' } else { '' }
+            [void]$sb.AppendLine(('<p class="muted">{0} <em>Weighs most in</em> counts the site collections where the signal added more than any other.{1}{2}</p>' -f $signalListNote, $cappedNote, $negativeNote))
             [void]$sb.AppendLine('<div class="table-scroll">')
             [void]$sb.AppendLine('<table class="waves">')
             [void]$sb.AppendLine(('<thead><tr><th>Signal</th><th class="num">Site collections</th><th class="num">Share of the score</th><th class="num">Weighs most in</th>{0}</tr></thead>' -f $cappedHeader))

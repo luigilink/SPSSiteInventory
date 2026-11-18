@@ -18,22 +18,29 @@
         (+0). Such a contribution cannot be told from nothing: it is not counted as a signal, and a site
         collection whose score has no signal that can be read is counted in Unresolved instead of Scored.
 
+        A weight below 0 gives a contribution below 0, which a score can be made of as well. The signals are
+        ordered, and the top ones are told, by the size of what they contributed, and a share is a part of the
+        sum of the sizes of all the contributions: with contributions that are all above 0 it is the part of the
+        score that the signal makes, and a contribution below 0 has a share below 0. Whatever the sign of the
+        score, even 0, every share is defined and the signals are never left out for that.
+
         It looks at the site collections that were assessed (a failed assessment has no score, and a web
         application row is not a site collection) and returns:
 
         - Assessed, Scored, Unresolved and TotalScore: the site collections that have a category, those of
-          them that have at least one signal that can be read, those that have a score but none (the
-          contributions were rounded to zero, or the reasons are missing), and the sum of what the signals
-          added;
+          them that have at least one signal that can be read, those that have a score other than 0 but no
+          signal that can be read (the contributions were rounded to zero, or the reasons are missing), and the
+          sum of what the signals added;
         - Signal: one row for each signal that added something to at least one site collection, with its
-          Name, SiteCount, Total (what it added in all of them), Share (its part of TotalScore, from 0 to 1),
-          TopSiteCount (the site collections where it added the most; a tie goes to the first name) and
-          CappedSiteCount (the site collections where its cap cut what it added), the largest Total first;
+          Name, SiteCount, Total (what it added in all of them), Share (its Total divided by the sum of the sizes
+          of all the contributions, from -1 to 1), TopSiteCount (the site collections where its contribution is
+          the largest; a tie goes to the first name) and CappedSiteCount (the site collections where its cap cut
+          what it added), the largest in size first;
         - Category: one row for each category that has a site collection, in the order of the categories,
           with its Category number, CategoryName, SiteCount, MinScore and MaxScore (the lowest and the highest
-          Score of the record), Signal (the three that added the most in those site collections, each with its
-          Name and its Share of what they added there) and Blocking (the blocking signals of those site
-          collections, each with its Name and SiteCount, the most frequent first).
+          Score of the record), Signal (the three that contributed the most in size in those site collections,
+          each with its Name and its Share of the sizes of what was contributed there) and Blocking (the blocking
+          signals of those site collections, each with its Name and SiteCount, the most frequent first).
 
         The function is pure: it reads no farm. The numbers of the reasons are read with the invariant
         culture, as Measure-SPSSiteComplexity writes them.
@@ -59,7 +66,7 @@
     $invariant = [System.Globalization.CultureInfo]::InvariantCulture
     $contributionPattern = [System.Text.RegularExpressions.Regex]::new('^(?<name>[^=;|]+)=(?<value>\S+) \(\+(?<amount>-?\d+(?:\.\d+)?)(?<capped>, capped from -?\d+(?:\.\d+)?)?\)$')
     $blockingPrefix = 'blocking: '
-    $byValueThenName = @(@{ Expression = { $_.Value }; Descending = $true }, @{ Expression = { $_.Key } })
+    $bySizeThenName = @(@{ Expression = { [System.Math]::Abs($_.Value) }; Descending = $true }, @{ Expression = { $_.Key } })
 
     $signalTotal = @{}
     $signalSite = @{}
@@ -70,6 +77,7 @@
     $scored = 0
     $unresolved = 0
     $totalScore = 0.0
+    $totalSize = 0.0
 
     foreach ($record in $InputObject) {
         if ($null -eq $record) {
@@ -117,7 +125,7 @@
         }
         if (-not $categoryData.ContainsKey($categoryNumber)) {
             $categoryData[$categoryNumber] = @{
-                Name = [string]$record.CategoryName; Count = 0; Min = $score; Max = $score; Total = 0.0
+                Name = [string]$record.CategoryName; Count = 0; Min = $score; Max = $score; Size = 0.0
                 Signal = @{}; Blocking = @{}
             }
         }
@@ -130,13 +138,13 @@
         }
 
         if ($contribution.Count -eq 0) {
-            if ($score -gt 0) {
+            if ($score -ne 0) {
                 $unresolved++
             }
             continue
         }
         $scored++
-        $top = @($contribution.GetEnumerator() | Sort-Object -Property $byValueThenName | Select-Object -First 1)[0]
+        $top = @($contribution.GetEnumerator() | Sort-Object -Property $bySizeThenName | Select-Object -First 1)[0]
         $signalTop[$top.Key] = 1 + [int]$signalTop[$top.Key]
         foreach ($name in $contribution.Keys) {
             $amount = [double]$contribution[$name]
@@ -146,8 +154,9 @@
                 $signalCapped[$name] = 1 + [int]$signalCapped[$name]
             }
             $category.Signal[$name] = [double]$category.Signal[$name] + $amount
-            $category.Total += $amount
+            $category.Size += [System.Math]::Abs($amount)
             $totalScore += $amount
+            $totalSize += [System.Math]::Abs($amount)
         }
     }
 
@@ -157,12 +166,12 @@
                 Name            = [string]$name
                 SiteCount       = [int]$signalSite[$name]
                 Total           = [double]$signalTotal[$name]
-                Share           = if ($totalScore -gt 0) { [double]$signalTotal[$name] / $totalScore } else { 0.0 }
+                Share           = if ($totalSize -gt 0) { [double]$signalTotal[$name] / $totalSize } else { 0.0 }
                 TopSiteCount    = [int]$signalTop[$name]
                 CappedSiteCount = [int]$signalCapped[$name]
             }
         }
-    ) | Sort-Object -Property @{ Expression = { $_.Total }; Descending = $true }, @{ Expression = { $_.Name } }
+    ) | Sort-Object -Property @{ Expression = { [System.Math]::Abs($_.Total) }; Descending = $true }, @{ Expression = { $_.Name } }
 
     $categoryRow = @(
         foreach ($number in ($categoryData.Keys | Sort-Object)) {
@@ -174,12 +183,12 @@
                 MinScore     = [double]$category.Min
                 MaxScore     = [double]$category.Max
                 Signal       = @(
-                    $category.Signal.GetEnumerator() | Sort-Object -Property $byValueThenName | Select-Object -First 3 | ForEach-Object {
-                        [PSCustomObject]@{ Name = [string]$_.Key; Share = if ($category.Total -gt 0) { [double]$_.Value / $category.Total } else { 0.0 } }
+                    $category.Signal.GetEnumerator() | Sort-Object -Property $bySizeThenName | Select-Object -First 3 | ForEach-Object {
+                        [PSCustomObject]@{ Name = [string]$_.Key; Share = if ($category.Size -gt 0) { [double]$_.Value / $category.Size } else { 0.0 } }
                     }
                 )
                 Blocking     = @(
-                    $category.Blocking.GetEnumerator() | Sort-Object -Property $byValueThenName | ForEach-Object {
+                    $category.Blocking.GetEnumerator() | Sort-Object -Property $bySizeThenName | ForEach-Object {
                         [PSCustomObject]@{ Name = [string]$_.Key; SiteCount = [int]$_.Value }
                     }
                 )

@@ -256,3 +256,74 @@ Describe 'Get-SPSScoreDriver and the caps of the scoring' {
         $receivers.CappedSiteCount | Should -Be 1
     }
 }
+
+Describe 'Get-SPSScoreDriver and the contributions below 0' {
+    It 'gives a share that is a part of the sum of the sizes of the contributions, whatever the sign of the score, and orders the signals by size' {
+        $result = Get-Driver -Record @((New-Site -Name 'a' -Score -6 -Reasons 'Cap=1 (+4); Discount=1 (+-10)'))
+
+        $result.Scored | Should -Be 1
+        $result.TotalScore | Should -Be -6
+        @($result.Signal | ForEach-Object { $_.Name }) | Should -Be @('Discount', 'Cap')
+        $discount, $cap = @($result.Signal)
+        $discount.Total | Should -Be -10
+        $discount.Share | Should -BeGreaterThan -0.7143
+        $discount.Share | Should -BeLessThan -0.7142
+        $discount.TopSiteCount | Should -Be 1
+        $cap.Share | Should -BeGreaterThan 0.2857
+        $cap.Share | Should -BeLessThan 0.2858
+        $cap.TopSiteCount | Should -Be 0
+        ($discount.Share + $cap.Share) | Should -BeGreaterThan -0.4287
+        ($discount.Share + $cap.Share) | Should -BeLessThan -0.4285
+    }
+
+    It 'gives a share to each signal when the contributions cancel each other out' {
+        $result = Get-Driver -Record @((New-Site -Name 'a' -Score 0 -Reasons 'Up=1 (+5); Down=1 (+-5)'))
+
+        $result.Scored | Should -Be 1
+        $result.Unresolved | Should -Be 0
+        $result.TotalScore | Should -Be 0
+        @($result.Signal | ForEach-Object { $_.Name }) | Should -Be @('Down', 'Up')
+        $result.Signal[0].Share | Should -Be -0.5
+        $result.Signal[1].Share | Should -Be 0.5
+        @($result.Category[0].Signal | ForEach-Object { $_.Name }) | Should -Be @('Down', 'Up')
+        $result.Category[0].Signal[0].Share | Should -Be -0.5
+        $result.Category[0].Signal[1].Share | Should -Be 0.5
+    }
+
+    It 'gives shares to the signals of a category whose contributions add up to less than 0, even when the inventory adds up to more' {
+        $result = Get-Driver -Record @(
+            (New-Site -Name 'big' -Score 100 -Reasons 'Big=1 (+100)')
+            (New-Site -Name 'discounted' -Category 1 -CategoryName 'Simple' -Score -6 -Reasons 'Cap=1 (+4); Discount=1 (+-10)')
+        )
+
+        $simple = @($result.Category | Where-Object { $_.Category -eq 1 })[0]
+        @($simple.Signal | ForEach-Object { $_.Name }) | Should -Be @('Discount', 'Cap')
+        $simple.Signal[0].Share | Should -BeGreaterThan -0.7143
+        $simple.Signal[0].Share | Should -BeLessThan -0.7142
+        $simple.Signal[1].Share | Should -BeGreaterThan 0.2857
+        $simple.Signal[1].Share | Should -BeLessThan 0.2858
+        $result.TotalScore | Should -Be 94
+    }
+
+    It 'counts a site collection with a score below 0 and no signal that can be read as unresolved, and one with a score of 0 as nothing to explain' {
+        $result = Get-Driver -Record @(
+            (New-Site -Name 'negative' -Score -0.01 -Reasons 'A=1 (+-0); B=1 (+0)')
+            (New-Site -Name 'positive' -Score 0.01 -Reasons 'A=1 (+0); B=1 (+0)')
+            (New-Site -Name 'zero' -Score 0 -Reasons 'A=1 (+0)')
+        )
+
+        $result.Assessed | Should -Be 3
+        $result.Scored | Should -Be 0
+        $result.Unresolved | Should -Be 2
+        @($result.Signal) | Should -HaveCount 0
+    }
+
+    It 'tells the top signal of a site collection by size, and gives a tie to the first name' {
+        $result = Get-Driver -Record @(
+            (New-Site -Name 'a' -Score -3 -Reasons 'Cap=1 (+2); Discount=1 (+-5)')
+            (New-Site -Name 'b' -Score 0 -Reasons 'Zulu=1 (+3); Alpha=1 (+-3)')
+        )
+
+        @($result.Signal | Where-Object { $_.TopSiteCount -gt 0 } | ForEach-Object { '{0}={1}' -f $_.Name, $_.TopSiteCount } | Sort-Object) | Should -Be @('Alpha=1', 'Discount=1')
+    }
+}

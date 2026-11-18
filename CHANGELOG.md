@@ -36,7 +36,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   change, and the section needs no setting. The `Reasons` round each contribution to two decimals, so
   the site collections whose score has no readable signal (every contribution is `+0`) are counted in
   a note and left out of the shares (the section is there for that note even when no signal can be
-  read at all), and a weight below 0 gives a negative share, which keeps its sign. (#138)
+  read at all). A weight below 0 gives a contribution below 0: the shares are parts of the sum of the
+  sizes of the contributions, so that it has a negative share, and the signals are ordered by size.
+  (#138)
 - An optional `Scoring.Caps` setting limits what one signal can add to the score of a site collection:
   a contribution above its cap is cut to it, so that a signal with a large value cannot, on its own,
   put a site collection above a threshold of the categories when its cap is below that threshold.

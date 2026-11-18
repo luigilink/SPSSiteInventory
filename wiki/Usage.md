@@ -308,11 +308,12 @@ folder can be moved, zipped and sent. The manifest lists the pages in `Files.Inv
     with their share (those under 1% are left out) and the blocking signals that set it. A second
     table gives the ten signals that add the most to the score: the site collections that raise it,
     its share of the score and the site collections where it adds more than any other signal
-    (*Weighs most in*); a weight below 0 gives a negative share, which keeps its sign. When one
-    signal holds half of the score or more, a note says so; the share is measured on the whole
-    inventory and does not say that the signal sets the category of every site collection that has
-    it, because a blocking signal sets its category whatever its weight. If that is not what you
-    want, change its weight, or limit what it can add to a site collection with
+    (*Weighs most in*). A weight below 0 gives a contribution below 0: the shares are parts of the
+    sum of the sizes of the contributions, so it has a negative share, and the signals are ordered
+    by size. When one signal holds half of the score or more, a note says so; the share is measured
+    on the whole inventory and does not say that the signal sets the category of every site
+    collection that has it, because a blocking signal sets its category whatever its weight. If that
+    is not what you want, change its weight, or limit what it can add to a site collection with
     [`Caps`](Configuration#caps), in the [Scoring section](Configuration#scoring-section) of the
     settings: when a cap cut what a signal added, the table has a *Capped in* column that counts the
     site collections where it did. The numbers come from the `Reasons` column, which says what each
