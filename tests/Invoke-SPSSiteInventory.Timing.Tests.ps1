@@ -14,6 +14,7 @@ BeforeAll {
         'Inspecting the solution packages'
         'Enumerating the site collections'
         'Collecting the customization signals'
+        'Processing the assessment results'
         'Reading the Business Connectivity Services definitions'
         'Reading the Secure Store target applications'
         'Reading the profile property mappings'
@@ -66,14 +67,22 @@ Describe 'Invoke-SPSSiteInventory.ps1 and the duration of the scan' {
         $script:Text.IndexOf("& `$endPhase 'Collecting the customization signals'") | Should -BeLessThan $script:Text.IndexOf('$scored = @($assessment.Inventory)')
     }
 
-    It 'gives the export the durations that are known before the reports are written, built just before the call' {
+    It 'ends the processing of the results (the migration waves) in a phase of its own, before the farm-wide reads' {
+        $script:Text.IndexOf("& `$endPhase 'Processing the assessment results'") | Should -BeGreaterThan $script:Text.IndexOf('$scored = @(Group-SPSMigrationWave -InputObject $scored')
+        $script:Text.IndexOf("& `$endPhase 'Processing the assessment results'") | Should -BeLessThan $script:Text.IndexOf("Add-SPSInventoryEvent -Message 'Reading Business Connectivity Services definitions.'")
+        $script:Text.IndexOf("& `$endPhase 'Processing the assessment results'") | Should -BeGreaterThan $script:Text.IndexOf("& `$endPhase 'Collecting the customization signals'")
+    }
+
+    It 'gives the export the durations that are known before the first report is written' {
         $export = @($script:Commands | Where-Object { $_.GetCommandName() -eq 'Export-SPSInventoryReport' })
 
         $export | Should -HaveCount 1
         $export[0].Extent.Text | Should -Match '-Timing \$scanTiming @packageExportParams'
         $script:Text | Should -Match '\$scanTiming = \[PSCustomObject\]@\{\s*StartedAt = \$scanStartedAt\.ToString\(''o''\)\s*ScanSeconds = \[System\.Math\]::Round\(\$scanWatch\.Elapsed\.TotalSeconds, 1\)\s*Phase = @\(\$phaseTiming\.ToArray\(\)\)\s*Site = @\(\$assessment\.SiteDuration\)\s*\}'
+        # The solution report is the first one that is written: a snapshot after it would count part of the reports.
+        $script:Text.IndexOf('$scanTiming = [PSCustomObject]@{') | Should -BeLessThan $script:Text.IndexOf('$solutionOutput = Export-SPSSolutionReport')
         $script:Text.IndexOf('$scanTiming = [PSCustomObject]@{') | Should -BeLessThan $script:Text.IndexOf('$output = Export-SPSInventoryReport')
-        $script:Text.IndexOf('$scanTiming = [PSCustomObject]@{') | Should -BeGreaterThan $script:Text.IndexOf('Export-SPSSolutionReport')
+        $script:Text.IndexOf('$scanTiming = [PSCustomObject]@{') | Should -BeGreaterThan $script:Text.IndexOf("& `$endPhase 'Reading the profile property mappings'")
     }
 
     It 'ends the phase of the reports right after they are written, and logs the recap last, once, at the information level' {

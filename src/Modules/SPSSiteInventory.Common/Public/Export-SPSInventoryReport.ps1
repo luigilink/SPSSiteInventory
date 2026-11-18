@@ -147,7 +147,7 @@
 
         .PARAMETER Timing
         Optional durations of the scan, from the orchestrator: StartedAt, ScanSeconds (from the start of the
-        run to the moment the reports are written, which the export itself is not part of), Phase (the name
+        run to the moment the first report is written, so without the time that the reports take), Phase (the name
         and the seconds of each phase) and Site (the URL, the seconds and the assessment status of each site
         collection, from the SiteDuration of the assessment). The manifest gets it as Timing, as it is given.
         Without it, Timing is null in the manifest.

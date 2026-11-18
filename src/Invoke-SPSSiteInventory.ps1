@@ -336,6 +336,7 @@ try {
         @($targetProfile.MigrationWave)
     }
     $scored = @(Group-SPSMigrationWave -InputObject $scored -MigrationWaves $waves)
+    & $endPhase 'Processing the assessment results'
 
     # BCS definitions are farm-wide; a failure here must not stop the site report.
     Add-SPSInventoryEvent -Message 'Reading Business Connectivity Services definitions.' -Level Information
@@ -383,18 +384,18 @@ try {
         Add-SPSInventoryEvent -Message 'The SharePoint alerts files contain the login names of the alert owners, which are personal data. Set SharePointAlerts.IncludeUserLogin to $false in the settings to leave them out.' -Level Information
     }
 
-    $solutionOutput = Export-SPSSolutionReport -InputObject @($solutionMap) -OutputFolder $outputFolder.Path -BaseName ('SPSSiteInventory-' + $settings.EnvName)
-    # The package files and their section of the HTML report exist only when packages were inspected.
-    $packageExportParams = @{}
-    if ($solutionPackages.Count -gt 0) {
-        $packageExportParams['SolutionPackages'] = @($solutionPackages)
-    }
-    # The manifest is written by the export, so its durations stop here: the time to write the reports is in the log only.
+    # The reports are written after this point, and the manifest is one of them, so its durations stop here: the time that the reports take is in the log only.
     $scanTiming = [PSCustomObject]@{
         StartedAt = $scanStartedAt.ToString('o')
         ScanSeconds = [System.Math]::Round($scanWatch.Elapsed.TotalSeconds, 1)
         Phase = @($phaseTiming.ToArray())
         Site = @($assessment.SiteDuration)
+    }
+    $solutionOutput = Export-SPSSolutionReport -InputObject @($solutionMap) -OutputFolder $outputFolder.Path -BaseName ('SPSSiteInventory-' + $settings.EnvName)
+    # The package files and their section of the HTML report exist only when packages were inspected.
+    $packageExportParams = @{}
+    if ($solutionPackages.Count -gt 0) {
+        $packageExportParams['SolutionPackages'] = @($solutionPackages)
     }
     $output = Export-SPSInventoryReport -InputObject @($scored) -OutputFolder $outputFolder.Path -BaseName ('SPSSiteInventory-' + $settings.EnvName) -EnvName $settings.EnvName -SolutionMap @($solutionMap) -ContentTypes $contentTypes -ManagedMetadataLists $managedMetadataLists -ExternalLists $externalLists -SharePointAlerts $sharePointAlerts -EventReceiverClasses $eventReceiverClasses -WorkflowAssociations $workflowAssociations -BcsApplications @($bcs.Applications) -BcsInventoryComplete ([bool]$bcs.Complete) -SecureStoreApplications @($secureStore.Applications) -SecureStoreInventoryComplete ([bool]$secureStore.Complete) -ProfilePropertyMappings @($profileMappings.Mappings) -ProfileInventoryComplete ([bool]$profileMappings.Complete) -SolutionJsonPath $solutionOutput.JsonPath -ExcludedPersonalSiteCount ([int]$exclusion.PersonalSites) -ExcludedSiteMasterCount ([int]$exclusion.SiteMasters) -HtmlSplitThreshold $reportOption.HtmlSplitThreshold -HtmlRowsPerPage $reportOption.HtmlRowsPerPage -TargetMode $targetMode -Timing $scanTiming @packageExportParams
     & $endPhase 'Writing the reports'

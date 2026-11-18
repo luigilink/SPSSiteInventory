@@ -68,13 +68,11 @@
     $siteTotal = $Inventory.Count
     $siteIndex = 0
     $siteDuration = [System.Collections.Generic.List[object]]::new()
-    $assessmentWatch = [System.Diagnostics.Stopwatch]::StartNew()
     $largeSiteSizeThresholdGb = Get-SPSNumericThreshold -Thresholds $LargeContentThresholds -Name 'LargeSiteSizeGB' -DefaultValue 100 -MinimumValue 0
 
     try {
         foreach ($item in $Inventory) {
             $siteIndex++
-            $siteWatch = [System.Diagnostics.Stopwatch]::StartNew()
             $scoredBefore = $scored.Count
             $inventoryScope = 'SiteCollection'
             if ($null -ne $item.PSObject.Properties['InventoryScope']) {
@@ -97,6 +95,8 @@
                 $siteWarnings.Add("Site inventory partial: $($item.SiteInventoryWarnings)")
             }
 
+            # The duration starts here, so that the progress line of the log (and the first write of the Event Log) is not in it.
+            $siteWatch = [System.Diagnostics.Stopwatch]::StartNew()
             try {
                 if ($inventoryScope -eq 'WebApplication') {
                     throw "Site collection enumeration failed for web application '$($item.WebApp)': $($item.SiteInventoryWarnings)"
@@ -430,7 +430,8 @@
                 Select-Object -First 3 |
                 ForEach-Object { '{0} ({1})' -f $_.Url, (Format-SPSDuration -Seconds $_.Seconds) }
         )
-        $averageSeconds = $assessmentWatch.Elapsed.TotalSeconds / $siteDuration.Count
+        # The average of the durations that are recorded, so that the log of each site and the rows that are not site collections are not in it.
+        $averageSeconds = ($siteDuration | Measure-Object -Property Seconds -Average).Average
         Add-SPSInventoryEvent -Message ('{0} site collection(s) read, {1} on average. The slowest: {2}.' -f $siteDuration.Count, (Format-SPSDuration -Seconds $averageSeconds), ($slowest -join ', ')) -Level Information | Out-Host
     }
 

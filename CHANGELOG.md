@@ -13,9 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   failed, then the average and the three slowest when the collection ends. It gives one line when each
   phase of the run ends (loading the settings and the SharePoint commands, the farm-solution map, the
   inspection of the packages, the enumeration of the site collections, the collection of the signals,
-  the three farm-wide reads and the reports), and the last line of the log gives the total and the
-  phases. The manifest has a new `Timing` object: `StartedAt`, `ScanSeconds` (from the start of the run
-  until the reports are written, so without the time that the reports take, which only the log gives),
+  the processing of the results, the three farm-wide reads and the reports), and the last line of the
+  log gives the total and the phases. The manifest has a new `Timing` object: `StartedAt`, `ScanSeconds`
+  (from the start of the run until the first report is written, so without the time that the reports
+  take, which only the log gives),
   `Phase` (the name and the seconds of each phase) and `Site` (the URL, the seconds and the assessment
   status of each site collection, in the order they were read). `Timing` is `null` when
   `Export-SPSInventoryReport` is called without its new `-Timing` parameter, which is the last one, so

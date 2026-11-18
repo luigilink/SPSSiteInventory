@@ -37,17 +37,18 @@ The scan is timed, as a whole and phase by phase, so that the duration of a larg
 estimated from a small one. The log says it:
 
 - one line for each site collection when its signals are collected, with its number, how long it
-  took (from the moment it is opened to the moment it is released), its assessment status and its
+  took (from the moment it is opened to the moment it is released, without the lines of the log), its assessment status and its
   URL, for example `Site collection 5/34 done in 38 s (Complete): https://intranet/sites/team`. A
   site collection that failed has its line too, and the number counts the rows of a web application
   whose site list could not be read, which are not site collections and have no line;
-- when the collection ends, one line with the number of site collections, the average duration and the
-  three slowest;
+- when the collection ends, one line with the number of site collections, the average of their
+  durations and the three slowest;
 - one line when each phase ends, such as `Collecting the customization signals: done in 18 min 20 s
   (34 site collection(s)).` The phases are loading the settings and the SharePoint commands, the
   farm-solution map, the inspection of the solution packages (only when they are inspected), the
-  enumeration of the site collections, the collection of the signals, the three farm-wide reads (BCS,
-  Secure Store, profile property mappings) and the writing of the reports;
+  enumeration of the site collections, the collection of the signals, the processing of the results
+  (the migration waves), the three farm-wide reads (BCS, Secure Store, profile property mappings) and
+  the writing of the reports;
 - the last line of the log gives the total and the phases: `Scan finished in 19 min 04 s. By phase: ...`.
 
 Durations under 10 seconds keep a decimal (`3.4 s`); longer ones are written as `38 s`,
@@ -58,7 +59,7 @@ The manifest has the same durations as numbers in a `Timing` object:
 | Field | Meaning |
 | --- | --- |
 | `StartedAt` | When the run started (ISO 8601). |
-| `ScanSeconds` | Seconds from the start of the run until the reports are written. The time that the reports take is not in it, because the manifest is one of them: the last line of the log has it. |
+| `ScanSeconds` | Seconds from the start of the run until the first report is written. The time that the reports take is not in it, because the manifest is one of them: the last line of the log has it. |
 | `Phase` | One row for each phase that ended before the reports, with its `Name` and its `Seconds`, in the order they ran. |
 | `Site` | One row for each site collection, with its `Url`, its `Seconds` and its `AssessmentStatus`, in the order they were read. |
 

@@ -101,6 +101,28 @@ Describe 'Invoke-SPSiteAssessment and the duration of each site collection' {
         }
     }
 
+    It 'leaves the log out of the duration of a site collection and out of the average, however slow the log is' {
+        InModuleScope SPSSiteInventory.Common {
+            Mock Get-SPSite {
+                $site = [PSCustomObject]@{ Url = $Identity }
+                $site | Add-Member -MemberType ScriptMethod -Name Dispose -Value { }
+                $site
+            }
+            Mock Get-SPSSiteCustomization { @{ ContentTypeInventoryComplete = $true; CustomizationInventoryComplete = $true; ContentTypes = @() } }
+            Mock Add-SPSInventoryEvent { Start-Sleep -Milliseconds 400 }
+            Mock Write-Progress { }
+            Mock Out-Host { }
+
+            $inventory = @('a', 'b', 'c') | ForEach-Object { [PSCustomObject]@{ Url = "https://intranet/sites/$_"; Title = $_; SiteInventoryComplete = $true; SiteInventoryWarnings = '' } }
+
+            $result = Invoke-SPSiteAssessment -Inventory $inventory -Scoring @{ Weights = @{}; Thresholds = @{}; BlockingSignals = @() }
+
+            # The first and the last site collection have a progress line before them, and each one has a line after it: 5 lines of 0.4 s.
+            foreach ($row in @($result.SiteDuration)) { $row.Seconds | Should -BeLessThan 0.3 -Because $row.Url }
+            Should -Invoke Add-SPSInventoryEvent -Times 1 -Exactly -ParameterFilter { $Message -match '^3 site collection\(s\) read, (\d+(\.\d)?) s on average\.' -and [double]$Matches[1] -lt 0.3 }
+        }
+    }
+
     It 'gives no duration and logs no summary for an empty inventory' {
         InModuleScope SPSSiteInventory.Common {
             Mock Add-SPSInventoryEvent { }
