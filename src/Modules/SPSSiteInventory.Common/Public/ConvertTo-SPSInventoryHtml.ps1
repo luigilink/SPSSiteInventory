@@ -1055,7 +1055,9 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
     if ($hasScoreSection) {
         $formatShare = {
             param([System.Double]$Share)
-            if ($Share -lt 0.005) { return '<1%' }
+            # A contribution can be negative (a weight below 0): it keeps its sign and its magnitude, and is not a negligible share.
+            if ($Share -ge 0 -and $Share -lt 0.005) { return '<1%' }
+            if ($Share -lt 0 -and $Share -gt -0.005) { return '>-1%' }
             return '{0}%' -f [System.Math]::Round($Share * 100, 0, [System.MidpointRounding]::AwayFromZero).ToString($invariant)
         }
         [void]$sb.AppendLine('<h2 id="score-drivers">Score drivers</h2>')
@@ -1077,8 +1079,8 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
                 '{0} to {1}' -f $scoreCategory.MinScore.ToString('0.##', $invariant), $scoreCategory.MaxScore.ToString('0.##', $invariant)
             }
             # A signal under 1% of the category adds nothing to the answer: the cut-off is on the share itself, not on
-            # the rounded percentage that is shown.
-            $categorySignal = @($scoreCategory.Signal | Where-Object { $_.Share -ge 0.01 })
+            # the rounded percentage that is shown, and a negative share counts by its size.
+            $categorySignal = @($scoreCategory.Signal | Where-Object { [System.Math]::Abs($_.Share) -ge 0.01 })
             $categorySignalText = if ($categorySignal.Count -gt 0) { (@($categorySignal | ForEach-Object { '{0} {1}' -f $_.Name, (& $formatShare $_.Share) }) -join ', ') } else { '-' }
             $categoryBlockingText = if ($scoreCategory.Blocking.Count -gt 0) { (@($scoreCategory.Blocking | ForEach-Object { '{0} ({1})' -f $_.Name, $_.SiteCount }) -join ', ') } else { '-' }
             # The name of the category follows the target mode, as everywhere else in the report; the name of the record

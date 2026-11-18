@@ -291,3 +291,29 @@ Describe 'The Score drivers section and the caps of the scoring' {
         $uncapped | Should -Not -Match 'lower its cap'
     }
 }
+
+Describe 'The Score drivers section and the contributions that are negative or that cannot be read' {
+    It 'shows a negative share with its sign and its size, in the table of the signals and in the row of the category, and not as a negligible one' {
+        $records = @((New-Site -Name 'a' -Score 2 -Reasons 'Workflow2010Count=4 (+12); Discount=5 (+-10)'))
+
+        $section = Get-Section -Html (Get-Html -Record $records)
+
+        $section | Should -Match '<tr><td>Workflow2010Count</td><td class="num">1</td><td class="num">600%</td><td class="num">1</td></tr>'
+        $section | Should -Match '<tr><td>Discount</td><td class="num">1</td><td class="num">-500%</td><td class="num">0</td></tr>'
+        $section | Should -Not -Match '<td>Discount</td><td class="num">1</td><td class="num">&lt;1%'
+        $section | Should -Match '<td>Workflow2010Count 600%, Discount -500%</td>'
+    }
+
+    It 'writes a negative share under 0.5% as above -1%, a larger one with its sign, and keeps <1% for a positive one' {
+        # In a total of 1738.5: Big is 115%, Mid -14.4%, Half -0.575% (which rounds to -1%), Tiny -0.115% and Small 0.029%.
+        $records = @((New-Site -Name 'a' -Score 1738.5 -Reasons 'Big=1 (+2000); Mid=1 (+-250); Half=1 (+-10); Tiny=1 (+-2); Small=1 (+0.5)'))
+
+        $section = Get-Section -Html (Get-Html -Record $records)
+
+        $section | Should -Match '<tr><td>Big</td><td class="num">1</td><td class="num">115%</td>'
+        $section | Should -Match '<tr><td>Mid</td><td class="num">1</td><td class="num">-14%</td>'
+        $section | Should -Match '<tr><td>Half</td><td class="num">1</td><td class="num">-1%</td>'
+        $section | Should -Match '<tr><td>Tiny</td><td class="num">1</td><td class="num">&gt;-1%</td>'
+        $section | Should -Match '<tr><td>Small</td><td class="num">1</td><td class="num">&lt;1%</td>'
+    }
+}
