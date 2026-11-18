@@ -303,21 +303,26 @@ folder can be moved, zipped and sent. The manifest lists the pages in `Files.Inv
     content and how many of them are partial. The `Needs review` wave holds the Simple site
     collections whose assessment is partial, and the summary says how many wait there.
   - The **score drivers** section says what makes the score, which the categories hide: one signal
-    with a large weight and a large value can hold most of it. A first table gives, for each category, its site collections, its
-    lowest and highest score, the signals that weigh most in it with their share (those under 1% are
-    left out) and the blocking signals that set it. A second table gives the ten signals that add the
-    most to the score: the site collections that raise it, its share of the score and the site
-    collections where it adds more than any other signal (*Weighs most in*). When one signal holds
-    half of the score or more, a note says so; the share is measured on the whole inventory and does
-    not say that the signal sets the category of every site collection that has it, because a
-    blocking signal sets its category whatever its weight. If that is not what you want, change its
-    weight in the [Scoring section](Configuration#scoring-section) of the settings. The numbers come
-    from the `Reasons` column, which says what each signal added to the score of a site collection, so
-    the section has nothing to configure. The `Reasons` column rounds each contribution to two
-    decimals, so a signal that adds less than 0.005 is written as `+0` and cannot be read back: the
-    site collections whose score has no readable signal are counted in a note under the tables and
-    are not part of the shares. A partial assessment gives a score that is a lower bound, as
-    everywhere else, and a failed one has no score and is not counted.
+    with a large weight and a large value can hold most of it. A first table gives, for each
+    category, its site collections, its lowest and highest score, the signals that weigh most in it
+    with their share (those under 1% are left out) and the blocking signals that set it. A second
+    table gives the ten signals that add the most to the score: the site collections that raise it,
+    its share of the score and the site collections where it adds more than any other signal
+    (*Weighs most in*). A weight below 0 gives a contribution below 0: the shares are parts of the
+    sum of the sizes of the contributions, so it has a negative share, and the signals are ordered
+    by size. When one signal holds half of the score or more, a note says so; the share is measured
+    on the whole inventory and does not say that the signal sets the category of every site
+    collection that has it, because a blocking signal sets its category whatever its weight. If that
+    is not what you want, change its weight, or limit what it can add to a site collection with
+    [`Caps`](Configuration#caps), in the [Scoring section](Configuration#scoring-section) of the
+    settings: when a cap cut what a signal added, the table has a *Capped in* column that counts the
+    site collections where it did. The numbers come from the `Reasons` column, which says what each
+    signal added to the score of a site collection (and where a cap cut it), so the section has
+    nothing to configure. The `Reasons` column rounds each contribution to two decimals, so a signal
+    that adds less than 0.005 is written as `+0` and cannot be read back: the site collections whose
+    score has no readable signal are counted in a note under the tables and are not part of the
+    shares. A partial assessment gives a score that is a lower bound, as everywhere else, and a
+    failed one has no score and is not counted.
 - **Site collections** is the inventory table, right after the wave plan. Each site collection
   has one row with its title and URL, category, score, wave, size, template, last modification,
   status and reasons, **worst first** (not assessed, Blocking, Complex, Moderate, then Simple, by

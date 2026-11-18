@@ -203,7 +203,8 @@ Each key is a **signal** collected by `Get-SPSSiteCustomization`. The weight is 
 by the signal value (booleans count as 1 when true) and summed into the site's score. Set a
 weight to `0` (or omit the key) to ignore a signal. A signal with a large weight and a large
 value can hold most of the score: the *Score drivers* section of the HTML report gives the share of
-each signal, and says when one signal holds half of it or more (see [Usage](Usage)).
+each signal, and says when one signal holds half of it or more (see [Usage](Usage)). [`Caps`](#caps)
+limits what one signal can add.
 
 Workflows are split by platform because their migration cost differs:
 
@@ -530,6 +531,47 @@ mode weighs the first three lightly (`AlternateCssUrlCount = 0.5`, `XsltListView
 
 What is not collected yet: the `JSLink` of the views and of the fields (the client-side rendering
 that the modern list also ignores), and the web parts of the list view and form pages.
+
+### Caps
+
+Optional. A weight multiplied by a large value adds a great deal to a score: with the weight of the
+example, a site collection with 121 event receivers adds 181.5 for them, far above the `Complex`
+threshold, so that signal alone puts the site collection in that category. `Caps` limits what a
+signal can add to the score of **one site collection**: a contribution above its cap is cut to the
+cap. The *Score drivers* section of the HTML report gives the share of each signal in the score of
+the inventory (see [Usage](Usage)): it is where to look for a signal that weighs a lot before you set
+a cap.
+
+```powershell
+Scoring = @{
+    Weights = @{ EventReceivers = 1.5; Workflow2010Count = 3.0 }
+    Caps = @{
+        EventReceivers = 4
+    }
+    Thresholds = @{ Moderate = 1.0; Complex = 6.0 }
+}
+```
+
+- **There is no cap by default**, also when the key is missing: the scores are those of the weights
+  alone, and nothing changes in the reports.
+- A key is a signal of `Weights` and a value is a number greater than 0 (a number, not a string).
+  The settings are refused, before the scan starts, when a cap is not valid or names a signal that has
+  no weight, which is most likely a misspelled name that would otherwise cap nothing. The readiness
+  check reports the same error.
+- A cap changes the **score**, so it can change the category, but only when it is below the
+  threshold of the category. With the example above, the receivers alone make a site collection
+  Moderate at most (4, below `Complex`, 6): it needs other signals worth 2 more to be Complex. A cap
+  at or above `Complex` still lets the signal make a site collection Complex on its own, and only
+  keeps its score from going far above the threshold. A cap does not change the blocking signals.
+- The reasons of a site collection say when a cap acted: `EventReceivers=121 (+4, capped from 181.5)`.
+  The score, and the *Score drivers* section, use the capped value; the signal table of the section
+  gets a *Capped in* column that counts the site collections where it happened. The log of the scan
+  lists the caps in force when it starts.
+- To choose a cap, read the *Score drivers* section of a first inventory (the share of each signal,
+  and the category table), set a cap on the signals that weigh a lot, and run the inventory again.
+  A cap makes the scores comparable, but it does not move a site collection to another category when
+  its other signals already put it above a threshold: if the categories still do not spread, read the
+  scores again and move the thresholds, which say where each category starts.
 
 ### Thresholds
 

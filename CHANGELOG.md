@@ -30,12 +30,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   site collections, its lowest and highest score, the signals that weigh most in it with their share,
   and the blocking signals that set it, and, for each signal (the ten that weigh most), its site
   collections, its share of the score and the site collections where it weighs most. When one signal
-  holds half of the score or more, a note says so and points to its weight in the Scoring section of
-  the settings. The numbers are read from the `Reasons` of the records, which already say what each
-  signal added, so the inventory files, the scores and the categories do not change, and the section
-  needs no setting. The `Reasons` round each contribution to two decimals, so the site collections
-  whose score has no readable signal (every contribution is `+0`) are counted in a note and left out
-  of the shares (the section is there for that note even when no signal can be read at all). (#138)
+  holds half of the score or more, a note says so and points to its weight, or to a cap, in the
+  Scoring section of the settings. The numbers are read from the `Reasons` of the records, which
+  already say what each signal added, so the inventory files, the scores and the categories do not
+  change, and the section needs no setting. The `Reasons` round each contribution to two decimals, so
+  the site collections whose score has no readable signal (every contribution is `+0`) are counted in
+  a note and left out of the shares (the section is there for that note even when no signal can be
+  read at all). A weight below 0 gives a contribution below 0: the shares are parts of the sum of the
+  sizes of the contributions, so that it has a negative share, and the signals are ordered by size.
+  (#138)
+- An optional `Scoring.Caps` setting limits what one signal can add to the score of a site collection:
+  a contribution above its cap is cut to it, so that a signal with a large value cannot, on its own,
+  put a site collection above a threshold of the categories when its cap is below that threshold.
+  There is no cap by default, and nothing changes without one. A cap is a number greater than 0 that
+  names a signal of `Scoring.Weights`: the settings are refused otherwise, because a misspelled name
+  would cap nothing. The reason of a site collection says when a cap acted
+  (`EventReceivers=121 (+4, capped from 181.5)`), the signal table of the *Score drivers* section
+  counts those site collections in a *Capped in* column, and the log of the scan lists the caps in
+  force. Both example settings have a `Caps` block in comments, and the Configuration wiki page says
+  how a cap and the thresholds go together. (#138)
 
 ### Changed
 

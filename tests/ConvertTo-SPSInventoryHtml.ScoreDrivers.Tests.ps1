@@ -67,7 +67,7 @@ Describe 'The Score drivers section of the HTML report' {
     It 'tells which signal holds most of the score, and in how many site collections it weighs most' {
         $section = Get-Section -Html (Get-Html -Record $script:Sites)
 
-        $section | Should -Match '<div class="note warn"><strong>EventReceivers</strong> holds <strong>82%</strong> of the score of the inventory and weighs most in <strong>2</strong> of the <strong>4</strong> site collection\(s\) that have a score\. If this is not what you expect, review its weight in the Scoring section of the settings\.</div>'
+        $section | Should -Match '<div class="note warn"><strong>EventReceivers</strong> holds <strong>82%</strong> of the score of the inventory and weighs most in <strong>2</strong> of the <strong>4</strong> site collection\(s\) that have a score\. If this is not what you expect, review its weight, or cap what it can add with <code>Caps</code>, in the Scoring section of the settings\.</div>'
     }
 
     It 'says nothing of the kind when no signal holds half of the score' {
@@ -253,5 +253,117 @@ Describe 'The Score drivers section of the HTML report' {
 
         $html | Should -Not -Match 'id="score-drivers"'
         $html | Should -Not -Match 'href="#score-drivers"'
+    }
+}
+
+Describe 'The Score drivers section and the caps of the scoring' {
+    BeforeAll {
+        $script:Capped = @(
+            (New-Site -Name 'a' -Score 7 -Reasons 'EventReceivers=121 (+4, capped from 181.5); Workflow2010Count=1 (+3)')
+            (New-Site -Name 'b' -Score 4 -Reasons 'EventReceivers=300 (+4, capped from 450)')
+            (New-Site -Name 'c' -Score 3 -Reasons 'EventReceivers=2 (+3)')
+        )
+    }
+
+    It 'has a Capped in column, with the number of site collections for each signal, and explains it, when a cap cut something' {
+        $section = Get-Section -Html (Get-Html -Record $script:Capped)
+
+        $section | Should -Match '<th class="num">Weighs most in</th><th class="num">Capped in</th></tr>'
+        $section | Should -Match '<tr><td>EventReceivers</td><td class="num">3</td><td class="num">79%</td><td class="num">3</td><td class="num">2</td></tr>'
+        $section | Should -Match '<tr><td>Workflow2010Count</td><td class="num">1</td><td class="num">21%</td><td class="num">0</td><td class="num">0</td></tr>'
+        $section | Should -Match '<em>Capped in</em> counts the site collections where the cap of the signal \(<code>Caps</code> in the Scoring section of the settings\) cut what it added\.'
+    }
+
+    It 'has no such column and no such explanation when no cap cut anything' {
+        $section = Get-Section -Html (Get-Html -Record $script:Sites)
+
+        $section | Should -Not -Match 'Capped in'
+        $section | Should -Match '<th class="num">Weighs most in</th></tr>'
+    }
+
+    It 'advises to lower the cap of the signal that holds most of the score when it is capped, and to cap it when it is not' {
+        $capped = Get-Section -Html (Get-Html -Record $script:Capped)
+        $uncapped = Get-Section -Html (Get-Html -Record $script:Sites)
+
+        $capped | Should -Match 'If this is not what you expect, lower its cap, or review its weight, in the Scoring section of the settings\.'
+        $capped | Should -Not -Match 'cap what it can add'
+        $uncapped | Should -Match 'If this is not what you expect, review its weight, or cap what it can add with <code>Caps</code>, in the Scoring section of the settings\.'
+        $uncapped | Should -Not -Match 'lower its cap'
+    }
+}
+
+Describe 'The Score drivers section and the contributions that are negative or that cannot be read' {
+    It 'shows a negative share with its sign and its size, in the table of the signals and in the row of the category, and not as a negligible one' {
+        $records = @((New-Site -Name 'a' -Score 2 -Reasons 'Workflow2010Count=4 (+12); Discount=5 (+-10)'))
+
+        $section = Get-Section -Html (Get-Html -Record $records)
+
+        # Shares are parts of the sum of the sizes of the contributions, 22 here.
+        $section | Should -Match '<tr><td>Workflow2010Count</td><td class="num">1</td><td class="num">55%</td><td class="num">1</td></tr>'
+        $section | Should -Match '<tr><td>Discount</td><td class="num">1</td><td class="num">-45%</td><td class="num">0</td></tr>'
+        $section | Should -Not -Match '<td>Discount</td><td class="num">1</td><td class="num">&lt;1%'
+        $section | Should -Match '<td>Workflow2010Count 55%, Discount -45%</td>'
+    }
+
+    It 'writes a negative share under 0.5% as above -1%, a larger one with its sign, and keeps <1% for a positive one' {
+        # In a sum of sizes of 1107.5: Big is 90.3%, Mid -9.03%, Half -0.54% (which rounds to -1%), Tiny -0.09% and Small 0.045%.
+        $records = @((New-Site -Name 'a' -Score 893.5 -Reasons 'Big=1 (+1000); Mid=1 (+-100); Half=1 (+-6); Tiny=1 (+-1); Small=1 (+0.5)'))
+
+        $section = Get-Section -Html (Get-Html -Record $records)
+
+        $section | Should -Match '<tr><td>Big</td><td class="num">1</td><td class="num">90%</td>'
+        $section | Should -Match '<tr><td>Mid</td><td class="num">1</td><td class="num">-9%</td>'
+        $section | Should -Match '<tr><td>Half</td><td class="num">1</td><td class="num">-1%</td>'
+        $section | Should -Match '<tr><td>Tiny</td><td class="num">1</td><td class="num">&gt;-1%</td>'
+        $section | Should -Match '<tr><td>Small</td><td class="num">1</td><td class="num">&lt;1%</td>'
+    }
+
+    It 'keeps the signals of a category whose contributions add up to less than 0, with their shares, and orders them by size' {
+        $records = @(
+            (New-Site -Name 'big' -Score 100 -Reasons 'Big=1 (+100)')
+            (New-Site -Name 'discounted' -Category 1 -CategoryName 'Simple' -Score -6 -Reasons 'Cap=1 (+4); Discount=1 (+-10)')
+        )
+
+        $section = Get-Section -Html (Get-Html -Record $records)
+
+        # In the category: Discount is 10 of the 14 that the sizes add up to, Cap is 4. In the inventory the sizes add up to 114.
+        $section | Should -Match '<td>Discount -71%, Cap 29%</td>'
+        $section | Should -Match '<tr><td>Big</td><td class="num">1</td><td class="num">88%</td><td class="num">1</td></tr>'
+        $section | Should -Match '<tr><td>Cap</td><td class="num">1</td><td class="num">4%</td><td class="num">0</td></tr>'
+        $section | Should -Match '<tr><td>Discount</td><td class="num">1</td><td class="num">-9%</td><td class="num">1</td></tr>'
+        $section.IndexOf('<td>Discount</td>') | Should -BeLessThan $section.IndexOf('<td>Cap</td>')
+    }
+
+    It 'explains a negative share under the table of the signals, and only then' {
+        $negative = Get-Section -Html (Get-Html -Record @((New-Site -Name 'a' -Score 2 -Reasons 'Workflow2010Count=4 (+12); Discount=5 (+-10)')))
+        $positive = Get-Section -Html (Get-Html -Record $script:Sites)
+        # A signal whose contributions cancel each other out over the inventory has a share of 0, which is not negative.
+        $cancelled = Get-Section -Html (Get-Html -Record @((New-Site -Name 'a' -Score 5 -Reasons 'Same=1 (+5)'), (New-Site -Name 'b' -Score -5 -Reasons 'Same=1 (+-5)'), (New-Site -Name 'c' -Score 3 -Reasons 'Other=1 (+3)')))
+
+        $negative | Should -Match 'A negative share is that of a signal that took points off the score \(a weight below 0\): the shares are parts of the sum of the sizes of what the signals contributed, and the signals are ordered by that size\.'
+        $positive | Should -Not -Match 'negative share'
+        $cancelled | Should -Not -Match 'negative share'
+    }
+
+    It 'writes the shares of contributions that cancel each other out, and of a score of 0, as 50% and -50%' {
+        $records = @((New-Site -Name 'a' -Category 1 -CategoryName 'Simple' -Score 0 -Reasons 'Up=1 (+5); Down=1 (+-5)'))
+
+        $section = Get-Section -Html (Get-Html -Record $records)
+
+        # The two are as large as each other: the top signal of the site collection is the first name.
+        $section | Should -Match '<tr><td>Up</td><td class="num">1</td><td class="num">50%</td><td class="num">0</td></tr>'
+        $section | Should -Match '<tr><td>Down</td><td class="num">1</td><td class="num">-50%</td><td class="num">1</td></tr>'
+        $section | Should -Not -Match 'have a score without a signal'
+    }
+
+    It 'explains a score below 0 whose contributions were all rounded to zero' {
+        $records = @((New-Site -Name 'a' -Category 1 -CategoryName 'Simple' -Score -0.01 -Reasons 'PublishingPageCount=4 (+-0); SizeGB=0.2 (+0)'))
+
+        $section = Get-Section -Html (Get-Html -Record $records)
+
+        $section | Should -Not -BeNullOrEmpty
+        $section | Should -Match '<strong>1</strong> site collection\(s\) have a score without a signal that can be read'
+        $section | Should -Match '<tr><td><span class="badge b1">Simple</span></td><td class="num">1</td><td class="num">-0.01</td><td>-</td><td>-</td></tr>'
+        $section | Should -Not -Match '<th>Signal</th>'
     }
 }
