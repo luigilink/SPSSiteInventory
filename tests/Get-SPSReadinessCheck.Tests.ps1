@@ -220,6 +220,16 @@ Describe 'Get-SPSReadinessCheck' {
             $result.Detail | Should -Match 'IncludeUserLogin'
         }
 
+        It 'is an error when a cap of Scoring.Caps is not valid, and says which one' {
+            $body = "@{ EnvName = 'LAB'; Scoring = @{ Weights = @{ EventReceivers = 1.5 }; Caps = @{ EventReceivers = 0 } } }"
+            $path = Write-TestSettings -Name 'badcaps.psd1' -Body $body
+
+            $result = Get-TestResult -Check @(Get-SPSReadinessCheck -ConfigPath $path) -Name 'Settings content'
+
+            $result.Status | Should -Be 'Error'
+            $result.Detail | Should -Match 'Scoring\.Caps\.EventReceivers must be a number greater than 0'
+        }
+
         It 'is an error when the settings file cannot be parsed' {
             $path = Write-TestSettings -Name 'broken.psd1' -Body '@{ EnvName = '
 

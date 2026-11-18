@@ -305,6 +305,16 @@
             SizeGB                   = 0.02
         }
 
+        # Optional: the most that one signal can add to the score of a site collection. There is no
+        # cap by default. With a large value, a signal can add more than the Complex threshold on its
+        # own (the Score drivers section of the HTML report gives the share of each signal). A cap
+        # lower than that threshold (see Thresholds) keeps such a signal from making a site
+        # collection Complex on its own. Each key must be a signal of Weights above, and each value
+        # a number greater than 0. For example:
+        # Caps = @{
+        #     EventReceivers = 4
+        # }
+
         # Score thresholds that promote a site to the next category.
         Thresholds = @{
             Moderate = 1.0

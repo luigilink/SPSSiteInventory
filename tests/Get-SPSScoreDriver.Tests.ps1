@@ -204,3 +204,55 @@ Describe 'Get-SPSScoreDriver and Measure-SPSSiteComplexity' {
         $result.Category[0].Blocking[0].Name | Should -BeExactly 'HasFbaZone'
     }
 }
+
+Describe 'Get-SPSScoreDriver and the caps of the scoring' {
+    It 'reads a contribution that a cap cut at the capped amount, and counts the site collections where a cap cut' {
+        $result = Get-Driver -Record @(
+            (New-Site -Name 'a' -Score 7 -Reasons 'EventReceivers=121 (+4, capped from 181.5); Workflow2010Count=1 (+3)')
+            (New-Site -Name 'b' -Score 4 -Reasons 'EventReceivers=300 (+4, capped from 450)')
+            (New-Site -Name 'c' -Score 3 -Reasons 'EventReceivers=2 (+3)')
+        )
+
+        $receivers = @($result.Signal | Where-Object { $_.Name -eq 'EventReceivers' })[0]
+        $workflow = @($result.Signal | Where-Object { $_.Name -eq 'Workflow2010Count' })[0]
+        $result.TotalScore | Should -Be 14
+        $receivers.Total | Should -Be 11
+        $receivers.SiteCount | Should -Be 3
+        $receivers.TopSiteCount | Should -Be 3
+        $receivers.CappedSiteCount | Should -Be 2
+        $receivers.Share | Should -BeGreaterThan 0.7857
+        $receivers.Share | Should -BeLessThan 0.7858
+        $workflow.Total | Should -Be 3
+        $workflow.CappedSiteCount | Should -Be 0
+    }
+
+    It 'counts no site collection as capped when no reason says so' {
+        $result = Get-Driver -Record @((New-Site -Name 'a' -Score 5 -Reasons 'Signal=1 (+5)'), (New-Site -Name 'b' -Score 2 -Reasons 'Other=2 (+2)'))
+
+        foreach ($signal in @($result.Signal)) {
+            $signal.CappedSiteCount | Should -Be 0
+        }
+    }
+
+    It 'does not read as a contribution a text that only looks like one with a cap' {
+        $result = Get-Driver -Record @((New-Site -Name 'a' -Score 5 -Reasons 'Signal=1 (+5); Other=1 (+7, capped from 9) was left out; Third=1 (+2, capped)'))
+
+        @($result.Signal) | Should -HaveCount 1
+        $result.Signal[0].Name | Should -BeExactly 'Signal'
+        $result.Signal[0].CappedSiteCount | Should -Be 0
+    }
+
+    It 'reads back what Measure-SPSSiteComplexity wrote for a capped signal' {
+        $scoring = @{ Weights = @{ EventReceivers = 1.5; Workflow2010Count = 3.0 }; Caps = @{ EventReceivers = 4 }; Thresholds = @{ Moderate = 1; Complex = 6 }; BlockingSignals = @() }
+        $measured = Measure-SPSSiteComplexity -Signals @{ EventReceivers = 121; Workflow2010Count = 1 } -Scoring $scoring
+        $record = [PSCustomObject]@{ InventoryScope = 'SiteCollection'; Url = 'https://intranet/sites/a'; AssessmentStatus = 'Complete'; Category = $measured.Category; CategoryName = $measured.CategoryName; Score = $measured.Score; Reasons = ($measured.Reasons -join '; ') }
+
+        $result = Get-Driver -Record @($record)
+
+        $measured.Score | Should -Be 7
+        $result.TotalScore | Should -Be 7
+        $receivers = @($result.Signal | Where-Object { $_.Name -eq 'EventReceivers' })[0]
+        $receivers.Total | Should -Be 4
+        $receivers.CappedSiteCount | Should -Be 1
+    }
+}

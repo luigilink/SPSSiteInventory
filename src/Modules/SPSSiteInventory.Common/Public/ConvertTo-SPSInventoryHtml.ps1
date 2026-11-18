@@ -1062,7 +1062,8 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
         [void]$sb.AppendLine('<p>The score of a site collection is the sum of the signals that it raises, each one multiplied by its weight (the Scoring section of the settings), and its category follows from the score, unless a blocking signal sets it. This section says what weighs in this inventory, by category and by signal.</p>')
         $topSignal = if ($scoreDriver.Signal.Count -gt 0) { $scoreDriver.Signal[0] } else { $null }
         if ($null -ne $topSignal -and $topSignal.Share -ge 0.5) {
-            [void]$sb.AppendLine(('<div class="note warn"><strong>{0}</strong> holds <strong>{1}</strong> of the score of the inventory and weighs most in <strong>{2}</strong> of the <strong>{3}</strong> site collection(s) that have a score. If this is not what you expect, review its weight in the Scoring section of the settings.</div>' -f (ConvertTo-SPSHtmlText -Value $topSignal.Name), (ConvertTo-SPSHtmlText -Value (& $formatShare $topSignal.Share)), $topSignal.TopSiteCount, $scoreDriver.Scored))
+            $topAdvice = if ($topSignal.CappedSiteCount -gt 0) { 'lower its cap, or review its weight,' } else { 'review its weight, or cap what it can add with <code>Caps</code>,' }
+            [void]$sb.AppendLine(('<div class="note warn"><strong>{0}</strong> holds <strong>{1}</strong> of the score of the inventory and weighs most in <strong>{2}</strong> of the <strong>{3}</strong> site collection(s) that have a score. If this is not what you expect, {4} in the Scoring section of the settings.</div>' -f (ConvertTo-SPSHtmlText -Value $topSignal.Name), (ConvertTo-SPSHtmlText -Value (& $formatShare $topSignal.Share)), $topSignal.TopSiteCount, $scoreDriver.Scored, $topAdvice))
         }
         [void]$sb.AppendLine('<div class="table-scroll">')
         [void]$sb.AppendLine('<table class="waves">')
@@ -1094,13 +1095,18 @@ dl.signals dd { margin: 0; overflow-wrap: anywhere; }
             if ($scoreDriver.Signal.Count -gt $shownSignal.Count) {
                 $signalListNote = 'The <strong>{0}</strong> signals that added the most to the score are listed, of <strong>{1}</strong>.' -f $shownSignal.Count, $scoreDriver.Signal.Count
             }
-            [void]$sb.AppendLine(('<p class="muted">{0} <em>Weighs most in</em> counts the site collections where the signal added more than any other.</p>' -f $signalListNote))
+            # The column of the caps is only there when a cap cut something, so that the table is the same for a farm without caps.
+            $hasCappedSignal = @($shownSignal | Where-Object { $_.CappedSiteCount -gt 0 }).Count -gt 0
+            $cappedNote = if ($hasCappedSignal) { ' <em>Capped in</em> counts the site collections where the cap of the signal (<code>Caps</code> in the Scoring section of the settings) cut what it added.' } else { '' }
+            $cappedHeader = if ($hasCappedSignal) { '<th class="num">Capped in</th>' } else { '' }
+            [void]$sb.AppendLine(('<p class="muted">{0} <em>Weighs most in</em> counts the site collections where the signal added more than any other.{1}</p>' -f $signalListNote, $cappedNote))
             [void]$sb.AppendLine('<div class="table-scroll">')
             [void]$sb.AppendLine('<table class="waves">')
-            [void]$sb.AppendLine('<thead><tr><th>Signal</th><th class="num">Site collections</th><th class="num">Share of the score</th><th class="num">Weighs most in</th></tr></thead>')
+            [void]$sb.AppendLine(('<thead><tr><th>Signal</th><th class="num">Site collections</th><th class="num">Share of the score</th><th class="num">Weighs most in</th>{0}</tr></thead>' -f $cappedHeader))
             [void]$sb.AppendLine('<tbody>')
             foreach ($scoreSignal in $shownSignal) {
-                [void]$sb.AppendLine(('<tr><td>{0}</td><td class="num">{1}</td><td class="num">{2}</td><td class="num">{3}</td></tr>' -f (ConvertTo-SPSHtmlText -Value $scoreSignal.Name), $scoreSignal.SiteCount, (ConvertTo-SPSHtmlText -Value (& $formatShare $scoreSignal.Share)), $scoreSignal.TopSiteCount))
+                $cappedCell = if ($hasCappedSignal) { '<td class="num">{0}</td>' -f $scoreSignal.CappedSiteCount } else { '' }
+                [void]$sb.AppendLine(('<tr><td>{0}</td><td class="num">{1}</td><td class="num">{2}</td><td class="num">{3}</td>{4}</tr>' -f (ConvertTo-SPSHtmlText -Value $scoreSignal.Name), $scoreSignal.SiteCount, (ConvertTo-SPSHtmlText -Value (& $formatShare $scoreSignal.Share)), $scoreSignal.TopSiteCount, $cappedCell))
             }
             [void]$sb.AppendLine('</tbody>')
             [void]$sb.AppendLine('</table>')

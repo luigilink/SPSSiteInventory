@@ -112,6 +112,13 @@ try {
     } $(if ($settings.ContainsKey('TargetMode')) { $settings.TargetMode } else { 'SharePointOnline' })
     $targetMode = $targetProfile.TargetMode
     Add-SPSInventoryEvent -Message ("Target mode: {0} ({1})." -f $targetMode, $targetProfile.DisplayName) -Level Information
+    $scoringCapText = & $commonModule {
+        param ($Scoring)
+        Format-SPSScoringCap -Cap (Get-SPSScoringCap -Scoring $Scoring)
+    } $settings.Scoring
+    if (-not [System.String]::IsNullOrEmpty($scoringCapText)) {
+        Add-SPSInventoryEvent -Message ("Scoring caps: {0}. A capped signal adds no more than that to the score of a site collection." -f $scoringCapText) -Level Information
+    }
 
     # The folder is created now, so that one that cannot be created stops the run before the scan and not when the reports are written.
     $outputFolder = & $commonModule {

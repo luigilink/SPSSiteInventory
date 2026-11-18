@@ -10,7 +10,9 @@
         writes what each signal added to the Reasons field of the record ("EventReceivers=121 (+181.5)", and
         "blocking: HasFbaZone" for a blocking signal), and this function reads that field, so it needs neither
         the settings nor any other field. Any other text of the field, such as the warnings of the assessment,
-        is ignored.
+        is ignored. When a cap of Scoring.Caps cut what a signal added, the reason says so ("EventReceivers=121
+        (+5, capped from 181.5)"): the contribution is the capped one, as in the score, and the site
+        collection is counted in CappedSiteCount.
 
         The reasons round each contribution to two decimals, so a signal that adds less than 0.005 is written as
         (+0). Such a contribution cannot be told from nothing: it is not counted as a signal, and a site
@@ -24,9 +26,9 @@
           contributions were rounded to zero, or the reasons are missing), and the sum of what the signals
           added;
         - Signal: one row for each signal that added something to at least one site collection, with its
-          Name, SiteCount, Total (what it added in all of them), Share (its part of TotalScore, from 0 to 1)
-          and TopSiteCount (the site collections where it added the most; a tie goes to the first name),
-          the largest Total first;
+          Name, SiteCount, Total (what it added in all of them), Share (its part of TotalScore, from 0 to 1),
+          TopSiteCount (the site collections where it added the most; a tie goes to the first name) and
+          CappedSiteCount (the site collections where its cap cut what it added), the largest Total first;
         - Category: one row for each category that has a site collection, in the order of the categories,
           with its Category number, CategoryName, SiteCount, MinScore and MaxScore (the lowest and the highest
           Score of the record), Signal (the three that added the most in those site collections, each with its
@@ -55,13 +57,14 @@
     )
 
     $invariant = [System.Globalization.CultureInfo]::InvariantCulture
-    $contributionPattern = [System.Text.RegularExpressions.Regex]::new('^(?<name>[^=;|]+)=(?<value>\S+) \(\+(?<amount>-?\d+(?:\.\d+)?)\)$')
+    $contributionPattern = [System.Text.RegularExpressions.Regex]::new('^(?<name>[^=;|]+)=(?<value>\S+) \(\+(?<amount>-?\d+(?:\.\d+)?)(?<capped>, capped from -?\d+(?:\.\d+)?)?\)$')
     $blockingPrefix = 'blocking: '
     $byValueThenName = @(@{ Expression = { $_.Value }; Descending = $true }, @{ Expression = { $_.Key } })
 
     $signalTotal = @{}
     $signalSite = @{}
     $signalTop = @{}
+    $signalCapped = @{}
     $categoryData = @{}
     $assessed = 0
     $scored = 0
@@ -88,6 +91,7 @@
         $assessed++
 
         $contribution = @{}
+        $cappedName = [System.Collections.Generic.HashSet[System.String]]::new([System.StringComparer]::Ordinal)
         $blockingName = [System.Collections.Generic.HashSet[System.String]]::new([System.StringComparer]::Ordinal)
         $reasonText = (@($record.Reasons) | ForEach-Object { [string]$_ }) -join '; '
         foreach ($part in ($reasonText -split '; ')) {
@@ -97,6 +101,9 @@
                 # (+0) is a contribution that the reasons rounded away: it is not a signal that can be read.
                 if ($amount -ne 0) {
                     $contribution[$match.Groups['name'].Value] = $amount
+                    if ($match.Groups['capped'].Success) {
+                        [void]$cappedName.Add($match.Groups['name'].Value)
+                    }
                 }
             }
             elseif ($part.StartsWith($blockingPrefix, [System.StringComparison]::Ordinal)) {
@@ -135,6 +142,9 @@
             $amount = [double]$contribution[$name]
             $signalTotal[$name] = [double]$signalTotal[$name] + $amount
             $signalSite[$name] = 1 + [int]$signalSite[$name]
+            if ($cappedName.Contains($name)) {
+                $signalCapped[$name] = 1 + [int]$signalCapped[$name]
+            }
             $category.Signal[$name] = [double]$category.Signal[$name] + $amount
             $category.Total += $amount
             $totalScore += $amount
@@ -144,11 +154,12 @@
     $signalRow = @(
         foreach ($name in $signalTotal.Keys) {
             [PSCustomObject]@{
-                Name         = [string]$name
-                SiteCount    = [int]$signalSite[$name]
-                Total        = [double]$signalTotal[$name]
-                Share        = if ($totalScore -gt 0) { [double]$signalTotal[$name] / $totalScore } else { 0.0 }
-                TopSiteCount = [int]$signalTop[$name]
+                Name            = [string]$name
+                SiteCount       = [int]$signalSite[$name]
+                Total           = [double]$signalTotal[$name]
+                Share           = if ($totalScore -gt 0) { [double]$signalTotal[$name] / $totalScore } else { 0.0 }
+                TopSiteCount    = [int]$signalTop[$name]
+                CappedSiteCount = [int]$signalCapped[$name]
             }
         }
     ) | Sort-Object -Property @{ Expression = { $_.Total }; Descending = $true }, @{ Expression = { $_.Name } }

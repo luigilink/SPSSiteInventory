@@ -10,7 +10,9 @@
         single site and the Scoring section of the inventory settings, then:
 
         1. Computes a weighted numeric score from the Weights map. Each weight is
-           multiplied by the matching signal value (booleans count as 1 when true).
+           multiplied by the matching signal value (booleans count as 1 when true). When the
+           Caps map gives a cap for a signal, what the signal adds is cut to it: the reason
+           then says "(+5, capped from 181.5)", and the score is that of the capped value.
         2. Maps the score to a category using the Thresholds map:
            - score below Moderate            -> category 1 (Simple)
            - score at or above Moderate       -> category 2 (Moderate)
@@ -33,7 +35,8 @@
 
         .PARAMETER Scoring
         The Scoring hashtable from the inventory settings (Weights, Thresholds,
-        BlockingSignals). See inventory-settings.example.psd1.
+        BlockingSignals and the optional Caps). See inventory-settings.example.psd1. A cap
+        that is not valid, or that names a signal without a weight, throws.
 
         .PARAMETER TargetMode
         SharePointOnline (the default) or SharePointOnPrem. It only chooses the names of the
@@ -65,6 +68,7 @@
     $weights = if ($Scoring['Weights']) { $Scoring['Weights'] } else { @{} }
     $thresholds = if ($Scoring['Thresholds']) { $Scoring['Thresholds'] } else { @{} }
     $blockingSignals = if ($Scoring['BlockingSignals']) { @($Scoring['BlockingSignals']) } else { @() }
+    $caps = Get-SPSScoringCap -Scoring $Scoring
 
     $moderateThreshold = if ($null -ne $thresholds['Moderate']) { [double]$thresholds['Moderate'] } else { 1 }
     $complexThreshold = if ($null -ne $thresholds['Complex']) { [double]$thresholds['Complex'] } else { 6 }
@@ -73,14 +77,20 @@
 
     # 1. Weighted numeric score.
     $score = 0.0
+    $invariant = [System.Globalization.CultureInfo]::InvariantCulture
     foreach ($signalName in $weights.Keys) {
         $weight = [double]$weights[$signalName]
         $value = ConvertTo-SPSSignalNumber -Value $Signals[$signalName]
         if ($value -ne 0 -and $weight -ne 0) {
             $contribution = $weight * $value
+            $cappedFrom = ''
+            if ($caps.ContainsKey($signalName) -and $contribution -gt $caps[$signalName]) {
+                $cappedFrom = [string]::Format($invariant, ', capped from {0}', [math]::Round($contribution, 2))
+                $contribution = $caps[$signalName]
+            }
             $score += $contribution
             # Invariant culture: the reasons are written to the reports and must not depend on the server.
-            $reasons.Add([string]::Format([System.Globalization.CultureInfo]::InvariantCulture, '{0}={1} (+{2})', $signalName, $value, [math]::Round($contribution, 2)))
+            $reasons.Add([string]::Format($invariant, '{0}={1} (+{2}{3})', $signalName, $value, [math]::Round($contribution, 2), $cappedFrom))
         }
     }
 
