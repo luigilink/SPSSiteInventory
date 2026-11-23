@@ -5,6 +5,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The Configuration wiki page gives the French names of the permission levels that SharePoint provisions
+  (View Only, Approve, Manage Hierarchy, Restricted Read and Restricted Interfaces for Translation), to
+  put in `PermissionLevels.BuiltInNames` on a farm with a French interface, where they are otherwise
+  reported as custom permission levels. The levels are still recognized by name: recognizing them in any
+  language, without a list, is not done yet. (#136)
+
 ### Fixed
 
 - The farm-solution report gave a wrong `FeatureCount`, and no `FeatureIds` or `FeatureScopes`, on a real
