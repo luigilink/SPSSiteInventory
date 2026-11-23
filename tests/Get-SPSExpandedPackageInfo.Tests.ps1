@@ -100,6 +100,60 @@ Describe 'Get-SPSExpandedPackageInfo' {
         }
     }
 
+    Context 'the application resource files' {
+        BeforeAll {
+            # A package that has the manifest only, with no assembly that is deployed to a web application, which would give the flag too.
+            $script:ReadManifest = {
+                param ([System.String] $Group)
+                $path = Join-Path -Path $script:Dir -ChildPath ('m-' + [guid]::NewGuid().ToString('N'))
+                Write-TestFile -Path (Join-Path $path 'manifest.xml') -Text @"
+<?xml version="1.0" encoding="utf-8"?>
+<Solution xmlns="http://schemas.microsoft.com/sharepoint/" SolutionId="{11111111-2222-3333-4444-555555555555}" SharePointProductVersion="16.0">
+  <Assemblies>
+    <Assembly Location="Contoso.Fixture.Custom.dll" DeploymentTarget="GlobalAssemblyCache" />
+  </Assemblies>
+$Group
+</Solution>
+"@
+                [System.IO.File]::WriteAllBytes((Join-Path $path 'Contoso.Fixture.Custom.dll'), (Get-TestAssemblyByte 'Custom'))
+                & $script:Read $path
+            }
+        }
+
+        It 'flags a package whose application resource files are listed with <Name>' -ForEach @(
+            @{ Name = 'ApplicationResourceFile' }
+            @{ Name = 'App_GlobalResourceFile' }
+        ) {
+            $info = & $script:ReadManifest "  <ApplicationResourceFiles><$Name Location=`"Sample.resx`" /></ApplicationResourceFiles>"
+
+            $info.ContainsWebApplicationResource | Should -BeTrue
+            $info.ContainsWebApplicationAssembly | Should -BeFalse
+        }
+
+        It 'flags a package that lists both element names' {
+            $info = & $script:ReadManifest '  <ApplicationResourceFiles><ApplicationResourceFile Location="A.resx" /><App_GlobalResourceFile Location="B.resx" /></ApplicationResourceFiles>'
+
+            $info.ContainsWebApplicationResource | Should -BeTrue
+        }
+
+        It 'does not flag a package that has no group of application resource files' {
+            $info = & $script:ReadManifest ''
+
+            $info.ContainsWebApplicationResource | Should -BeFalse
+        }
+
+        It 'does not flag a package whose group of application resource files is empty or has only a comment' {
+            (& $script:ReadManifest '  <ApplicationResourceFiles />').ContainsWebApplicationResource | Should -BeFalse
+            (& $script:ReadManifest '  <ApplicationResourceFiles><!-- <App_GlobalResourceFile Location="A.resx" /> --></ApplicationResourceFiles>').ContainsWebApplicationResource | Should -BeFalse
+        }
+
+        It 'still counts the other groups by the name of their element' {
+            $info = & $script:ReadManifest '  <TemplateFiles><TemplateFile Location="A.aspx" /><TemplateFile Location="B.aspx" /><Other Location="C.aspx" /></TemplateFiles>'
+
+            $info.TemplateFileCount | Should -Be 2
+        }
+    }
+
     Context 'the classification of an assembly' {
         It 'treats a token that is added to the list as Microsoft when the signature is valid' {
             $info = & $script:Read (& $script:NewPackage) @($script:GenuineToken.ToUpperInvariant())

@@ -114,9 +114,11 @@
         throw "manifest.xml is not a solution manifest (its root element is '$($solution.LocalName)')."
     }
 
+    # Counts the elements of a group of the manifest: the ones that have the name Item, or all of them when no name is given.
     $count = {
-        param ([System.String] $Group, [System.String] $Item)
-        return @($manifest.SelectNodes("/*[local-name()='Solution']/*[local-name()='$Group']/*[local-name()='$Item']")).Count
+        param ([System.String] $Group, [System.String] $Item = '')
+        $name = if ($Item) { "[local-name()='$Item']" } else { '' }
+        return @($manifest.SelectNodes("/*[local-name()='Solution']/*[local-name()='$Group']/*$name")).Count
     }
 
     # The assemblies of the manifest, and then the other DLLs of the package.
@@ -329,7 +331,9 @@
     }
 
     $codeAccessSecurity = @($manifest.SelectNodes("/*[local-name()='Solution']/*[local-name()='CodeAccessSecurity']/*[local-name()='PolicyItem']")).Count -gt 0
-    $applicationResource = (& $count 'ApplicationResourceFiles' 'ApplicationResourceFile') -gt 0
+    # The schema has two element names for the application resource files, ApplicationResourceFile and App_GlobalResourceFile, which
+    # is the one that the Visual Studio SharePoint tools write.
+    $applicationResource = (& $count 'ApplicationResourceFiles') -gt 0
     $globalAssembly = @($assembly | Where-Object { $_.DeploymentTarget -eq 'GlobalAssemblyCache' -and $_.Status -notin @('Outside', 'Link') }).Count -gt 0
     $webApplicationAssembly = @($assembly | Where-Object { $_.DeploymentTarget -eq 'WebApplication' -and $_.Status -notin @('Outside', 'Link') }).Count -gt 0
 

@@ -23,6 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   configuration for a migration to SharePoint Online, and weigh 2.0 and 4.0 in the on-premises one. The
   `Difference` column of the package report no longer shows a false difference on the number of features of
   a deployed solution. (#131)
+- `ContainsWebApplicationResource` of the package inspection is now `True` for a package that lists its
+  application resource files with the `App_GlobalResourceFile` element, which the Visual Studio SharePoint
+  tools write, and not only with `ApplicationResourceFile`. The solution schema allows both under
+  `ApplicationResourceFiles`, and every element of that group is counted now, whatever its name. The flag
+  is in the solution package CSV and JSON files; the comparison with the farm solution does not use it.
+  (#151)
 
 ## [2.3.0] - 2026-11-23
 
