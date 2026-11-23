@@ -258,7 +258,7 @@ Each row in the `*-solutions-*` CSV/JSON describes one farm solution (WSP):
 | `ContainsWebApplicationResource` | Deploys web-application-scoped resources |
 | `IsFullTrustCode` | Custom **and** deploys a global assembly (SPO blocker) |
 | `DeployedWebApplicationCount` / `DeployedServerCount` | Deployment reach |
-| `FeatureCount` / `FeatureScopes` / `FeatureIds` | Features the solution registers |
+| `FeatureCount` / `FeatureScopes` / `FeatureIds` | The features that the farm has registered for the solution, counted once by id (none until the solution is deployed) |
 
 The farm only gives booleans and, for a solution that is not deployed, no feature. To read the package itself (strong names and public key tokens of its assemblies, the features and scopes, the framework it was built for), with no farm, see [Inspecting WSP packages (offline)](Solution-Packages).
 

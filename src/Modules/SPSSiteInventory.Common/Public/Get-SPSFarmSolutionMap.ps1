@@ -31,9 +31,12 @@
         Returns an array of PSCustomObject with SolutionName, SolutionId, Deployed,
         DeploymentState, IsCustom, ContainsGlobalAssembly, ContainsCasPolicy,
         ContainsWebApplicationResource, IsFullTrustCode, DeployedWebApplicationCount,
-        DeployedServerCount, FeatureCount, FeatureScopes and FeatureIds. FeatureCount
-        reflects the number of features the solution ships even when it is added but not
-        deployed (the ids and scopes may still be empty until deployment).
+        DeployedServerCount, FeatureCount, FeatureScopes and FeatureIds. SPSolution has
+        no property that lists its features, so they are the feature definitions that the
+        farm has registered for the solution (Get-SPFeature, matched on its SolutionId),
+        counted once by id. SharePoint registers them when the solution is deployed: a
+        solution that is only added has none here, and the package says which features it
+        would register (see Get-SPSSolutionPackageInfo).
 
         .PARAMETER CustomSolutionPrefix
         Optional list of case-insensitive name prefixes that force a solution to be flagged
@@ -85,6 +88,31 @@
 
     $solutions = Get-SPSolution -ErrorAction Stop
 
+    # The features of a solution are the feature definitions of the farm that carry its id. They are
+    # read once for all the solutions, with no limit (the default one is 200), and counted by id, as a
+    # definition appears once for each compatibility level that the farm has.
+    $featureOfSolution = @{}
+    try {
+        foreach ($definition in @(Get-SPFeature -Limit All -ErrorAction Stop)) {
+            try {
+                $ownerId = $definition.SolutionId.ToString()
+                $definitionId = $definition.Id.ToString()
+                $definitionScope = [string]$definition.Scope
+            }
+            catch {
+                Write-Verbose -Message "Could not read a feature definition of the farm: $($_.Exception.Message)"
+                continue
+            }
+            if (-not $featureOfSolution.ContainsKey($ownerId)) {
+                $featureOfSolution[$ownerId] = @{}
+            }
+            $featureOfSolution[$ownerId][$definitionId] = $definitionScope
+        }
+    }
+    catch {
+        Write-Warning -Message "Could not read the feature definitions of the farm, so FeatureCount, FeatureScopes and FeatureIds stay empty for every solution and no site collection can be flagged UsesCustomFarmFeature or UsesFullTrustCode: $($_.Exception.Message)"
+    }
+
     $map = foreach ($solution in $solutions) {
         $name = [string]$solution.Name
 
@@ -120,40 +148,19 @@
         try { $deployedWebAppCount = @($solution.DeployedWebApplications).Count } catch { Write-Verbose -Message "Could not read DeployedWebApplications for '$name': $($_.Exception.Message)" }
         try { $deployedServerCount = @($solution.DeployedServers).Count } catch { Write-Verbose -Message "Could not read DeployedServers for '$name': $($_.Exception.Message)" }
 
+        $solutionId = $solution.Id.ToString()
         $featureIds = @()
         $featureScopes = @()
-        $featureCount = 0
-        try {
-            $deployedFeatures = @($solution.DeployedFeatures)
-            # Capture the count first: SPSolution.DeployedFeatures enumerates even when the
-            # solution is not deployed, but reading each feature's Id/Scope can throw until
-            # deployment. Keeping the count separate means a non-deployed solution still
-            # reports how many features it ships.
-            $featureCount = $deployedFeatures.Count
-
-            $ids = [System.Collections.Generic.List[string]]::new()
-            $scopes = [System.Collections.Generic.List[string]]::new()
-            foreach ($feature in $deployedFeatures) {
-                # Read each feature best-effort so one unreadable feature does not drop the
-                # detail for the others.
-                try { if ($feature.Id) { $ids.Add($feature.Id.ToString()) } }
-                catch { Write-Verbose -Message "Could not read a feature Id for solution '$name': $($_.Exception.Message)" }
-                try { $scope = [string]$feature.Scope; if ($scope) { $scopes.Add($scope) } }
-                catch { Write-Verbose -Message "Could not read a feature Scope for solution '$name': $($_.Exception.Message)" }
-            }
-            $featureIds = @($ids)
-            $featureScopes = @($scopes | Sort-Object -Unique)
+        if ($featureOfSolution.ContainsKey($solutionId)) {
+            $feature = $featureOfSolution[$solutionId]
+            $featureIds = @($feature.Keys | Sort-Object)
+            $featureScopes = @($feature.Values | Where-Object { $_ } | Sort-Object -Unique)
         }
-        catch {
-            Write-Verbose -Message "Could not read features for solution '$name': $($_.Exception.Message)"
-        }
-
-        # Prefer the enumerated count; fall back to the number of ids actually read.
-        if ($featureCount -lt $featureIds.Count) { $featureCount = $featureIds.Count }
+        $featureCount = $featureIds.Count
 
         [PSCustomObject]@{
             SolutionName                   = $name
-            SolutionId                     = $solution.Id.ToString()
+            SolutionId                     = $solutionId
             Deployed                       = [bool]$solution.Deployed
             DeploymentState                = $deploymentState
             IsCustom                       = $isCustom
