@@ -54,7 +54,7 @@ The check is read-only: it changes nothing on the farm and writes no file. It pr
 
 ```text
 == Toolkit ==
-[ OK ]  SPSSiteInventory.Common module - Version 2.3.0
+[ OK ]  SPSSiteInventory.Common module - Version 2.3.1
 
 == PowerShell ==
 [ OK ]  Windows PowerShell 5.1 - Version 5.1.14393.6343
