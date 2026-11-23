@@ -9,19 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The farm-solution report gave a wrong `FeatureCount`, and no `FeatureIds` or `FeatureScopes`, on a real
   farm: a solution that registers six features and one that registers none both gave 1. The map read the
-  features from `SPSolution.DeployedFeatures`, a property that a farm solution does not have, and took
-  the empty value for one feature. The features of a solution are now the feature definitions that the
-  farm has registered for it (`Get-SPFeature -Limit All`, matched on `SolutionId`, counted once by id
-  although the farm has one definition for each compatibility level). They are read once for all the
-  solutions, and when the farm does not give them the scan warns and the counts stay at 0. A solution
-  that is added and not deployed has none, as SharePoint registers the features when it deploys the
-  solution: its package says which ones it would register. As the ids were always empty,
-  `UsesCustomFarmFeature` and `UsesFullTrustCode`, which are built from them, were never raised. They now
-  are, for the site collections that activate a feature of a custom solution, so the scores and the
-  categories of a farm that has such solutions change: the two signals block in the example configuration
-  for a migration to SharePoint Online, and weigh 2.0 and 4.0 in the on-premises one. The `Difference`
-  column of the package report no longer shows a false difference on the number of features of a deployed
-  solution. (#131)
+  features from `SPSolution.DeployedFeatures`, a property that a farm solution does not have, and took the
+  empty value for one feature. The features of a solution are now the feature definitions that the farm has
+  registered for it (`Get-SPFeature -Limit All`, matched on `SolutionId`, counted once by id although the
+  farm has one definition for each compatibility level). They are read once for all the solutions, and when
+  the farm does not give them the scan warns and the counts stay at 0. The log line that ends the
+  farm-solution map says how many features of custom solutions, and of full-trust code, the site collections
+  are matched against. A solution that is added and not deployed has none, as SharePoint registers the
+  features when it deploys the solution: its package says which ones it would register. As the ids were
+  always empty, `UsesCustomFarmFeature` and `UsesFullTrustCode`, which are built from them, were never
+  raised. They now are, for the site collections that activate a feature of a custom solution, so the scores
+  and the categories of a farm that has such solutions change: the two signals block in the example
+  configuration for a migration to SharePoint Online, and weigh 2.0 and 4.0 in the on-premises one. The
+  `Difference` column of the package report no longer shows a false difference on the number of features of
+  a deployed solution. (#131)
 
 ## [2.3.0] - 2026-11-23
 

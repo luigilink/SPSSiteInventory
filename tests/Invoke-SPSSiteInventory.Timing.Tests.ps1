@@ -62,6 +62,11 @@ Describe 'Invoke-SPSSiteInventory.ps1 and the duration of the scan' {
         $script:Text | Should -Match "& \`$endPhase 'Collecting the customization signals' \('\{0\} site collection\(s\)' -f @\(\`$assessment\.SiteDuration\)\.Count\)"
     }
 
+    It 'says in the log how many features of custom solutions the site collections are matched against' {
+        $script:Text | Should -Match "& \`$endPhase 'Building the farm-solution map' \('\{0\} solution\(s\), \{1\} feature\(s\) of custom solutions, \{2\} of full-trust code' -f @\(\`$solutionMap\)\.Count, \`$customFeatureId\.Count, \`$fullTrustFeatureId\.Count\)"
+        $script:Text.IndexOf("& `$endPhase 'Building the farm-solution map'") | Should -BeGreaterThan $script:Text.IndexOf('$fullTrustFeatureId = @(')
+    }
+
     It 'ends the collection of the signals right after the assessment, before the results are read' {
         $script:Text.IndexOf("& `$endPhase 'Collecting the customization signals'") | Should -BeGreaterThan $script:Text.IndexOf('Invoke-SPSiteAssessment -Inventory')
         $script:Text.IndexOf("& `$endPhase 'Collecting the customization signals'") | Should -BeLessThan $script:Text.IndexOf('$scored = @($assessment.Inventory)')

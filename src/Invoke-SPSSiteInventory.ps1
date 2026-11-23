@@ -141,7 +141,7 @@ try {
     $solutionMap = Get-SPSFarmSolutionMap @solutionMapParams
     $customFeatureId = @($solutionMap | Where-Object { $_.IsCustom } | ForEach-Object { $_.FeatureIds } | Sort-Object -Unique)
     $fullTrustFeatureId = @($solutionMap | Where-Object { $_.IsFullTrustCode } | ForEach-Object { $_.FeatureIds } | Sort-Object -Unique)
-    & $endPhase 'Building the farm-solution map' ('{0} solution(s)' -f @($solutionMap).Count)
+    & $endPhase 'Building the farm-solution map' ('{0} solution(s), {1} feature(s) of custom solutions, {2} of full-trust code' -f @($solutionMap).Count, $customFeatureId.Count, $fullTrustFeatureId.Count)
 
     # The packages are read now, so that a wrong path shows before the scan, and a failure here must not stop the site report.
     $solutionPackages = @()
