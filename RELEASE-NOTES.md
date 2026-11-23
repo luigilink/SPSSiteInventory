@@ -1,95 +1,97 @@
 # SPSSiteInventory - Release Notes
 
-## [2.2.0] - 2026-11-17
+## [2.3.0] - 2026-11-23
 
-This release makes the inventory show what its numbers are made of. A first run of 2.1.0 on a real
-SharePoint farm asked for more detail on three things: what the farm solutions contain (the WSP
-packages could be inspected offline, but not from the scan), what the `EventReceivers` signal counts
-(registrations, and not the classes behind them), and which workflows are behind the totals
-`Workflow2010Count` and `Workflow2010RunningInstanceCount`. 2.2.0 lists what is behind each of them,
-in the HTML report and in new CSV and JSON files. SPSSiteInventory is still read-only for the farm
-and 100% generic (no client-specific value ships in the repository).
+This release helps to read a scan and to tune it. A run on a real SharePoint farm showed three
+things: a scan of 34 site collections took about 19 minutes and nothing said which site collection or
+which phase took the time; one signal (the event receivers) made about 90% of the score, and 23 site
+collections out of 34 were in the same category; and a scan that stopped at its cap made the whole
+site collection partial, so that a known limit kept a Simple site collection in the `Needs review`
+wave. 2.3.0 times the scan, says what the score is made of, lets you limit what one signal adds to
+it, and treats the cap of a scan as what it is, a lower bound. SPSSiteInventory is still read-only
+for the farm and 100% generic (no client-specific value ships in the repository).
 
-It is a minor release: no public function lost a parameter, the parameters that were added come
-after the existing ones, the settings file of 2.1.x keeps working unchanged, and the values and the
-weights of the signals do not change. The reports gain columns, files, sections and manifest fields:
-read "Upgrading from 2.1.x" below.
+It is a minor release: no public function was added or removed, `Export-SPSInventoryReport` has one
+new optional parameter that comes after the existing ones, the settings file of 2.2.x keeps working
+unchanged (the new setting is optional, and there is no cap by default), and the values and the
+weights of the signals do not change. One result does change: a site collection that was partial
+only because a scan reached its cap is complete now. The reports gain a column, a manifest field, a
+section and log lines: read "Upgrading from 2.2.x" below.
 
 ### Highlights
 
-- **The WSP packages can be inspected from the scan.** `Invoke-SPSSiteInventory.ps1` has two new
-  optional parameters. `-ExportSolutionPackage` saves the package of every farm solution
-  (`SolutionFile.SaveAs`) in a temporary folder of the account that runs the scan, inspects the
-  packages with `Get-SPSSolutionPackageInfo`, and removes the folder as soon as they are read, also
-  after an error or Ctrl+C (a killed process leaves it: the log gives its path). Nothing goes in the
-  reports folder, which is the one that is zipped and sent: only what the inspection found reaches
-  the reports, and the temporary paths are taken out of their text. `-SolutionPackagePath` takes the
-  packages that you already have (WSP files, folders that hold some, or folders of expanded
-  packages), and the two can be combined. The reports gain a *Solution packages* section (what each
-  package holds: custom or Microsoft, full-trust code, assemblies, features and .NET framework; the
-  farm solution that it matches and what differs; the farm solutions that no inspected package
-  matches) and the `*-solution-packages-*` and `*-solution-assemblies-*` files. A package that
-  cannot be saved or read is a warning, not the end of the scan. Without either parameter nothing
-  changes, except that the scan ends by telling how to inspect the packages when the farm has
-  solutions. See
-  [Inspecting WSP packages offline](https://github.com/luigilink/SPSSiteInventory/wiki/Solution-Packages).
-  (#135)
-- **What the `EventReceivers` signal counts.** SharePoint registers one receiver for each event type
-  and each list, so a class that listens to six events on a hundred lists counts 600. A site
-  collection now has `EventReceiverExamples` (up to five assemblies and classes, the largest first,
-  with the number of receivers and of lists, the first list and the solution that ships the
-  assembly), the HTML detail of a site collection shows it, and the report has a *Custom event
-  receivers* section by assembly. `*-eventreceivers-*` CSV and JSON files give one row for each
-  assembly and class in each site collection. When the packages are inspected, each assembly is
-  matched to the package and the farm solution that ship it, by its name and its public key token.
-  (#132)
-- **What the classic workflow signals count.** `Workflow2010Count` and
-  `Workflow2010RunningInstanceCount` did not say which workflows they were, so the site owners could
-  not be told which list or library to look at, and the counts could not be checked. A site
-  collection now has `Workflow2010Examples` (up to five associations, the counted ones with the most
-  running instances first), and the report has a *Workflow associations* section and
-  `*-workflow-associations-*` CSV and JSON files, with one row for each classic workflow association
-  of a web, a list or a library. `Counted` says whether the association is in `Workflow2010Count`: a
-  previous version of a workflow, which SharePoint keeps as an association of its own, is not, but
-  its running instances are in `Workflow2010RunningInstanceCount`. The counted rows of a site
-  collection add up to the first count, and all its rows to the second. (#133)
-- **The detail never changes what is counted.** The values and the weights of the signals are those
-  of 2.1.0, so the categories, the waves and the alerts of a farm do not change. The detail is kept
-  within limits (200 assemblies and classes for the event receivers of a site collection, and 1000
-  rows for the previous versions of workflows, whose counted rows are all kept), the counts stay
-  exact, and a note in the HTML report says how much of a signal its table accounts for when that is
-  less than the column. A site collection whose detail cannot be built keeps its counts, its other
-  signals and its status, and a warning gives the reason.
+- **The scan says how long it takes.** The log gives one line for each site collection, with its
+  number, its duration, its assessment status and its URL (`Site collection 5/34 done in 38 s
+  (Complete): https://...`), also for one that failed, and ends the collection with the number of
+  site collections, the average and the three slowest. It gives one line when each phase of the run
+  ends (the settings and the SharePoint commands, the farm-solution map, the inspection of the
+  packages, the enumeration of the site collections, the collection of the signals, the processing of
+  the results, the three farm-wide reads and the reports), and its last line gives the total and the
+  phases, so that the duration of a large farm can be estimated from a small one. The manifest has a
+  new `Timing` object: `StartedAt`, `ScanSeconds` (until the first report is written, so without the
+  time that the reports take, which only the log gives), `Phase` (the name and the seconds of each
+  phase) and `Site` (the URL, the seconds and the assessment status of each site collection). It
+  adds about 144 bytes to the manifest for each site collection. (#139)
+- **The report says what the score is made of.** A signal that has a large weight and a large value
+  can hold most of the score, which nothing in the report showed. The HTML report has a *Score
+  drivers* section, between the migration wave plan and the table of the site collections: a table by
+  category (its site collections, its lowest and highest score, the signals that weigh most in it with
+  their share, and the blocking signals that set it) and a table by signal (the ten that weigh most:
+  its site collections, its share of the score and the site collections where it weighs most). When
+  one signal holds half of the score or more, a note says so. The numbers are read from the `Reasons`
+  of the records, so the scores, the categories and the files do not change, and the section needs no
+  setting. A share is a part of the whole inventory: it does not say that the signal sets the
+  category of every site collection that has it, because a blocking signal sets its category whatever
+  its weight. (#138)
+- **A cap on what one signal adds to the score.** The optional `Scoring.Caps` setting gives, for a
+  signal of `Scoring.Weights`, the most that it can add to the score of one site collection. A
+  contribution above its cap is cut to it (the reasons say `EventReceivers=121 (+4, capped from
+  181.5)`), so that a signal with a large value cannot, on its own, put a site collection above a
+  threshold of the categories when its cap is below that threshold. There is no cap by default, and
+  nothing changes without one. A cap that is not a number greater than 0, or that names a signal that
+  has no weight, is refused before the scan starts, with a message that names it. The *Score drivers*
+  table gets a *Capped in* column when a cap cut something, and the log of the scan lists the caps in
+  force. Both example files have the block in comments. See the
+  [Configuration](https://github.com/luigilink/SPSSiteInventory/wiki/Configuration) wiki page for how
+  a cap and the thresholds go together. (#138)
+- **A scan that stops at its cap is a lower bound, not a partial site.** The file version, page
+  layout, web part, HTML file, Excel file, audience targeting and site notebook scans each read at
+  most `LargeContentThresholds.MaxItemsFor...` items of a library or of a list. Reaching that cap
+  marked the whole site collection partial: on a real farm, 7 site collections out of 34 were partial
+  for the file version scan alone, and a Simple one waited in the `Needs review` wave for a known
+  limit although all its other signals were read. The count is now a lower bound ("at least this
+  many"): the site collection stays complete, keeps its category and its wave, and has the warning
+  that says where the scan stopped. The new `LowerBoundSignals` column names the signals whose count
+  is a lower bound, the HTML report shows these counts as "at least", and its summary and its *Modern
+  experience readiness* section say how many site collections reached a cap. A scan that cannot read
+  (an error, a list that cannot be opened) still makes the site collection partial. (#137)
+- **The values and the weights of the signals do not change.** The score of a site collection is the
+  same as in 2.2.0 unless you set a cap, and the categories follow from the score as before.
 
-### Upgrading from 2.1.x
+### Upgrading from 2.2.x
 
-- **Settings.** Nothing is required: there is no new setting, and the example files are unchanged.
-- **Results.** No result changes: the signals, their weights, the categories, the waves and the
-  alerts (50 alert types) are those of 2.1.0.
-- **Files and manifest.** The site CSV and JSON gain two columns, `EventReceiverExamples` and
-  `Workflow2010Examples` (the workflow dataset of the report pack gains the second too), and the run
-  writes more files: `*-eventreceivers-*` and `*-workflow-associations-*` (CSV and JSON) and, when
-  packages are inspected, `*-solution-packages-*` (CSV and JSON) and `*-solution-assemblies-*`
-  (CSV). The manifest lists them (`Files.EventReceiversCsv`, `Files.EventReceiversJson`,
-  `Files.WorkflowAssociationsCsv`, `Files.WorkflowAssociationsJson`, `Files.SolutionPackagesCsv`,
-  `Files.SolutionPackagesJson` and `Files.SolutionAssembliesCsv`) and counts the packages
-  (`Summary.SolutionPackageCount` and `Summary.SolutionPackageIssueCount`, null when no package was
-  inspected). They are additive: `ReportPackVersion` stays `1.0`. Read the files by column name, not
-  by position.
-- **HTML report.** Three new sections, each only when it has something to show: *Custom event
-  receivers*, *Workflow associations* and *Solution packages* (after the farm solutions), with a
-  link in the navigation. The detail of a site collection shows the two kinds of examples.
-- **Inspecting the packages from the scan.** `-ExportSolutionPackage` reads the packages from the
-  farm, so the account that runs the inventory has to be able to read the farm solutions, as for the
-  farm solution map, and a package that it cannot save is a warning. The temporary folder is in the
-  profile of that account, and it is removed when the packages have been read. Use
-  `-SolutionPackagePath` instead when the packages are already on disk.
-- **Public functions.** None was added or removed. The new parameters are all optional and come
-  after the existing ones, so that a call of 2.1.x that gives parameters by position keeps its
-  meaning: `-ExportSolutionPackage` and `-SolutionPackagePath` of the script, `-SolutionPackages`,
-  `-EventReceiverClasses` and `-WorkflowAssociations` of `Export-SPSInventoryReport` and
-  `ConvertTo-SPSInventoryHtml`, `-Timestamp` of `Export-SPSSolutionPackageReport` and
-  `-SolutionAssemblyIndex` of `Get-SPSSiteCustomization`. (#143)
+- **Settings.** Nothing is required: there is no new required setting, and the example files only
+  gain comments (the `Scoring.Caps` block, and the way that a scan that reaches its cap is now
+  treated).
+- **Results.** The signals, their weights, the categories and the alerts (50 alert types) are those
+  of 2.2.0, with one exception: a site collection that was partial only because a scan reached its
+  cap is complete now. A farm therefore reports fewer partial site collections and fewer in the
+  `Needs review` wave, and the `AssessmentPartial` alert is not raised for them. The cap of the alert
+  rows (`MaxAlertRowsPerSite`) is not part of this: the rows that are cut still make the site
+  collection partial.
+- **Files and manifest.** The site CSV and JSON gain a column, `LowerBoundSignals` (the names of the
+  signals whose count is a lower bound, separated by semicolons, empty when there is none), and so do
+  the `*-publishing-*`, `*-permissions-*`, `*-large-content-*` and `*-collaboration-*` files. The
+  manifest gains `Timing` (null when `Export-SPSInventoryReport` is called without `-Timing`). They
+  are additive: `ReportPackVersion` stays `1.0`. Read the files by column name, not by position.
+- **HTML report.** A new *Score drivers* section, with a link in the navigation. The detail of a site
+  collection shows the counts whose scan reached a cap as "at least", and the summary and the *Modern
+  experience readiness* section say how many site collections reached one.
+- **Log.** The log gains the timing lines (one for each site collection and each phase, and the
+  total) and, when a cap is set, the line that lists the caps.
+- **Public functions.** None was added or removed. `Export-SPSInventoryReport` has a new optional
+  parameter, `-Timing`, which comes after the existing ones, so that a call of 2.2.x that gives
+  parameters by position keeps its meaning.
 
 ### Known issues
 
@@ -99,18 +101,21 @@ read "Upgrading from 2.1.x" below.
   activate a feature of a custom solution: the packages inspected with `-ExportSolutionPackage` list
   the features of each solution. `Workflow2013Count` stays at 0 when Workflow Manager is not
   connected, and the report does not say it (#134), so a 0 does not prove that a farm has no
-  SharePoint 2013 workflow. Both are planned for 2.2.1. On a farm whose interface is not in English,
-  the permission levels that SharePoint provisions are reported as custom, because their names are
-  localized (#136): fill `PermissionLevels.BuiltInNames` with the localized names, as the warning of
-  the run advises.
-- **Not tested on a farm yet.** The new detail is tested with stand-ins for the SharePoint objects:
-  `SolutionFile.SaveAs` and the end-to-end run of `-ExportSolutionPackage`, the registration data of
-  real event receivers, and the real workflow association objects (their name, their running
-  instances and the way that an association is told apart from the previous versions of its
-  workflow). The first run on a farm settles them. When one differs, the run log carries a warning
-  that names it and the detail of that site collection is left out, with its counts unchanged.
-  Please report the text of such a warning. The time that the detail adds to a scan has not been
-  measured on a farm with thousands of associations either.
+  SharePoint 2013 workflow. Both are planned for a coming release. On a farm whose interface is not
+  in English, the permission levels that SharePoint provisions are reported as custom, because their
+  names are localized (#136): fill `PermissionLevels.BuiltInNames` with the localized names, as the
+  warning of the run advises.
+- **The categories of a farm are yours to tune.** The *Score drivers* section shows what makes the
+  score, and `Scoring.Caps` limits what one signal adds, but what that does to the categories depends
+  on the farm (#138, still open). On the saved report of one real farm, a cap on the receivers alone
+  moved at most 2 of 23 site collections out of the Complex category, because their other signals
+  already put them above the threshold; capping the few signals that have the largest values brought
+  the scores together, and the thresholds then decided the categories. Read the section on your first
+  inventory, set caps on the signals that weigh a lot, and move the thresholds if the categories still
+  do not spread.
+- **Not tested on a farm yet.** The timing and the caps are tested with stand-ins for the SharePoint
+  objects, and the caps on one saved report, not on a live scan. The first run on a farm gives real
+  durations; please report anything that looks wrong in the timing lines of the log.
 - **Still open from 2.1.0.** The Secure Store, profile property mapping, audience targeting and site
   notebook scans read members of SharePoint objects that Microsoft documents only in part. They are
   tested with stand-ins, and a run on a farm settles them: when a member differs, the run log
