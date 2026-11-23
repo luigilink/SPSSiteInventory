@@ -1,6 +1,6 @@
 # SPSSiteInventory - Release Notes
 
-## [2.3.0] - 2026-11-18
+## [2.3.0] - 2026-11-23
 
 This release helps to read a scan and to tune it. A run on a real SharePoint farm showed three
 things: a scan of 34 site collections took about 19 minutes and nothing said which site collection or
