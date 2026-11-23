@@ -5,6 +5,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.1] - 2026-11-23
+
 ### Changed
 
 - The Configuration wiki page gives the French names of the permission levels that SharePoint provisions
