@@ -697,6 +697,28 @@ The scan logs a warning when half or more of the site collections report custom
 permission levels, which usually means the names are missing. The
 `CustomPermissionLevelExamples` field shows which levels were flagged.
 
+On a farm with a French interface, SharePoint named the provisioned levels as follows:
+
+```powershell
+PermissionLevels = @{
+    BuiltInNames = @(
+        'Affichage seul'                             # View Only
+        'Approbation'                                # Approve
+        'Gestion de la hiérarchie'                   # Manage Hierarchy
+        'Lecture restreinte'                         # Restricted Read
+        'Interfaces restreintes pour la traduction'  # Restricted Interfaces for Translation
+    )
+}
+```
+
+Moderate and Records Center Web Service Submitters are not in this list: that farm did not have them,
+so their French names are not known here. Check the list against `CustomPermissionLevelExamples` on
+your own farm, add the name of any level that SharePoint provisioned and that is still reported, and
+keep out the levels that were created by a user.
+
+Save the settings file as UTF-8 **with** a byte order mark when it holds accents: Windows PowerShell 5.1
+reads a file that has none with the ANSI code page, and the names would not match.
+
 ## Scope section
 
 ```powershell
